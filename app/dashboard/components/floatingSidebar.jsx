@@ -2,10 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
+  Home,
   LayoutGrid,
+  Building2,
+  Mail,
+  Settings,
   Network,
+  BarChart3,
+  Clock,
+  Cog,
   ChevronRight,
   ChevronLeft,
   CalendarClock,
@@ -91,7 +97,6 @@ export function FloatingSidebar() {
 }
 
 function NavItem({ icon: Icon, href, label, isActive, onClick, expanded }) {
-  const pathname = usePathname();
   const isCreatePost = label === "Create Post";
 
   return expanded ? (
@@ -99,13 +104,16 @@ function NavItem({ icon: Icon, href, label, isActive, onClick, expanded }) {
       href={href}
       className={cn(
         "flex items-center w-full p-2 rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/50",
-        isActive == pathname && "bg-primary/10 text-primary",
+        isActive &&
+          "bg-primary/20 text-primary font-medium border-l-4 border-primary pl-1",
         isCreatePost &&
           "bg-primary text-primary-foreground py-3 hover:bg-primary/90 hover:text-primary-foreground"
       )}
       onClick={onClick}
     >
-      <Icon className="h-5 w-5 mr-3 flex-shrink-0" />
+      <Icon
+        className={cn("h-5 w-5 mr-3 flex-shrink-0", isActive && "text-primary")}
+      />
       <span className="text-sm font-medium">{label}</span>
     </Link>
   ) : (
@@ -115,14 +123,14 @@ function NavItem({ icon: Icon, href, label, isActive, onClick, expanded }) {
           href={href}
           className={cn(
             "flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground",
-            isActive && "bg-primary/10 text-primary",
+            isActive && "bg-primary/20 text-primary border-l-4 border-primary",
             isCreatePost
               ? "bg-primary text-primary-foreground h-12 w-12 hover:bg-primary/90 hover:text-primary-foreground"
               : "h-10 w-10"
           )}
           onClick={onClick}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className={cn("h-5 w-5", isActive && "text-primary")} />
           <span className="sr-only">{label}</span>
         </Link>
       </TooltipTrigger>
