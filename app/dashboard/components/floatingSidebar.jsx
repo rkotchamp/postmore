@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Home,
@@ -45,6 +45,11 @@ const navItems = [
 export function FloatingSidebar() {
   const [activeItem, setActiveItem] = useState("/");
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    setActiveItem(pathname);
+  }, []);
 
   const toggleSidebar = () => {
     setExpanded(!expanded);
