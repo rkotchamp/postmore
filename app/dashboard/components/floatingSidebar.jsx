@@ -42,14 +42,50 @@ const navItems = [
   // { icon: BarChart3, href: "/analytics", label: "Analytics" },
 ];
 
-export function FloatingSidebar() {
+export function FloatingSidebar({ onExpandChange, initialExpanded }) {
   const [activeItem, setActiveItem] = useState("/");
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initialExpanded || false);
+
+  // Update expanded state when initialExpanded prop changes
+  useEffect(() => {
+    if (initialExpanded !== undefined) {
+      setExpanded(initialExpanded);
+    }
+  }, [initialExpanded]);
+
+  // Check for screen size on mount and when window resizes
+  useEffect(() => {
+    const checkScreenSize = () => {
+      // Close sidebar by default on small screens (less than lg breakpoint)
+      if (window.innerWidth < 1024) {
+        setExpanded(false);
+      } else {
+        // On large screens, default to expanded
+        setExpanded(true);
+      }
+    };
+
+    // Initial check
+    checkScreenSize();
+
+    // Add event listener for window resize
+    window.addEventListener("resize", checkScreenSize);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", checkScreenSize);
+  }, []);
 
   useEffect(() => {
     const pathname = window.location.pathname;
     setActiveItem(pathname);
   }, []);
+
+  // Notify parent component when expanded state changes
+  useEffect(() => {
+    if (onExpandChange) {
+      onExpandChange(expanded);
+    }
+  }, [expanded, onExpandChange]);
 
   const toggleSidebar = () => {
     setExpanded(!expanded);
@@ -59,8 +95,11 @@ export function FloatingSidebar() {
     <TooltipProvider>
       <Sidebar
         className={cn(
-          "fixed left-4 top-1/2 -translate-y-1/2 h-[calc(100vh-4rem)] max-h-[600px] rounded-xl border bg-background shadow-lg transition-all duration-300",
-          expanded ? "w-48" : "w-16"
+          "fixed left-4 top-1/2 -translate-y-1/2 h-[calc(100vh-4rem)] max-h-[600px] rounded-xl border bg-background shadow-lg transition-all duration-300 z-50",
+          expanded ? "w-48" : "w-16",
+          // Responsive adjustments for mobile
+          "md:left-4 left-2",
+          "md:max-h-[600px] max-h-[500px]"
         )}
         collapsible="none"
       >
@@ -69,6 +108,7 @@ export function FloatingSidebar() {
           <button
             onClick={toggleSidebar}
             className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md hover:bg-primary/90 transition-colors"
+            aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
           >
             {expanded ? (
               <ChevronLeft className="h-4 w-4" />

@@ -12,9 +12,14 @@ import {
   TabsTrigger,
 } from "@/app/components/ui/tabs";
 import { Badge } from "@/app/components/ui/badge";
+import { Switch } from "@/app/components/ui/switch";
+import { ScheduleToggle } from "./ScheduleToggle";
 
 export function Caption({ selectedAccounts = [], onCaptionChange }) {
   const [mode, setMode] = useState("single"); // "single" or "multiple"
+  const [scheduled, setScheduled] = useState(false); // Track if post is scheduled
+  const [scheduledDate, setScheduledDate] = useState(new Date());
+  const [scheduledTime, setScheduledTime] = useState("12:00");
   const [captions, setCaptions] = useState({
     single: "",
     platforms: {
@@ -64,15 +69,31 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
         captionData = { ...captions.platforms };
       }
 
+      // Add scheduling information
+      captionData.scheduled = scheduled;
+      if (scheduled) {
+        captionData.scheduledDate = scheduledDate;
+        captionData.scheduledTime = scheduledTime;
+      }
+
       // Only notify parent if data has actually changed
-      const currentDataStr = JSON.stringify(captionData);
+      const currentDataStr = JSON.stringify({
+        ...captionData,
+        scheduledDate: scheduled ? scheduledDate.toISOString() : null,
+      });
+
       const prevDataStr = JSON.stringify(
         prevCaptionsRef.current === captions
-          ? mode === "single"
-            ? Object.fromEntries(
-                platforms.map((p) => [p, prevCaptionsRef.current.single])
-              )
-            : prevCaptionsRef.current.platforms
+          ? {
+              ...(mode === "single"
+                ? Object.fromEntries(
+                    platforms.map((p) => [p, prevCaptionsRef.current.single])
+                  )
+                : prevCaptionsRef.current.platforms),
+              scheduledDate: scheduled ? scheduledDate.toISOString() : null,
+              scheduledTime: scheduled ? scheduledTime : null,
+              scheduled,
+            }
           : {}
       );
 
@@ -81,7 +102,7 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
         prevCaptionsRef.current = captions;
       }
     }
-  }, [captions, mode, platforms]); // Removed onCaptionChange
+  }, [captions, mode, platforms, scheduled, scheduledDate, scheduledTime]);
 
   // Handle caption text change
   const handleCaptionChange = (value, platform = "single") => {
@@ -99,6 +120,13 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
         },
       }));
     }
+  };
+
+  // Toggle scheduled state and handle date/time updates
+  const handleScheduleToggle = (newScheduledState, date, time) => {
+    setScheduled(newScheduledState);
+    if (date) setScheduledDate(date);
+    if (time) setScheduledTime(time);
   };
 
   // Get platform icon
@@ -212,6 +240,14 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
                 Using the lowest character limit from all selected platforms
               </span>
             </div>
+
+            {/* Schedule toggle button */}
+            <ScheduleToggle
+              scheduled={scheduled}
+              onToggle={(newState, date, time) =>
+                handleScheduleToggle(newState, date, time)
+              }
+            />
           </CardContent>
         </Card>
       ) : (
@@ -248,6 +284,13 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
                     <span>Limit: {characterLimits[platform]} characters</span>
                   </div>
                 </CardContent>
+                {/* Schedule toggle button */}
+                <ScheduleToggle
+                  scheduled={scheduled}
+                  onToggle={(newState, date, time) =>
+                    handleScheduleToggle(newState, date, time)
+                  }
+                />
               </Card>
             </TabsContent>
           ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { SidebarProvider } from "@/app/components/ui/sidebar";
 import { FloatingSidebar } from "@/app/dashboard/components/floatingSidebar";
 import { UserNav } from "@/app/dashboard/components/userProfile";
@@ -15,13 +16,31 @@ import {
 
 export function DashboardLayout({ children }) {
   const { theme, setTheme } = useTheme();
+  // Use null for initial state to avoid hydration mismatch
+  const [sidebarExpanded, setSidebarExpanded] = useState(null);
+
+  // Calculate margin classes based on sidebar state
+  const getContentClasses = () => {
+    // During SSR and initial hydration, use a consistent class
+    if (sidebarExpanded === null) {
+      return "flex-1 w-full transition-all duration-300 lg:ml-24 md:ml-20 ml-16";
+    }
+
+    // After hydration, update classes based on sidebar state
+    return `flex-1 w-full transition-all duration-300 ${
+      sidebarExpanded ? "lg:ml-56 md:ml-24 ml-20" : "lg:ml-24 md:ml-20 ml-16"
+    }`;
+  };
 
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background overflow-hidden">
-        <FloatingSidebar />
-        <div className="flex-1 w-full ml-[215px] transition-all duration-300">
-          <header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b bg-background px-8 py-4 shadow-sm">
+        <FloatingSidebar
+          onExpandChange={setSidebarExpanded}
+          initialExpanded={null} // Let component decide based on viewport
+        />
+        <div className={getContentClasses()}>
+          <header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b bg-background px-4 md:px-8 py-4 shadow-sm">
             {/* App Logo */}
             <Link href="/">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">
@@ -56,7 +75,7 @@ export function DashboardLayout({ children }) {
               <UserNav />
             </div>
           </header>
-          <main className="w-full p-0">{children}</main>
+          <main className="w-full p-0 md:p-2 lg:p-4">{children}</main>
         </div>
       </div>
     </SidebarProvider>

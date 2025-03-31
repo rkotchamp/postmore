@@ -116,14 +116,14 @@ export function Content({ onContentChange }) {
       </Card>
 
       {/* Submit Button */}
-      <Button
+      {/* <Button
         className="max-w-5xl w-full mx-auto py-6 flex items-center justify-center gap-2 transition-all"
         disabled={!canSubmit}
         variant={canSubmit ? "default" : "secondary"}
       >
         <SendHorizontal className="h-5 w-5" />
         <span className="text-base">Schedule Post</span>
-      </Button>
+      </Button> */}
     </div>
   );
 }
