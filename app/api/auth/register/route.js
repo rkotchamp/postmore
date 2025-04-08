@@ -49,6 +49,7 @@ export async function POST(request) {
       email,
       password, // Pass as "password" to trigger pre-save hook in userSchema
       authProvider: "email",
+      image: "",
     });
 
     // Save the user to the database
@@ -101,6 +102,7 @@ export async function POST(request) {
       email: newUser.email,
       authProvider: newUser.authProvider,
       createdAt: newUser.createdAt,
+      image: newUser.image,
     };
 
     // Set the refresh token as an HTTP-only cookie

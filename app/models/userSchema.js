@@ -8,6 +8,17 @@ const userSchema = new mongoose.Schema({
     required: [true, "Name is required"],
     trim: true,
   },
+  fullName: {
+    // Add this field as an alias for compatibility
+    type: String,
+    get: function () {
+      return this.name;
+    },
+    set: function (val) {
+      this.name = val;
+      return val;
+    },
+  },
   email: {
     type: String,
     required: [true, "Email is required"],
@@ -21,7 +32,10 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, "Password is required"],
+    required: function () {
+      // Password is only required for email authentication
+      return this.authProvider === "email";
+    },
     minlength: 8,
     select: false, // Don't return password by default in queries
   },
@@ -29,6 +43,24 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ["email", "google", "github"],
     default: "email",
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Allow null/undefined values
+  },
+  githubId: {
+    type: String,
+    unique: true,
+    sparse: true, // Allow null/undefined values
+  },
+  image: {
+    type: String,
+    default: null,
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false,
   },
   socialAccounts: [
     {
@@ -44,8 +76,8 @@ const userSchema = new mongoose.Schema({
 
 // Hash password before saving to database
 userSchema.pre("save", async function (next) {
-  // Only hash the password if it's been modified (or is new)
-  if (!this.isModified("password")) return next();
+  // Only hash the password if it's been modified (or is new) and it exists
+  if (!this.isModified("password") || !this.password) return next();
 
   try {
     // Generate salt
@@ -60,6 +92,7 @@ userSchema.pre("save", async function (next) {
 
 // Method to check if password is correct
 userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
