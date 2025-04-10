@@ -63,8 +63,6 @@ export function DashboardContent() {
 
   // Handle content changes - wrapped in useCallback for stable reference
   const handleContentChange = useCallback((contentData) => {
-    console.log("Content changed:", contentData);
-
     setPostData((prev) => ({
       ...prev,
       content: contentData,
@@ -163,7 +161,7 @@ export function DashboardContent() {
     // For text posts, check if there's actual text content
     if (postData.content.type === "text") {
       return (
-        postData.content.data?.text && postData.content.data.text.trim() !== ""
+        postData.content.data?.text && postData.content.data?.text.trim() !== ""
       );
     }
 

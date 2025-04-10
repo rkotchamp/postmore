@@ -130,6 +130,8 @@ export default function Authenticate() {
         return <div className="h-5 w-5 text-sm font-bold">@</div>;
       case "ytShorts":
         return <Youtube {...iconProps} />;
+      case "tiktok":
+        return <Tiktok {...iconProps} />;
       default:
         return null;
     }
@@ -141,6 +143,7 @@ export default function Authenticate() {
     facebook: "Facebook",
     threads: "Threads",
     ytShorts: "YouTube Shorts",
+    tiktok: "TikTok",
   };
 
   const AvatarGroup = ({ accounts, max = 3 }) => {
