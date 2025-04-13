@@ -41,32 +41,20 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      // Make API call to the login endpoint
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          toast.error(data.message || "Invalid email or password")
-        );
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       // Successfully logged in
       toast.success("Login successful!", {
         description: "Welcome back to Postmore.",
       });
-
-      // Store the token in localStorage for future authenticated requests
-      if (data.token) {
-        localStorage.setItem("access_token", data.token);
-      }
 
       // Redirect to dashboard after successful login
       router.push("/dashboard");
