@@ -239,81 +239,61 @@ export default function Authenticate() {
     // Integration code would go here
   };
 
-  const handleTikTokConnection = async () => {
+  // Function to initiate TikTok authentication
+  const handleTikTokAuth = async () => {
+    console.log("Initiating TikTok authentication");
     setIsLoading(true);
-    console.log("========== Initiating TikTok OAuth flow ==========");
+    setAuthStatus(null);
 
     try {
-      // Get the redirect URI from environment
-      const redirectUri = process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI;
-      if (!redirectUri) {
-        throw new Error("Missing TikTok redirect URI configuration");
+      // 1. Generate a state token for CSRF protection
+      const stateToken = Math.random().toString(36).substring(2, 15);
+      localStorage.setItem("tiktok_auth_state", stateToken);
+      console.log("Generated state token:", stateToken);
+
+      // 2. Construct the TikTok authorization URL
+      if (
+        !process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID ||
+        !process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI
+      ) {
+        throw new Error(
+          "TikTok client ID or redirect URI is not configured in environment variables."
+        );
       }
-      console.log("Redirect URI:", redirectUri);
 
-      // Get client key from environment
-      const clientKey = process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID;
-      if (!clientKey) {
-        throw new Error("Missing TikTok client key configuration");
-      }
-      console.log("Client Key present");
+      // Base URL for TikTok authorization
+      const baseUrl = "https://www.tiktok.com/v2/auth/authorize/";
 
-      // Use only the required scope for basic functionality
-      const scope = "user.info.basic,video.list";
-      console.log("Using scopes:", scope);
-
-      // Force disable sandbox mode
-      console.log("Sandbox mode is forced OFF");
-
-      // Use the production TikTok auth URL
-      const authUrlBase = "https://www.tiktok.com/v2/auth/authorize/";
-      console.log("Using TikTok auth URL:", authUrlBase);
-
-      // Generate state parameter for CSRF protection
-      const generateRandomString = (length) => {
-        let result = "";
-        const characters =
-          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        const charactersLength = characters.length;
-        for (let i = 0; i < length; i++) {
-          result += characters.charAt(
-            Math.floor(Math.random() * charactersLength)
-          );
-        }
-        return result;
+      // Define parameters
+      const params = {
+        client_key: process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID,
+        redirect_uri: process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI,
+        response_type: "code",
+        scope: "user.info.basic,video.list,video.publish", // Request necessary scopes
+        state: stateToken,
+        prompt: "select_account", // Force account selection
+        force_authentication: "true", // Force full auth flow
       };
 
-      const state = generateRandomString(32);
-      console.log("Generated state parameter for CSRF protection");
+      // Create URLSearchParams object
+      const searchParams = new URLSearchParams(params);
 
-      // Store state for later verification
-      localStorage.setItem("tiktok_auth_state", state);
+      // Construct the full authorization URL
+      const authUrl = `${baseUrl}?${searchParams.toString()}`;
 
-      // Build the full authorization URL with all required parameters
-      const url = `${authUrlBase}?client_key=${encodeURIComponent(
-        clientKey
-      )}&response_type=code&scope=${encodeURIComponent(
-        scope
-      )}&redirect_uri=${encodeURIComponent(
-        redirectUri
-      )}&state=${encodeURIComponent(state)}`;
+      console.log("Constructed TikTok Auth URL:", authUrl);
 
-      console.log(
-        "Final TikTok OAuth URL (structure):",
-        `${authUrlBase}?client_key=[REDACTED]&response_type=code&scope=${scope}&redirect_uri=${redirectUri}&state=[REDACTED]`
-      );
-
-      // Redirect the user to TikTok's authorization page
-      console.log("Redirecting to TikTok authorization page...");
-      window.location.href = url;
+      // 3. Redirect the user to the TikTok authorization page
+      window.location.href = authUrl;
     } catch (error) {
-      console.error("Error initiating TikTok connection:", error);
-      setIsLoading(false);
+      console.error("Error initiating TikTok authentication:", error);
       setAuthStatus({
         type: "error",
         platform: "tiktok",
-        message: `Failed to initiate TikTok connection: ${error.message}`,
+        message:
+          error.message || "An unexpected error occurred during TikTok auth.",
       });
+      setIsLoading(false);
     }
   };
 
@@ -323,7 +303,7 @@ export default function Authenticate() {
     facebook: handleFacebookConnection,
     threads: handleThreadsConnection,
     ytShorts: handleYtShortsConnection,
-    tiktok: handleTikTokConnection,
+    tiktok: handleTikTokAuth,
   };
 
   const PlatformIcon = ({ platform }) => {
