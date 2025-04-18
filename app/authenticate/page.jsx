@@ -27,67 +27,106 @@ import {
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import { Alert, AlertTitle, AlertDescription } from "@/app/components/ui/alert";
 
-// Dummy data for connected accounts
-const initialAccounts = {
-  instagram: [
-    {
-      id: 1,
-      name: "Bessie Cooper",
-      email: "bessie@example.com",
-      imageUrl: "/avatars/bessie.jpg",
-    },
-    {
-      id: 2,
-      name: "Jenny Wilson",
-      email: "jenny@example.com",
-      imageUrl: "/avatars/jenny.jpg",
-    },
-  ],
-  twitter: [
-    {
-      id: 3,
-      name: "John Doe",
-      email: "john@example.com",
-      imageUrl: "/avatars/john.jpg",
-    },
-  ],
-  facebook: [
-    {
-      id: 4,
-      name: "Sarah Smith",
-      email: "sarah@example.com",
-      imageUrl: "/avatars/sarah.jpg",
-    },
-    {
-      id: 5,
-      name: "Mike Johnson",
-      email: "mike@example.com",
-      imageUrl: "/avatars/mike.jpg",
-    },
-  ],
-  threads: [
-    {
-      id: 6,
-      name: "Alex Brown",
-      email: "alex@example.com",
-      imageUrl: "/avatars/alex.jpg",
-    },
-  ],
-  ytShorts: [
-    {
-      id: 7,
-      name: "Emma Davis",
-      email: "emma@example.com",
-      imageUrl: "/avatars/emma.jpg",
-    },
-  ],
-  tiktok: [], // Add empty TikTok accounts array
+// Initialize empty accounts structure
+const emptyAccounts = {
+  instagram: [],
+  twitter: [],
+  facebook: [],
+  threads: [],
+  ytShorts: [],
+  tiktok: [],
 };
 
 export default function Authenticate() {
-  const [connectedAccounts, setConnectedAccounts] = useState(initialAccounts);
+  const [connectedAccounts, setConnectedAccounts] = useState(emptyAccounts);
   const [isLoading, setIsLoading] = useState(false);
   const [authStatus, setAuthStatus] = useState(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  // Fetch all social accounts when component mounts
+  useEffect(() => {
+    fetchSocialAccounts();
+  }, []);
+
+  // Function to fetch all social accounts
+  const fetchSocialAccounts = async () => {
+    try {
+      const response = await fetch("/api/social-accounts");
+      if (!response.ok) {
+        throw new Error("Failed to fetch social accounts");
+      }
+
+      const data = await response.json();
+      console.log("Fetched social accounts:", data);
+
+      // Transform and sort accounts by platform
+      const sortedAccounts = { ...emptyAccounts };
+
+      data.accounts?.forEach((account) => {
+        if (sortedAccounts[account.platform]) {
+          sortedAccounts[account.platform].push({
+            id: account._id,
+            name: account.displayName || "Unknown User",
+            email: account.platformUsername || account.platformAccountId,
+            imageUrl: account.profileImage || "/avatars/placeholder.jpg",
+            platformAccountId: account.platformAccountId,
+          });
+        }
+      });
+
+      setConnectedAccounts(sortedAccounts);
+    } catch (error) {
+      console.error("Error fetching social accounts:", error);
+      // You might want to show an error message to the user here
+    }
+  };
+
+  // Handle disconnecting an account
+  const handleDisconnect = async (platform, accountId, platformAccountId) => {
+    if (isDisconnecting) return;
+
+    setIsDisconnecting(true);
+    try {
+      const response = await fetch(`/api/social-accounts/${accountId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          platform,
+          platformAccountId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to disconnect account");
+      }
+
+      // Update local state to remove the disconnected account
+      setConnectedAccounts((prev) => ({
+        ...prev,
+        [platform]: prev[platform].filter(
+          (account) => account.id !== accountId
+        ),
+      }));
+
+      // Show success message
+      setAuthStatus({
+        type: "success",
+        platform,
+        message: `Successfully disconnected ${platform} account`,
+      });
+    } catch (error) {
+      console.error(`Error disconnecting ${platform} account:`, error);
+      setAuthStatus({
+        type: "error",
+        platform,
+        message: `Failed to disconnect ${platform} account: ${error.message}`,
+      });
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
 
   // Check for success/error messages in URL after redirect
   useEffect(() => {
@@ -204,13 +243,6 @@ export default function Authenticate() {
     } catch (error) {
       console.error("Error fetching TikTok accounts:", error);
     }
-  };
-
-  const handleDisconnect = (platform, accountId) => {
-    setConnectedAccounts((prev) => ({
-      ...prev,
-      [platform]: prev[platform].filter((account) => account.id !== accountId),
-    }));
   };
 
   // Add connection handlers for each platform
@@ -385,6 +417,28 @@ export default function Authenticate() {
           Connected Accounts
         </h1>
 
+        {/* Show auth status messages */}
+        {authStatus && (
+          <Alert
+            className="max-w-4xl mx-auto mb-4"
+            variant={authStatus.type === "error" ? "destructive" : "default"}
+          >
+            <div className="flex items-center gap-2">
+              {authStatus.type === "error" ? (
+                <AlertCircle className="h-4 w-4" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
+              <AlertTitle className="text-sm font-medium">
+                {authStatus.type === "error" ? "Error" : "Success"}
+              </AlertTitle>
+            </div>
+            <AlertDescription className="mt-1 text-sm">
+              {authStatus.message}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Accordion
           type="single"
           collapsible
@@ -423,8 +477,13 @@ export default function Authenticate() {
                             size="icon"
                             className="absolute top-0 right-0"
                             onClick={() =>
-                              handleDisconnect(platform, account.id)
+                              handleDisconnect(
+                                platform,
+                                account.id,
+                                account.platformAccountId
+                              )
                             }
+                            disabled={isDisconnecting}
                           >
                             <X className="h-4 w-4 text-destructive" />
                           </Button>
@@ -450,7 +509,7 @@ export default function Authenticate() {
                         : `Connect to ${platformNames[platform]}`}
                     </Button>
 
-                    {/* TikTok-specific disclaimer */}
+                    {/* Platform-specific disclaimers */}
                     {platform === "tiktok" && (
                       <div className="mt-3 p-3 bg-muted/30 rounded-md text-xs text-muted-foreground">
                         <p className="font-semibold mb-1">
