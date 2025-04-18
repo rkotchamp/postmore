@@ -26,6 +26,7 @@ import {
 } from "@/app/components/ui/avatar";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import { Alert, AlertTitle, AlertDescription } from "@/app/components/ui/alert";
+import { DisconnectDialog } from "./components/DisconnectDialog";
 
 // Initialize empty accounts structure
 const emptyAccounts = {
@@ -42,6 +43,13 @@ export default function Authenticate() {
   const [isLoading, setIsLoading] = useState(false);
   const [authStatus, setAuthStatus] = useState(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [disconnectDialog, setDisconnectDialog] = useState({
+    isOpen: false,
+    platform: "",
+    accountId: "",
+    accountName: "",
+    platformAccountId: "",
+  });
 
   // Fetch all social accounts when component mounts
   useEffect(() => {
@@ -57,7 +65,6 @@ export default function Authenticate() {
       }
 
       const data = await response.json();
-      console.log("Fetched social accounts:", data);
 
       // Transform and sort accounts by platform
       const sortedAccounts = { ...emptyAccounts };
@@ -81,8 +88,25 @@ export default function Authenticate() {
     }
   };
 
-  // Handle disconnecting an account
-  const handleDisconnect = async (platform, accountId, platformAccountId) => {
+  // Updated disconnect handling
+  const handleDisconnectClick = (
+    platform,
+    accountId,
+    accountName,
+    platformAccountId
+  ) => {
+    setDisconnectDialog({
+      isOpen: true,
+      platform,
+      accountId,
+      accountName,
+      platformAccountId,
+    });
+  };
+
+  const handleDisconnectConfirm = async () => {
+    const { platform, accountId, platformAccountId } = disconnectDialog;
+
     if (isDisconnecting) return;
 
     setIsDisconnecting(true);
@@ -125,7 +149,12 @@ export default function Authenticate() {
       });
     } finally {
       setIsDisconnecting(false);
+      setDisconnectDialog((prev) => ({ ...prev, isOpen: false }));
     }
+  };
+
+  const handleDisconnectCancel = () => {
+    setDisconnectDialog((prev) => ({ ...prev, isOpen: false }));
   };
 
   // Check for success/error messages in URL after redirect
@@ -142,18 +171,6 @@ export default function Authenticate() {
     const state = params.get("state");
     const debug = params.get("debug");
     const response = params.get("response");
-
-    console.log("Auth redirect params:", {
-      success,
-      error,
-      platform,
-      message,
-      code,
-      state,
-      debug,
-      response,
-      allParams: Object.fromEntries(params.entries()),
-    });
 
     if (platform === "tiktok") {
       if (success === "true") {
@@ -477,9 +494,10 @@ export default function Authenticate() {
                             size="icon"
                             className="absolute top-0 right-0"
                             onClick={() =>
-                              handleDisconnect(
+                              handleDisconnectClick(
                                 platform,
                                 account.id,
+                                account.name,
                                 account.platformAccountId
                               )
                             }
@@ -537,6 +555,16 @@ export default function Authenticate() {
             </AccordionItem>
           ))}
         </Accordion>
+
+        {/* Add the DisconnectDialog */}
+        <DisconnectDialog
+          isOpen={disconnectDialog.isOpen}
+          onClose={handleDisconnectCancel}
+          onConfirm={handleDisconnectConfirm}
+          platform={disconnectDialog.platform}
+          accountName={disconnectDialog.accountName}
+          isLoading={isDisconnecting}
+        />
       </div>
     </DashboardLayout>
   );
