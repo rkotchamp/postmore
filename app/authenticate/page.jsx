@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
+import { BskyAgent } from "@atproto/api";
 import {
   Accordion,
   AccordionContent,
@@ -27,20 +29,18 @@ import {
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import { Alert, AlertTitle, AlertDescription } from "@/app/components/ui/alert";
 import { DisconnectDialog } from "./components/DisconnectDialog";
-
-// Initialize empty accounts structure
-const emptyAccounts = {
-  instagram: [],
-  twitter: [],
-  facebook: [],
-  threads: [],
-  ytShorts: [],
-  tiktok: [],
-};
+import Spinner from "@/app/components/ui/Spinner";
+import { BlueskyLoginModal } from "./components/BlueskyLoginModal";
 
 export default function Authenticate() {
-  const [connectedAccounts, setConnectedAccounts] = useState(emptyAccounts);
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    accounts: allAccounts,
+    isLoading: isLoadingAccounts,
+    error: accountsError,
+    refetch: refetchAccounts,
+  } = useFetchAllAccountsContext();
+
+  const [isLoadingAuthAction, setIsLoadingAuthAction] = useState(false);
   const [authStatus, setAuthStatus] = useState(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [disconnectDialog, setDisconnectDialog] = useState({
@@ -51,27 +51,24 @@ export default function Authenticate() {
     platformAccountId: "",
   });
 
-  // Fetch all social accounts when component mounts
-  useEffect(() => {
-    fetchSocialAccounts();
-  }, []);
+  const [isBlueskyModalOpen, setIsBlueskyModalOpen] = useState(false);
+  const [blueskyLoginError, setBlueskyLoginError] = useState(null);
 
-  // Function to fetch all social accounts
-  const fetchSocialAccounts = async () => {
-    try {
-      const response = await fetch("/api/social-accounts");
-      if (!response.ok) {
-        throw new Error("Failed to fetch social accounts");
-      }
+  const emptyAccounts = {
+    instagram: [],
+    twitter: [],
+    facebook: [],
+    threads: [],
+    ytShorts: [],
+    tiktok: [],
+    bluesky: [],
+  };
 
-      const data = await response.json();
-
-      // Transform and sort accounts by platform
-      const sortedAccounts = { ...emptyAccounts };
-
-      data.accounts?.forEach((account) => {
-        if (sortedAccounts[account.platform]) {
-          sortedAccounts[account.platform].push({
+  const connectedAccounts =
+    allAccounts?.reduce(
+      (acc, account) => {
+        if (acc[account.platform]) {
+          acc[account.platform].push({
             id: account._id,
             name: account.displayName || "Unknown User",
             email: account.platformUsername || account.platformAccountId,
@@ -79,16 +76,11 @@ export default function Authenticate() {
             platformAccountId: account.platformAccountId,
           });
         }
-      });
+        return acc;
+      },
+      { ...emptyAccounts }
+    ) || emptyAccounts;
 
-      setConnectedAccounts(sortedAccounts);
-    } catch (error) {
-      console.error("Error fetching social accounts:", error);
-      // You might want to show an error message to the user here
-    }
-  };
-
-  // Updated disconnect handling
   const handleDisconnectClick = (
     platform,
     accountId,
@@ -126,15 +118,8 @@ export default function Authenticate() {
         throw new Error("Failed to disconnect account");
       }
 
-      // Update local state to remove the disconnected account
-      setConnectedAccounts((prev) => ({
-        ...prev,
-        [platform]: prev[platform].filter(
-          (account) => account.id !== accountId
-        ),
-      }));
+      await refetchAccounts();
 
-      // Show success message
       setAuthStatus({
         type: "success",
         platform,
@@ -157,11 +142,9 @@ export default function Authenticate() {
     setDisconnectDialog((prev) => ({ ...prev, isOpen: false }));
   };
 
-  // Check for success/error messages in URL after redirect
   useEffect(() => {
     console.log("Checking URL for auth status params");
 
-    // Parse URL parameters
     const params = new URLSearchParams(window.location.search);
     const success = params.get("success");
     const error = params.get("error");
@@ -176,7 +159,6 @@ export default function Authenticate() {
       if (success === "true") {
         console.log("TikTok authentication successful");
 
-        // Check if we have debug information to display
         if (debug === "true" && response) {
           setAuthStatus({
             type: "success",
@@ -192,9 +174,9 @@ export default function Authenticate() {
           });
         }
 
-        // Don't fetch accounts immediately - just log success
-        console.log("Authentication successful - would fetch accounts here");
-        // fetchTikTokAccounts(); - commented out
+        console.log(
+          "Authentication successful - React Query context manages fetching"
+        );
       } else if (error) {
         console.error("TikTok authentication error:", error, message);
         setAuthStatus({
@@ -203,7 +185,6 @@ export default function Authenticate() {
           message: message || `Failed to connect to TikTok: ${error}`,
         });
       } else if (code) {
-        // Handle direct code response from TikTok
         console.log("Received authorization code from TikTok:", code);
         setAuthStatus({
           type: "success",
@@ -212,57 +193,12 @@ export default function Authenticate() {
         });
       }
 
-      // Clean up URL parameters
       const url = new URL(window.location.href);
       url.search = "";
       window.history.replaceState({}, document.title, url.toString());
     }
   }, []);
 
-  // Function to fetch TikTok accounts from the server
-  const fetchTikTokAccounts = async () => {
-    console.log("Fetching TikTok accounts");
-    try {
-      // Check if we're in test mode from URL parameter
-      const params = new URLSearchParams(window.location.search);
-      const testMode = params.get("testmode") === "true";
-
-      // Add testmode parameter if needed
-      const queryString = testMode
-        ? "platform=tiktok&testmode=true"
-        : "platform=tiktok";
-      const response = await fetch(`/api/social-accounts?${queryString}`);
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log("TikTok accounts fetched:", data);
-
-        // Update connected accounts state
-        if (data.accounts && data.accounts.length > 0) {
-          const tiktokAccounts = data.accounts.map((account) => ({
-            id: account._id,
-            name: account.displayName,
-            email: account.platformUsername || "TikTok User",
-            imageUrl: account.profileImage || "/avatars/placeholder.jpg",
-          }));
-
-          setConnectedAccounts((prev) => ({
-            ...prev,
-            tiktok: tiktokAccounts,
-          }));
-        }
-      } else {
-        console.error(
-          "Failed to fetch TikTok accounts:",
-          await response.text()
-        );
-      }
-    } catch (error) {
-      console.error("Error fetching TikTok accounts:", error);
-    }
-  };
-
-  // Add connection handlers for each platform
   const handleInstagramConnection = () => {
     console.log("Connecting to Instagram...");
     // Integration code would go here
@@ -288,19 +224,16 @@ export default function Authenticate() {
     // Integration code would go here
   };
 
-  // Function to initiate TikTok authentication
   const handleTikTokAuth = async () => {
     console.log("Initiating TikTok authentication");
-    setIsLoading(true);
+    setIsLoadingAuthAction(true);
     setAuthStatus(null);
 
     try {
-      // 1. Generate a state token for CSRF protection
       const stateToken = Math.random().toString(36).substring(2, 15);
       localStorage.setItem("tiktok_auth_state", stateToken);
       console.log("Generated state token:", stateToken);
 
-      // 2. Construct the TikTok authorization URL
       if (
         !process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID ||
         !process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI
@@ -310,29 +243,24 @@ export default function Authenticate() {
         );
       }
 
-      // Base URL for TikTok authorization
       const baseUrl = "https://www.tiktok.com/v2/auth/authorize/";
 
-      // Define parameters
       const params = {
         client_key: process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID,
         redirect_uri: process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI,
         response_type: "code",
-        scope: "user.info.basic,video.list,video.publish", // Request necessary scopes
+        scope: "user.info.basic,video.list,video.publish",
         state: stateToken,
-        prompt: "select_account", // Force account selection
-        force_authentication: "true", // Force full auth flow
+        prompt: "select_account",
+        force_authentication: "true",
       };
 
-      // Create URLSearchParams object
       const searchParams = new URLSearchParams(params);
 
-      // Construct the full authorization URL
       const authUrl = `${baseUrl}?${searchParams.toString()}`;
 
       console.log("Constructed TikTok Auth URL:", authUrl);
 
-      // 3. Redirect the user to the TikTok authorization page
       window.location.href = authUrl;
     } catch (error) {
       console.error("Error initiating TikTok authentication:", error);
@@ -342,7 +270,60 @@ export default function Authenticate() {
         message:
           error.message || "An unexpected error occurred during TikTok auth.",
       });
-      setIsLoading(false);
+      setIsLoadingAuthAction(false);
+    }
+  };
+
+  const handleBlueskyAuth = () => {
+    console.log("Opening Bluesky login modal...");
+    setAuthStatus(null);
+    setBlueskyLoginError(null);
+    setIsBlueskyModalOpen(true);
+  };
+
+  const handleBlueskyLoginSubmit = async (credentials) => {
+    console.log("Submitting Bluesky credentials:", credentials.identifier);
+    setIsLoadingAuthAction(true);
+    setBlueskyLoginError(null);
+    setAuthStatus(null);
+
+    try {
+      const response = await fetch("/api/auth/bluesky/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          identifier: credentials.identifier,
+          password: credentials.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Bluesky login failed");
+      }
+
+      console.log("Bluesky login successful:", data);
+      setAuthStatus({
+        type: "success",
+        platform: "bluesky",
+        message: data.message || "Connected to Bluesky successfully!",
+      });
+      setIsBlueskyModalOpen(false);
+      await refetchAccounts();
+    } catch (error) {
+      console.error("Bluesky login failed:", error);
+      const errorMessage = error.message || "An unexpected error occurred.";
+      setBlueskyLoginError(errorMessage);
+      setAuthStatus({
+        type: "error",
+        platform: "bluesky",
+        message: `Bluesky Connection Error: ${errorMessage}`,
+      });
+    } finally {
+      setIsLoadingAuthAction(false);
     }
   };
 
@@ -353,6 +334,7 @@ export default function Authenticate() {
     threads: handleThreadsConnection,
     ytShorts: handleYtShortsConnection,
     tiktok: handleTikTokAuth,
+    bluesky: handleBlueskyAuth,
   };
 
   const PlatformIcon = ({ platform }) => {
@@ -370,12 +352,13 @@ export default function Authenticate() {
         return <Youtube {...iconProps} />;
       case "tiktok":
         return <TikTokIcon {...iconProps} />;
+      case "bluesky":
+        return <BlueskyIcon {...iconProps} />;
       default:
         return null;
     }
   };
 
-  // TikTok logo component
   const TikTokIcon = ({ className }) => (
     <svg
       className={className}
@@ -390,6 +373,22 @@ export default function Authenticate() {
     </svg>
   );
 
+  const BlueskyIcon = ({ className }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z" />
+      <path d="M17 12c0 2.8-2.2 5-5 5s-5-2.2-5-5 2.2-5 5-5 5 2.2 5 5Z" />
+      <path d="M12 7v0" />
+    </svg>
+  );
+
   const platformNames = {
     instagram: "Instagram",
     twitter: "Twitter",
@@ -397,6 +396,7 @@ export default function Authenticate() {
     threads: "Threads",
     ytShorts: "YouTube Shorts",
     tiktok: "TikTok",
+    bluesky: "Bluesky",
   };
 
   const AvatarGroup = ({ accounts, max = 3 }) => {
@@ -427,6 +427,26 @@ export default function Authenticate() {
     );
   };
 
+  if (isLoadingAccounts) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 flex items-center justify-center h-full">
+          <Spinner />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (accountsError) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 text-center text-red-500">
+          Error loading accounts: {accountsError.message}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="p-6">
@@ -434,7 +454,6 @@ export default function Authenticate() {
           Connected Accounts
         </h1>
 
-        {/* Show auth status messages */}
         {authStatus && (
           <Alert
             className="max-w-4xl mx-auto mb-4"
@@ -514,20 +533,22 @@ export default function Authenticate() {
                     </p>
                   )}
 
-                  {/* Connection button */}
                   <div className="mt-6">
                     <Button
                       className="w-full py-6 text-base flex items-center gap-2"
                       onClick={connectionHandlers[platform]}
-                      disabled={isLoading && platform === "tiktok"}
+                      disabled={
+                        (isLoadingAuthAction && platform === "tiktok") ||
+                        (isLoadingAuthAction && platform === "bluesky")
+                      }
                     >
                       <PlatformIcon platform={platform} />
-                      {isLoading && platform === "tiktok"
+                      {(isLoadingAuthAction && platform === "tiktok") ||
+                      (isLoadingAuthAction && platform === "bluesky")
                         ? "Connecting..."
                         : `Connect to ${platformNames[platform]}`}
                     </Button>
 
-                    {/* Platform-specific disclaimers */}
                     {platform === "tiktok" && (
                       <div className="mt-3 p-3 bg-muted/30 rounded-md text-xs text-muted-foreground">
                         <p className="font-semibold mb-1">
@@ -556,7 +577,6 @@ export default function Authenticate() {
           ))}
         </Accordion>
 
-        {/* Add the DisconnectDialog */}
         <DisconnectDialog
           isOpen={disconnectDialog.isOpen}
           onClose={handleDisconnectCancel}
@@ -564,6 +584,18 @@ export default function Authenticate() {
           platform={disconnectDialog.platform}
           accountName={disconnectDialog.accountName}
           isLoading={isDisconnecting}
+        />
+
+        <BlueskyLoginModal
+          isOpen={isBlueskyModalOpen}
+          onClose={() => {
+            if (!isLoadingAuthAction) {
+              setIsBlueskyModalOpen(false);
+            }
+          }}
+          onSubmit={handleBlueskyLoginSubmit}
+          isLoading={isLoadingAuthAction}
+          error={blueskyLoginError}
         />
       </div>
     </DashboardLayout>
