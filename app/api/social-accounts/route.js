@@ -9,8 +9,6 @@ import SocialAccount from "@/app/models/SocialAccount";
  * Optionally filtered by platform
  */
 export async function GET(request) {
-  console.log("========== Social Accounts API Called ==========");
-
   try {
     // Get the user's session
     const session = await getServerSession(authOptions);
@@ -26,17 +24,6 @@ export async function GET(request) {
       userId: session.user.id,
       status: "active", // Only get active accounts
     }).sort({ createdAt: -1 }); // Sort by newest first
-
-    // Log the results
-    console.log("Found accounts:", {
-      count: accounts.length,
-      platforms: accounts.map((acc) => acc.platform),
-      ids: accounts.map((acc) => acc._id.toString()),
-    });
-
-    console.log(
-      "========== Social Accounts API Completed Successfully =========="
-    );
 
     // Return the accounts
     return NextResponse.json({ accounts });

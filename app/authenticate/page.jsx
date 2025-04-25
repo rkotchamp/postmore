@@ -199,9 +199,35 @@ export default function Authenticate() {
     }
   }, []);
 
-  const handleInstagramConnection = () => {
+  const handleInstagramConnection = async () => {
     console.log("Connecting to Instagram...");
-    // Integration code would go here
+    setIsLoadingAuthAction(true);
+    setAuthStatus(null);
+
+    try {
+      const response = await fetch("/api/auth/instagram/connect");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to get Instagram authorization URL"
+        );
+      }
+
+      if (data.authorizeUrl) {
+        window.location.href = data.authorizeUrl;
+      } else {
+        throw new Error("Authorization URL not received from server.");
+      }
+    } catch (error) {
+      console.error("Error initiating Instagram connection:", error);
+      setAuthStatus({
+        type: "error",
+        platform: "instagram",
+        message: `Failed to connect Instagram: ${error.message}`,
+      });
+      setIsLoadingAuthAction(false);
+    }
   };
 
   const handleTwitterConnection = () => {
@@ -219,9 +245,35 @@ export default function Authenticate() {
     // Integration code would go here
   };
 
-  const handleYtShortsConnection = () => {
+  const handleYtShortsConnection = async () => {
     console.log("Connecting to YouTube Shorts...");
-    // Integration code would go here
+    setIsLoadingAuthAction(true);
+    setAuthStatus(null);
+
+    try {
+      const response = await fetch("/api/auth/youtube/connect");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to get YouTube authorization URL"
+        );
+      }
+
+      if (data.authorizeUrl) {
+        window.location.href = data.authorizeUrl;
+      } else {
+        throw new Error("Authorization URL not received from server.");
+      }
+    } catch (error) {
+      console.error("Error initiating YouTube connection:", error);
+      setAuthStatus({
+        type: "error",
+        platform: "ytShorts",
+        message: `Failed to connect YouTube: ${error.message}`,
+      });
+      setIsLoadingAuthAction(false);
+    }
   };
 
   const handleTikTokAuth = async () => {
@@ -539,12 +591,16 @@ export default function Authenticate() {
                       onClick={connectionHandlers[platform]}
                       disabled={
                         (isLoadingAuthAction && platform === "tiktok") ||
-                        (isLoadingAuthAction && platform === "bluesky")
+                        (isLoadingAuthAction && platform === "bluesky") ||
+                        (isLoadingAuthAction && platform === "ytShorts") ||
+                        (isLoadingAuthAction && platform === "instagram")
                       }
                     >
                       <PlatformIcon platform={platform} />
                       {(isLoadingAuthAction && platform === "tiktok") ||
-                      (isLoadingAuthAction && platform === "bluesky")
+                      (isLoadingAuthAction && platform === "bluesky") ||
+                      (isLoadingAuthAction && platform === "ytShorts") ||
+                      (isLoadingAuthAction && platform === "instagram")
                         ? "Connecting..."
                         : `Connect to ${platformNames[platform]}`}
                     </Button>
