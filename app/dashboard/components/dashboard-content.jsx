@@ -184,8 +184,8 @@ export function DashboardContent() {
           }`}
         >
           {/* Progress Bar */}
-          <div className="mb-2">
-            <div className="flex items-center justify-between">
+          <div className="mb-0">
+            <div className="flex items-center justify-center">
               {steps.map((step, index) => (
                 <div key={step.id} className="flex items-center">
                   {/* Step circle with number or check */}
@@ -219,7 +219,7 @@ export function DashboardContent() {
                   {/* Connector line */}
                   {index < steps.length - 1 && (
                     <div
-                      className={`h-0.5 w-10 md:w-24 lg:w-36 mx-2 ${
+                      className={`h-0.5 w-10 md:w-24 lg:w-36 ${
                         index < currentStep
                           ? "bg-primary"
                           : "bg-muted-foreground/30"
@@ -232,7 +232,7 @@ export function DashboardContent() {
           </div>
 
           {/* Step Content */}
-          <Card className="border shadow-sm flex-1">
+          <Card className="border-none shadow-none flex-1 p-0">
             <CardContent className="p-6">
               {currentStep === 0 && (
                 <Content onContentChange={handleContentChange} />

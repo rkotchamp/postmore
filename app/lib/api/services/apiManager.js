@@ -6,12 +6,14 @@
 import youtubeService from "./youtubeService";
 import tiktokService from "./tiktokService";
 import instagramService from "./instagramService";
+import blueSkyService from "./blueSkyService";
 
 // Map platform names to their corresponding service modules
 const platformServices = {
   youtube: youtubeService,
   tiktok: tiktokService,
   instagram: instagramService,
+  bluesky: blueSkyService,
   // Add more platforms as needed
 };
 

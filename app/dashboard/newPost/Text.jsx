@@ -12,7 +12,10 @@ export function TextPost({ onTextChange }) {
     const newText = e.target.value;
     if (newText.length <= maxLength) {
       setText(newText);
-      if (onTextChange) onTextChange(newText);
+      if (onTextChange) {
+        const isValid = newText && newText.trim().length > 0;
+        onTextChange({ value: newText, isValid: isValid });
+      }
     }
   };
 
@@ -20,10 +23,10 @@ export function TextPost({ onTextChange }) {
     <div className="w-full space-y-4">
       <h2 className="text-xl font-semibold">Text Post</h2>
 
-      <div className="border rounded-lg p-4 bg-muted/5">
+      <div className="border rounded-lg p-4 bg-muted/5 min-h-[200px] flex flex-col">
         <Textarea
           placeholder="What's on your mind?"
-          className="min-h-[200px] resize-none border-0 focus-visible:ring-0 p-0 text-base"
+          className="flex-grow resize-none border-0 focus-visible:ring-0 p-0 text-base bg-transparent"
           value={text}
           onChange={handleTextChange}
         />

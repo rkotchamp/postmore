@@ -1,6 +1,6 @@
-import PlatformSelector from "./components/PlatformSelector";
-import MediaUploader from "./components/MediaUploader";
-import ScheduleToggle from "./components/ScheduleToggle";
+import PlatformSelector from "@/app/dashboard/create-post/components/PlatformSelector";
+import MediaUploader from "@/app/dashboard/create-post/components/MediaUploader";
+import ScheduleToggle from "@/app/dashboard/create-post/components/ScheduleToggle";
 
 export default function CreatePost() {
   return (
