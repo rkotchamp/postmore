@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useContext } from "react";
-import { Badge } from "@/app/components/ui/badge";
+import { useState, useContext } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -16,14 +15,11 @@ import {
   AtSign,
   Youtube,
   Calendar,
-  Image as ImageIcon,
-  FileVideo,
 } from "lucide-react";
-import NextImage from "next/image";
-import { useMediaItems } from "@/app/hooks/useMediaQueries";
 import { usePostData } from "@/app/context/PostDataContext";
 import { useMediaTextFlow } from "@/app/context/MediaTextFlowContext";
 
+// --- Reusable Icon Components (Consider moving to a shared file) ---
 const TikTokIcon = ({ className }) => (
   <svg
     className={className}
@@ -53,23 +49,18 @@ const BlueskyIcon = ({ className }) => (
     <path d="M12 7v0" />
   </svg>
 );
+// --- End Icon Components ---
 
-export function Preview() {
-  const { data: sessionMediaItems = [], isLoading: isLoadingMedia } =
-    useMediaItems();
+export function TextPreview() {
+  // --- Get Data from Contexts ---
   const { postData } = usePostData();
   const { behavior } = useMediaTextFlow();
 
-  const {
-    selectedAccounts: accounts,
-    captionMode,
-    singleCaption,
-    multiCaptions,
-    scheduleType,
-    scheduledAt,
-  } = postData;
+  const { selectedAccounts: accounts, scheduleType, scheduledAt } = postData;
   const { temporaryText } = behavior;
+  // -----------------------------
 
+  // Platform display names and icons
   const platformInfo = {
     instagram: { name: "Instagram", icon: Instagram },
     twitter: { name: "Twitter", icon: Twitter },
@@ -80,6 +71,7 @@ export function Preview() {
     bluesky: { name: "Bluesky", icon: BlueskyIcon },
   };
 
+  // Grouping and Sorting Logic
   const groupedByPlatform = accounts.reduce((acc, account) => {
     const platform = account.platform;
     if (!acc[platform]) {
@@ -107,6 +99,7 @@ export function Preview() {
     return indexA - indexB;
   });
 
+  // --- Get Scheduled Date String --- //
   const getFormattedScheduledDate = () => {
     if (
       scheduleType === "scheduled" &&
@@ -114,100 +107,46 @@ export function Preview() {
       !isNaN(scheduledAt)
     ) {
       return scheduledAt.toLocaleDateString(undefined, {
+        // Use user's locale
         year: "numeric",
         month: "short",
         day: "numeric",
       });
     } else if (scheduleType === "scheduled") {
-      return "Invalid Date";
+      return "Invalid Date"; // Handle case where date is invalid
     }
-    return "Immediate";
+    return "Immediate"; // Default if not scheduled
   };
   const displayDate = getFormattedScheduledDate();
-
-  const activePlatforms = [
-    ...new Set(accounts.map((account) => account.platform)),
-  ];
-
-  const getCaptionForDisplay = () => {
-    if (sessionMediaItems.length > 0) {
-      if (activePlatforms.length === 0) return "";
-
-      if (captionMode === "single") {
-        return singleCaption || "";
-      } else {
-        const firstActivePlatform = sortedPlatforms[0];
-        return multiCaptions?.[firstActivePlatform] || "";
-      }
-    } else {
-      return temporaryText || "";
-    }
-  };
-
-  const renderPreviewMedia = () => {
-    if (isLoadingMedia) {
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
-          Loading Media...
-        </div>
-      );
-    }
-
-    if (sessionMediaItems && sessionMediaItems.length > 0) {
-      const firstItem = sessionMediaItems[0];
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground p-4">
-          <div className="text-center">
-            {firstItem.type === "video" ? (
-              <FileVideo className="h-16 w-16 mx-auto mb-2" />
-            ) : (
-              <ImageIcon className="h-16 w-16 mx-auto mb-2" />
-            )}
-            <span className="text-sm break-all">
-              {firstItem.fileInfo?.name || "Media file"}
-            </span>
-            {sessionMediaItems.length > 1 && (
-              <Badge variant="secondary" className="mt-2">
-                + {sessionMediaItems.length - 1} more
-              </Badge>
-            )}
-          </div>
-        </div>
-      );
-    } else if (temporaryText && temporaryText.trim() !== "") {
-      return (
-        <div className="w-full h-full bg-background flex items-center justify-center p-4">
-          <p className="text-center text-sm whitespace-pre-wrap break-words line-clamp-[10]">
-            {temporaryText}
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="w-full h-full bg-muted flex items-center justify-center">
-        <div className="text-muted-foreground text-sm">Content Preview</div>
-      </div>
-    );
-  };
+  // --------------------------------- //
 
   return (
     <div>
-      <div className="flex flex-col w-full max-w-[360px] rounded-3xl bg-muted/30 p-4 shadow-sm">
+      <div className="flex flex-col w-full max-w-[360px] rounded-3xl bg-muted/30 p-4 shadow-sm border">
+        {/* Phone mockup container */}
         <div className="flex flex-col h-full rounded-xl overflow-hidden">
-          <div className="w-full aspect-[4/5] bg-gray-200">
-            {renderPreviewMedia()}
+          {/* Text Content preview area - Reads temporaryText from context */}
+          <div className="w-full min-h-[200px] bg-background p-3 text-sm leading-relaxed">
+            <p className="whitespace-pre-wrap break-words">
+              {temporaryText || (
+                <span className="text-muted-foreground italic">
+                  Type something...
+                </span>
+              )}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 my-3">
+          {/* Social accounts Preview - Reads accounts from context */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 my-3 px-1">
             {accounts && accounts.length > 0 ? (
               sortedPlatforms.map((platform) => {
                 const PlatformIconComponent = platformInfo[platform]?.icon;
+                // Ensure the platform exists in platformInfo before rendering
                 if (!PlatformIconComponent) {
                   console.warn(
-                    `Preview: Icon not found for platform: ${platform}`
+                    `TextPreview: Icon not found for platform: ${platform}`
                   );
-                  return null;
+                  return null; // Skip rendering if icon is missing
                 }
                 return (
                   <div key={platform} className="flex items-center space-x-1.5">
@@ -238,33 +177,20 @@ export function Preview() {
               </div>
             )}
           </div>
+          {/* End Accounts Preview */}
 
-          <div className="w-full h-24 bg-muted p-2 rounded overflow-y-auto text-sm leading-snug">
-            <p className="whitespace-pre-wrap break-words line-clamp-[6]">
-              {getCaptionForDisplay() || (
-                <span className="text-muted-foreground italic">
-                  Caption will appear here...
-                </span>
-              )}
-            </p>
-          </div>
-
-          <div className="flex justify-center mt-3">
+          {/* Date display - Reads schedule from context */}
+          <div className="flex justify-center mt-auto pt-3">
             <Button
               variant="secondary"
               size="sm"
-              className="text-xs flex items-center gap-1"
+              className="text-xs flex items-center gap-1 opacity-70"
             >
               <Calendar className="w-3 h-3" />
               <span>{displayDate}</span>
             </Button>
           </div>
         </div>
-      </div>
-      <div className="mt-4">
-        <Button variant="secondary" className="w-full">
-          Select Cover Image/Thumbnail
-        </Button>
       </div>
     </div>
   );

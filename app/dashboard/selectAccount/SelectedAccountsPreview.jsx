@@ -7,6 +7,7 @@ import {
   AvatarImage,
 } from "@/app/components/ui/avatar";
 import { Instagram, Twitter, Facebook, Youtube } from "lucide-react";
+import { usePostData } from "@/app/context/PostDataContext";
 
 // --- Icon Components (Copied from SelectAccount/Authenticate pages for consistency) ---
 const TikTokIcon = ({ className }) => (
@@ -66,7 +67,12 @@ const PlatformIcon = ({ platform }) => {
 };
 // --- End Icon Components ---
 
-export function SelectedAccountsPreview({ selectedAccounts = [] }) {
+export function SelectedAccountsPreview() {
+  // --- Get Data from Context ---
+  const { postData } = usePostData();
+  const { selectedAccounts } = postData;
+  // ---------------------------
+
   // Group selected accounts by platform
   const groupedByPlatform = selectedAccounts.reduce((acc, account) => {
     const platform = account.platform;
@@ -98,6 +104,7 @@ export function SelectedAccountsPreview({ selectedAccounts = [] }) {
     return indexA - indexB;
   });
 
+  // Condition based on context data
   if (selectedAccounts.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-muted-foreground">

@@ -1,43 +1,39 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 
 // 1. Create the Context
 const PostDataContext = createContext(null);
 
-// Initial state for the post data
+// Initial state for the post data - REMOVED textContent and mediaFiles
 const initialPostData = {
+  selectedAccounts: [],
+  postType: "",
   textContent: "",
-  mediaFiles: [], // Array of file objects or URLs
-  selectedAccounts: [], // Array of account objects { id: string, platform: string, name: string }
-  scheduleType: "immediate", // 'immediate' or 'scheduled'
-  scheduledAt: null, // Date object for scheduled posts
-  // Add other relevant fields as needed (e.g., tags, location)
+  mediaFiles: [],
+  scheduleType: "immediate",
+  scheduledAt: null,
+  captionMode: "single",
+  singleCaption: "",
+  multiCaptions: {},
+  isPosted: false,
 };
 
 // 2. Create the Provider Component
 export function PostDataProvider({ children }) {
   const [postData, setPostData] = useState(initialPostData);
 
-  // --- Update Functions ---
+  // --- Memoized Update Functions ---
 
-  const updateTextContent = useCallback((text) => {
-    setPostData((prevData) => ({ ...prevData, textContent: text }));
-  }, []);
-
-  const addMediaFile = useCallback((file) => {
-    setPostData((prevData) => ({
-      ...prevData,
-      mediaFiles: [...prevData.mediaFiles, file],
-    }));
-  }, []);
-
-  const removeMediaFile = useCallback((fileToRemove) => {
-    setPostData((prevData) => ({
-      ...prevData,
-      mediaFiles: prevData.mediaFiles.filter((file) => file !== fileToRemove), // Adjust filter logic based on file object structure
-    }));
-  }, []);
+  // REMOVED updateTextContent
+  // REMOVED addMediaFile
+  // REMOVED removeMediaFile
 
   const addSelectedAccount = useCallback((account) => {
     setPostData((prevData) => {
@@ -61,29 +57,62 @@ export function PostDataProvider({ children }) {
     }));
   }, []);
 
+  const handleCaptionModeChange = useCallback((mode) => {
+    setPostData((prevData) => {
+      if (prevData.captionMode === mode) return prevData;
+      return {
+        ...prevData,
+        captionMode: mode,
+      };
+    });
+  }, []);
+
   const setSchedule = useCallback((type, date = null) => {
-    setPostData((prevData) => ({
-      ...prevData,
-      scheduleType: type,
-      scheduledAt: type === "scheduled" ? date : null,
-    }));
+    setPostData((prevData) => {
+      const newScheduledAt = type === "scheduled" ? date : null;
+      if (
+        prevData.scheduleType === type &&
+        prevData.scheduledAt === newScheduledAt
+      ) {
+        return prevData;
+      }
+      return {
+        ...prevData,
+        scheduleType: type,
+        scheduledAt: newScheduledAt,
+      };
+    });
   }, []);
 
   const resetPostData = useCallback(() => {
+    console.log(
+      "Resetting PostDataContext state (accounts, schedule, captions)"
+    );
+    // Note: This only resets context state (accounts, schedule).
+    // It does NOT clear persisted text state or session media state.
+    // Clearing those might require separate calls to mutations or specific logic.
     setPostData(initialPostData);
   }, []);
 
-  // --- Value provided by the context ---
-  const value = {
-    postData,
-    updateTextContent,
-    addMediaFile,
-    removeMediaFile,
-    addSelectedAccount,
-    removeSelectedAccount,
-    setSchedule,
-    resetPostData,
-  };
+  // --- Memoized Context Value ---
+  const value = useMemo(
+    () => ({
+      postData,
+      addSelectedAccount,
+      removeSelectedAccount,
+      handleCaptionModeChange,
+      setSchedule,
+      resetPostData,
+    }),
+    [
+      postData,
+      addSelectedAccount,
+      removeSelectedAccount,
+      handleCaptionModeChange,
+      setSchedule,
+      resetPostData,
+    ]
+  );
 
   return (
     <PostDataContext.Provider value={value}>

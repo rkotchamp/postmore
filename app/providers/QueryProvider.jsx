@@ -1,29 +1,32 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { queryClient, persister } from "../lib/queryClient";
 
 /**
  * Provider component for React Query
  * Initializes and provides QueryClient to the app
  */
 export function QueryProvider({ children }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            // Global defaults for React Query
-            staleTime: 5 * 60 * 1000, // 5 minutes
-            cacheTime: 30 * 60 * 1000, // 30 minutes
-            retry: 1,
-            refetchOnWindowFocus: false,
+  return (
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) => {
+            // Only persist specific queries
+            const persistedQueries = ["media", "carousel", "text", "preview"];
+            return persistedQueries.includes(query.queryKey[0]);
           },
         },
-      })
-  );
-
-  return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      }}
+    >
+      {children}
+      {process.env.NODE_ENV === "development" && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
+    </PersistQueryClientProvider>
   );
 }

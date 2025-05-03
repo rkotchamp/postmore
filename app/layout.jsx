@@ -5,6 +5,9 @@ import { AuthProvider } from "@/app/providers/AuthProvider";
 import { Toaster } from "@/app/components/ui/sonner";
 import { QueryProvider } from "@/app/providers/QueryProvider";
 import { FetchAllAccountsProvider } from "@/app/context/FetchAllAccountsContext";
+import { PostDataProvider } from "@/app/context/PostDataContext";
+import { ProgressCountProvider } from "@/app/context/ProgressCountContext";
+import { MediaTextFlowProvider } from "@/app/context/MediaTextFlowContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,8 +29,14 @@ export default function RootLayout({ children }) {
               disableTransitionOnChange
             >
               <FetchAllAccountsProvider>
-                {children}
-                <Toaster />
+                <PostDataProvider>
+                  <ProgressCountProvider>
+                    <MediaTextFlowProvider>
+                      {children}
+                      <Toaster />
+                    </MediaTextFlowProvider>
+                  </ProgressCountProvider>
+                </PostDataProvider>
               </FetchAllAccountsProvider>
             </ThemeProvider>
           </AuthProvider>

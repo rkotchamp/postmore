@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 import { useRouter } from "next/navigation";
+import { usePostData } from "@/app/context/PostDataContext";
 
 // --- Add Icon Components from Authenticate/page.jsx ---
 const TikTokIcon = ({ className }) => (
@@ -53,10 +54,14 @@ const BlueskyIcon = ({ className }) => (
 );
 // --- End Icon Components ---
 
-export function SelectAccount({ onSelectionChange }) {
+export function SelectAccount() {
   const router = useRouter();
   // Fetch accounts from context
   const { accounts, isLoading, error } = useFetchAllAccountsContext();
+  // --- Post Data Context ---
+  const { postData, addSelectedAccount, removeSelectedAccount } = usePostData();
+  const { selectedAccounts: contextSelectedAccounts } = postData; // Get currently selected accounts from context
+  // -----------------------
 
   // State for processed accounts grouped by platform
   const [processedPlatformAccounts, setProcessedPlatformAccounts] = useState(
@@ -65,7 +70,6 @@ export function SelectAccount({ onSelectionChange }) {
   // Track initialization separately from rendering
   const [initialized, setInitialized] = useState(false);
   const [expandedPlatforms, setExpandedPlatforms] = useState([]);
-  const [selectedAccounts, setSelectedAccounts] = useState({});
 
   // One-time initialization
   useEffect(() => {
@@ -74,17 +78,17 @@ export function SelectAccount({ onSelectionChange }) {
     // --- Process fetched accounts into the required structure ---
     const groupedAccounts = {};
     accounts.forEach((account) => {
-      const platform = account.platform; // Assuming account object has a 'platform' field
+      const platform = account.platform;
       if (!groupedAccounts[platform]) {
         groupedAccounts[platform] = [];
       }
-      // Assuming account object has 'id', 'name', 'email', 'imageUrl'
-      // Adapt these fields based on your actual account data structure
       groupedAccounts[platform].push({
-        id: account._id || account.id, // Prioritize _id based on Authenticate/page.jsx
-        name: account.displayName || "Unnamed Account", // Use displayName, fallback to "Unnamed Account"
-        email: account.platformUsername || account.platformAccountId || "", // Use platformUsername or platformAccountId
-        imageUrl: account.profileImage || "/avatars/placeholder.jpg", // Use profileImage, fallback to placeholder
+        id: account._id || account.id,
+        name: account.displayName || "Unnamed Account",
+        email: account.platformUsername || account.platformAccountId || "",
+        imageUrl: account.profileImage || "/avatars/placeholder.jpg",
+        // Keep the original platform identifier
+        platform: platform,
         // Keep the original account data for later use if needed
         originalData: account,
       });
@@ -92,17 +96,6 @@ export function SelectAccount({ onSelectionChange }) {
     setProcessedPlatformAccounts(groupedAccounts);
     // --- End processing ---
 
-    // Create initial selection object based on processed accounts
-    const initialSelection = {};
-    Object.keys(groupedAccounts).forEach((platform) => {
-      initialSelection[platform] = {};
-      groupedAccounts[platform].forEach((account) => {
-        initialSelection[platform][account.id.toString()] = false;
-      });
-    });
-
-    // Set state without triggering other effects
-    setSelectedAccounts(initialSelection);
     // Mark initialization complete
     setInitialized(true);
   }, [initialized, accounts, isLoading, error]);
@@ -138,7 +131,6 @@ export function SelectAccount({ onSelectionChange }) {
 
   // Don't render anything until initialization is complete
   if (!initialized) {
-    // This handles the case where accounts are loaded but processing hasn't finished the first time
     return <div className="p-4 text-center">Initializing...</div>;
   }
 
@@ -147,63 +139,52 @@ export function SelectAccount({ onSelectionChange }) {
     setExpandedPlatforms(value ? [value] : []);
   };
 
-  // Toggle account selection
+  // Toggle account selection using context functions
   const toggleAccountSelection = (platform, accountId) => {
     const idKey = accountId.toString();
-
-    setSelectedAccounts((prev) => {
-      // Create a new object to avoid state mutation
-      const updated = JSON.parse(JSON.stringify(prev));
-      // Toggle the selection state
-      updated[platform][idKey] = !updated[platform][idKey];
-
-      // --- Immediately notify parent of the change ---
-      const selectedList = getSelectedListFromState(updated);
-      if (onSelectionChange) {
-        onSelectionChange(selectedList);
-      }
-      // --- End notification ---
-
-      return updated;
-    });
-  };
-
-  // Helper function to extract selected accounts from state
-  const getSelectedListFromState = (state) => {
-    const list = [];
-    Object.keys(state).forEach((p) => {
-      Object.keys(state[p]).forEach((id) => {
-        if (state[p][id]) {
-          // Use processedPlatformAccounts here
-          const account = processedPlatformAccounts[p]?.find(
-            (a) => a.id.toString() === id
-          );
-          if (account) {
-            list.push({ ...account, platform: p });
-          }
-        }
-      });
-    });
-    return list;
-  };
-
-  // Check if any account is selected for a platform
-  const hasSelectedAccounts = (platform) => {
-    if (!selectedAccounts[platform]) return false;
-    return Object.values(selectedAccounts[platform]).some(
-      (selected) => selected
+    // Find the full account object from processed accounts
+    const accountObject = processedPlatformAccounts[platform]?.find(
+      (acc) => acc.id.toString() === idKey
     );
+
+    if (!accountObject) {
+      console.error(
+        "Account object not found for toggling selection:",
+        platform,
+        accountId
+      );
+      return;
+    }
+
+    // Check if the account is currently selected in the context
+    const isCurrentlySelected = contextSelectedAccounts.some(
+      (acc) => acc.id.toString() === idKey
+    );
+
+    if (isCurrentlySelected) {
+      // If selected, remove it using the context function
+      console.log("Removing account:", accountId);
+      removeSelectedAccount(accountId);
+    } else {
+      // If not selected, add it using the context function
+      // Ensure we pass the necessary account details expected by addSelectedAccount
+      console.log("Adding account:", accountObject);
+      addSelectedAccount(accountObject); // Pass the full object
+    }
   };
 
-  // Count selected accounts for a platform
+  // Check if any account is selected for a platform (using context state)
+  const hasSelectedAccounts = (platform) => {
+    return contextSelectedAccounts.some((acc) => acc.platform === platform);
+  };
+
+  // Count selected accounts for a platform (using context state)
   const countSelectedAccounts = (platform) => {
-    if (!selectedAccounts[platform]) return 0;
-    return Object.values(selectedAccounts[platform]).filter(
-      (selected) => selected
-    ).length;
+    return contextSelectedAccounts.filter((acc) => acc.platform === platform)
+      .length;
   };
 
-  // Get icon for platform (Updated to match Authenticate/page.jsx)
+  // Get icon for platform
   const PlatformIcon = ({ platform }) => {
     const iconProps = { className: "h-5 w-5" };
     switch (platform) {
@@ -213,13 +194,13 @@ export function SelectAccount({ onSelectionChange }) {
         return <Twitter {...iconProps} />;
       case "facebook":
         return <Facebook {...iconProps} />;
-      case "threads": // Match Authenticate page: custom div for Threads
+      case "threads":
         return (
           <div className="h-5 w-5 text-sm font-bold flex items-center justify-center">
             @
           </div>
         );
-      case "ytShorts": // Match Authenticate page: key is ytShorts
+      case "ytShorts":
         return <Youtube {...iconProps} />;
       case "tiktok":
         return <TikTokIcon {...iconProps} />;
@@ -230,13 +211,13 @@ export function SelectAccount({ onSelectionChange }) {
     }
   };
 
-  // Platform display names (Updated to match Authenticate/page.jsx)
+  // Platform display names
   const platformNames = {
     instagram: "Instagram",
     twitter: "Twitter",
     facebook: "Facebook",
     threads: "Threads",
-    ytShorts: "YouTube Shorts", // Match Authenticate page: key is ytShorts
+    ytShorts: "YouTube Shorts",
     tiktok: "TikTok",
     bluesky: "Bluesky",
   };
@@ -253,80 +234,95 @@ export function SelectAccount({ onSelectionChange }) {
         className="w-full space-y-3"
       >
         {Object.entries(processedPlatformAccounts).map(
-          ([platform, accounts]) => (
-            <AccordionItem
-              key={platform}
-              value={platform}
-              className="border rounded-lg overflow-hidden"
-            >
-              <AccordionTrigger className="flex items-center gap-3 py-3 px-4 hover:no-underline bg-primary/5">
-                <div className="flex items-center gap-2">
-                  <PlatformIcon platform={platform} />
-                  <span className="font-medium">{platformNames[platform]}</span>
-                </div>
+          ([platform, accounts]) => {
+            // Check if the platform exists in platformNames to avoid errors
+            if (!platformNames[platform]) return null;
 
-                {hasSelectedAccounts(platform) && (
-                  <div className="ml-auto mr-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                    {countSelectedAccounts(platform)} selected
+            return (
+              <AccordionItem
+                key={platform}
+                value={platform}
+                className="border rounded-lg overflow-hidden"
+              >
+                <AccordionTrigger className="flex items-center gap-3 py-3 px-4 hover:no-underline bg-primary/5">
+                  <div className="flex items-center gap-2">
+                    <PlatformIcon platform={platform} />
+                    <span className="font-medium">
+                      {platformNames[platform]}
+                    </span>
                   </div>
-                )}
-              </AccordionTrigger>
 
-              <AccordionContent className="bg-background">
-                <div className="py-2 divide-y">
-                  {accounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between py-3 px-4 hover:bg-muted/20"
-                    >
-                      <div
-                        className="flex-1 cursor-pointer"
-                        onClick={() =>
-                          toggleAccountSelection(platform, account.id)
-                        }
-                      >
-                        <Username
-                          name={account.name}
-                          email={account.email}
-                          imageUrl={account.imageUrl}
-                        />
-                      </div>
-                      <div>
-                        <div
-                          className={`ml-4 h-5 w-5 rounded border flex items-center justify-center cursor-pointer ${
-                            selectedAccounts[platform]?.[account.id.toString()]
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "border-input"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleAccountSelection(platform, account.id);
-                          }}
-                        >
-                          {selectedAccounts[platform]?.[
-                            account.id.toString()
-                          ] && (
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="3"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-3 w-3"
-                            >
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          )}
-                        </div>
-                      </div>
+                  {/* Use context-based check */}
+                  {hasSelectedAccounts(platform) && (
+                    <div className="ml-auto mr-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                      {/* Use context-based count */}
+                      {countSelectedAccounts(platform)} selected
                     </div>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          )
+                  )}
+                </AccordionTrigger>
+
+                <AccordionContent className="bg-background">
+                  <div className="py-2 divide-y">
+                    {accounts.map((account) => {
+                      // Determine if the current account is selected based on context
+                      const isSelected = contextSelectedAccounts.some(
+                        (acc) => acc.id.toString() === account.id.toString()
+                      );
+                      return (
+                        <div
+                          key={account.id}
+                          className="flex items-center justify-between py-3 px-4 hover:bg-muted/20"
+                        >
+                          <div
+                            className="flex-1 cursor-pointer"
+                            onClick={() =>
+                              toggleAccountSelection(platform, account.id)
+                            }
+                          >
+                            <Username
+                              name={account.name}
+                              email={account.email}
+                              imageUrl={account.imageUrl}
+                            />
+                          </div>
+                          <div>
+                            {/* Checkbox appearance based on context selection */}
+                            <div
+                              className={`ml-4 h-5 w-5 rounded border flex items-center justify-center cursor-pointer ${
+                                isSelected
+                                  ? "bg-primary border-primary text-primary-foreground"
+                                  : "border-input"
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleAccountSelection(platform, account.id);
+                              }}
+                            >
+                              {/* Show checkmark based on context selection */}
+                              {isSelected && (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="3"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="h-3 w-3"
+                                >
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          }
         )}
       </Accordion>
     </div>

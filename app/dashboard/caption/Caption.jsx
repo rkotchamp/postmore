@@ -1,45 +1,50 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext, memo } from "react";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Instagram, Twitter, Facebook, AtSign, Youtube } from "lucide-react";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/app/components/ui/tabs";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/app/components/ui/accordion";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/app/components/ui/avatar";
 import { Badge } from "@/app/components/ui/badge";
 import { Switch } from "@/app/components/ui/switch";
 import { ScheduleToggle } from "./ScheduleToggle";
+import { usePostData } from "@/app/context/PostDataContext";
 
-export function Caption({ selectedAccounts = [], onCaptionChange }) {
-  const [mode, setMode] = useState("single"); // "single" or "multiple"
-  const [scheduled, setScheduled] = useState(false); // Track if post is scheduled
-  const [scheduledDate, setScheduledDate] = useState(new Date());
-  const [scheduledTime, setScheduledTime] = useState("12:00");
-  const [captions, setCaptions] = useState({
-    single: "",
-    platforms: {
-      instagram: "",
-      twitter: "",
-      facebook: "",
-      threads: "",
-      youtube: "",
-    },
-  });
+export function Caption({ selectedAccounts = [] }) {
+  const { postData, setPostData, handleCaptionModeChange, setSchedule } =
+    usePostData();
+  const {
+    captionMode,
+    scheduleType,
+    scheduledAt,
+    singleCaption,
+    multiCaptions,
+  } = postData;
 
-  // Track previous captions to prevent unnecessary updates
-  const prevCaptionsRef = useRef(null);
-
-  // Get unique platforms from selected accounts
   const platforms = [
     ...new Set(selectedAccounts.map((account) => account.platform)),
   ];
 
-  // Character limits for different platforms
+  const [openAccordionItems, setOpenAccordionItems] = useState([]);
+  useEffect(() => {
+    if (captionMode === "multiple") {
+      setOpenAccordionItems(platforms);
+    }
+  }, [captionMode, platforms]);
+
+  const MemoizedScheduleToggle = memo(ScheduleToggle);
+
   const characterLimits = {
     instagram: 2200,
     twitter: 280,
@@ -48,88 +53,47 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
     youtube: 5000,
   };
 
-  // Update parent component when captions change
-  useEffect(() => {
-    // Skip initial render
-    if (!prevCaptionsRef.current) {
-      prevCaptionsRef.current = captions;
-      return;
-    }
-
-    if (onCaptionChange) {
-      let captionData = {};
-
-      if (mode === "single") {
-        // For single mode, create an object with the same caption for all platforms
-        platforms.forEach((platform) => {
-          captionData[platform] = captions.single;
-        });
+  const handleCaptionUpdate = (value, platform = null) => {
+    setPostData((prev) => {
+      if (captionMode === "single") {
+        if (prev.singleCaption === value) return prev;
+        return { ...prev, singleCaption: value };
+      } else if (platform) {
+        if (prev.multiCaptions[platform] === value) return prev;
+        const newMultiCaptions = { ...prev.multiCaptions, [platform]: value };
+        return { ...prev, multiCaptions: newMultiCaptions };
       } else {
-        // For multiple mode, just pass the platform-specific captions
-        captionData = { ...captions.platforms };
+        console.warn(
+          "Attempted to update caption in multiple mode without a platform"
+        );
+        return prev;
       }
-
-      // Add scheduling information
-      captionData.scheduled = scheduled;
-      if (scheduled) {
-        captionData.scheduledDate = scheduledDate;
-        captionData.scheduledTime = scheduledTime;
-      }
-
-      // Only notify parent if data has actually changed
-      const currentDataStr = JSON.stringify({
-        ...captionData,
-        scheduledDate: scheduled ? scheduledDate.toISOString() : null,
-      });
-
-      const prevDataStr = JSON.stringify(
-        prevCaptionsRef.current === captions
-          ? {
-              ...(mode === "single"
-                ? Object.fromEntries(
-                    platforms.map((p) => [p, prevCaptionsRef.current.single])
-                  )
-                : prevCaptionsRef.current.platforms),
-              scheduledDate: scheduled ? scheduledDate.toISOString() : null,
-              scheduledTime: scheduled ? scheduledTime : null,
-              scheduled,
-            }
-          : {}
-      );
-
-      if (currentDataStr !== prevDataStr) {
-        onCaptionChange(captionData);
-        prevCaptionsRef.current = captions;
-      }
-    }
-  }, [captions, mode, platforms, scheduled, scheduledDate, scheduledTime]);
-
-  // Handle caption text change
-  const handleCaptionChange = (value, platform = "single") => {
-    if (mode === "single" || platform === "single") {
-      setCaptions((prev) => ({
-        ...prev,
-        single: value,
-      }));
-    } else {
-      setCaptions((prev) => ({
-        ...prev,
-        platforms: {
-          ...prev.platforms,
-          [platform]: value,
-        },
-      }));
-    }
+    });
   };
 
-  // Toggle scheduled state and handle date/time updates
-  const handleScheduleToggle = (newScheduledState, date, time) => {
-    setScheduled(newScheduledState);
-    if (date) setScheduledDate(date);
-    if (time) setScheduledTime(time);
+  const handleScheduleUpdate = (newScheduledState, date, time) => {
+    const scheduleTypeValue = newScheduledState ? "scheduled" : "immediate";
+
+    let combinedDateTime = null;
+    if (newScheduledState && date && time) {
+      try {
+        const dateString =
+          typeof date === "string" ? date : date.toISOString().split("T")[0];
+        const timeString = typeof time === "string" ? time : "00:00";
+        combinedDateTime = new Date(`${dateString}T${timeString}`);
+        if (isNaN(combinedDateTime.getTime())) {
+          throw new Error("Invalid Date object created");
+        }
+      } catch (error) {
+        console.error("Error creating scheduled date:", error);
+        combinedDateTime = new Date();
+      }
+    }
+
+    console.log("Updating schedule:", scheduleTypeValue, combinedDateTime);
+    setSchedule(scheduleTypeValue, combinedDateTime);
   };
 
-  // Get platform icon
   const PlatformIcon = ({ platform }) => {
     const iconProps = { className: "h-5 w-5" };
     switch (platform) {
@@ -148,7 +112,6 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
     }
   };
 
-  // Platform display names
   const platformNames = {
     instagram: "Instagram",
     twitter: "Twitter",
@@ -157,13 +120,12 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
     youtube: "YouTube",
   };
 
-  // Get accounts count by platform
   const getAccountCountByPlatform = (platform) => {
     return selectedAccounts.filter((account) => account.platform === platform)
       .length;
   };
 
-  if (mode === "multiple" && (!platforms || platforms.length === 0)) {
+  if (captionMode === "multiple" && (!platforms || platforms.length === 0)) {
     return (
       <div className="p-4 border rounded bg-muted/10">
         <p className="text-muted-foreground text-center">
@@ -181,24 +143,23 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
         <div className="flex border rounded-lg overflow-hidden">
           <Button
             type="button"
-            variant={mode === "single" ? "default" : "ghost"}
+            variant={captionMode === "single" ? "default" : "ghost"}
             className="rounded-none"
-            onClick={() => setMode("single")}
+            onClick={() => handleCaptionModeChange("single")}
           >
             One Caption for All
           </Button>
           <Button
             type="button"
-            variant={mode === "multiple" ? "default" : "ghost"}
+            variant={captionMode === "multiple" ? "default" : "ghost"}
             className="rounded-none"
-            onClick={() => setMode("multiple")}
+            onClick={() => handleCaptionModeChange("multiple")}
           >
             Caption for Each
           </Button>
         </div>
       </div>
 
-      {/* Platform selection info */}
       {selectedAccounts.length > 0 ? (
         <div className="flex flex-wrap gap-2 mb-4">
           {platforms.map((platform) => (
@@ -221,97 +182,108 @@ export function Caption({ selectedAccounts = [], onCaptionChange }) {
         </p>
       )}
 
-      {/* Caption editor */}
-      {mode === "single" ? (
+      {captionMode === "single" ? (
         <Card>
           <CardContent className="p-4">
             <Textarea
               placeholder="Write a caption for all platforms..."
               className="min-h-[150px] resize-y mb-2"
-              value={captions.single}
+              value={singleCaption}
               maxLength={Math.min(
                 ...platforms.map((p) => characterLimits[p] || 5000)
               )}
-              onChange={(e) => handleCaptionChange(e.target.value)}
+              onChange={(e) => handleCaptionUpdate(e.target.value)}
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Character count: {captions.single.length}</span>
+              <span>Character count: {singleCaption?.length || 0}</span>
               <span>
                 Using the lowest character limit from all selected platforms
               </span>
             </div>
-
-            {/* Schedule toggle button */}
-            <ScheduleToggle
-              scheduled={scheduled}
-              onToggle={(newState, date, time) =>
-                handleScheduleToggle(newState, date, time)
-              }
-            />
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue={platforms.length > 0 ? platforms[0] : "default"}>
-          {platforms.length > 0 ? (
-            <TabsList className="mb-4">
-              {platforms.map((platform) => (
-                <TabsTrigger key={platform} value={platform}>
-                  {platformNames[platform] || platform}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          ) : (
-            <TabsTrigger value="default">Default</TabsTrigger>
-          )}
-
-          {platforms.map((platform) => (
-            <TabsContent key={platform} value={platform}>
-              <Card>
-                <CardContent className="p-4">
+        <Accordion
+          type="multiple"
+          value={openAccordionItems}
+          onValueChange={setOpenAccordionItems}
+          className="w-full space-y-2"
+        >
+          {platforms.map((platform) => {
+            const platformAccounts = selectedAccounts.filter(
+              (acc) => acc.platform === platform
+            );
+            const platformCaption = multiCaptions?.[platform] || "";
+            return (
+              <AccordionItem
+                key={platform}
+                value={platform}
+                className="border rounded-lg overflow-hidden bg-background"
+              >
+                <AccordionTrigger className="flex items-center gap-3 py-3 px-4 hover:no-underline bg-muted/10">
+                  <div className="flex items-center gap-2 flex-1">
+                    <PlatformIcon platform={platform} />
+                    <span className="font-medium">
+                      {platformNames[platform]}
+                    </span>
+                  </div>
+                  <div className="flex items-center -space-x-2 mr-2">
+                    {platformAccounts.map((account) => (
+                      <Avatar
+                        key={account.id}
+                        className="h-6 w-6 border-2 border-background"
+                        title={account.name}
+                      >
+                        <AvatarImage
+                          src={account.imageUrl}
+                          alt={account.name}
+                        />
+                        <AvatarFallback className="text-[10px]">
+                          {account.name?.charAt(0)?.toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="p-4 border-t bg-background">
                   <Textarea
                     placeholder={`Write a caption for ${platformNames[platform]}...`}
-                    className="min-h-[150px] resize-y mb-2"
-                    value={captions.platforms[platform]}
+                    className="min-h-[120px] resize-y mb-2"
+                    value={platformCaption}
                     maxLength={characterLimits[platform]}
                     onChange={(e) =>
-                      handleCaptionChange(e.target.value, platform)
+                      handleCaptionUpdate(e.target.value, platform)
                     }
                   />
-                  <div className="flex justify-between text-xs text-muted-foreground">
+                  <div className="flex justify-end text-xs text-muted-foreground">
                     <span>
-                      Character count: {captions.platforms[platform].length}
+                      {platformCaption.length || 0} /{characterLimits[platform]}
                     </span>
-                    <span>Limit: {characterLimits[platform]} characters</span>
                   </div>
-                </CardContent>
-                {/* Schedule toggle button */}
-                <ScheduleToggle
-                  scheduled={scheduled}
-                  onToggle={(newState, date, time) =>
-                    handleScheduleToggle(newState, date, time)
-                  }
-                />
-              </Card>
-            </TabsContent>
-          ))}
-        </Tabs>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
       )}
 
-      {/* Copy buttons - optional feature */}
-      {mode === "multiple" && captions.single && (
+      <div className="mt-4">
+        <MemoizedScheduleToggle />
+      </div>
+
+      {captionMode === "multiple" && singleCaption && (
         <div className="mt-4">
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              const updatedPlatforms = { ...captions.platforms };
-              platforms.forEach((platform) => {
-                updatedPlatforms[platform] = captions.single;
+              setPostData((prev) => {
+                const updatedMultiCaptions = { ...prev.multiCaptions };
+                platforms.forEach((platform) => {
+                  updatedMultiCaptions[platform] = prev.singleCaption;
+                });
+                return { ...prev, multiCaptions: updatedMultiCaptions };
               });
-              setCaptions((prev) => ({
-                ...prev,
-                platforms: updatedPlatforms,
-              }));
             }}
           >
             Copy single caption to all platforms

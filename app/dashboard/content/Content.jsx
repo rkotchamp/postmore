@@ -1,67 +1,61 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { Card, CardContent } from "@/app/components/ui/card";
-import { ImageIcon, Type } from "lucide-react";
+import { ImageIcon, Type, Layers, SendHorizontal } from "lucide-react";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { MediaPost } from "@/app/dashboard/newPost/Media";
+import { MediaPosts } from "@/app/dashboard/newPost/MediaPosts";
 import { TextPost } from "@/app/dashboard/newPost/Text";
 import { Button } from "@/app/components/ui/button";
+import { useMediaTextFlow } from "@/app/context/MediaTextFlowContext";
+import { useTextContent } from "@/app/hooks/useMediaQueries";
 
-export function Content({ onContentChange }) {
-  const [postType, setPostType] = useState("media");
-  const [latestData, setLatestData] = useState(null);
-
-  const handleMediaChange = (mediaData) => {
-    setLatestData({ type: "media", ...mediaData });
-  };
-
-  const handleTextChange = (textData) => {
-    setLatestData({ type: "text", ...textData });
-  };
-
-  useEffect(() => {
-    if (latestData === null || !onContentChange) {
-      return;
-    }
-
-    let contentObject;
-    if (latestData.type === "media") {
-      contentObject = {
-        type: "media",
-        isValid: latestData.isValid || false,
-        data: { mediaItems: latestData.items || [] },
-      };
-    } else if (latestData.type === "text") {
-      contentObject = {
-        type: "text",
-        isValid: latestData.isValid || false,
-        data: { text: latestData.value || "" },
-      };
-    } else {
-      contentObject = { type: null, isValid: false, data: null };
-    }
-
-    onContentChange(contentObject);
-  }, [latestData, onContentChange]);
+export function Content() {
+  const { behavior, setBehavior } = useMediaTextFlow();
+  const {
+    postType,
+    temporaryText,
+    isMediaAvailable: sessionHasMedia,
+  } = behavior;
+  const { data: persistedText, isLoading: isLoadingPersistedText } =
+    useTextContent();
 
   useEffect(() => {
-    setLatestData(null);
-  }, [postType]);
+    if (
+      postType === "text" &&
+      !isLoadingPersistedText &&
+      temporaryText !== persistedText
+    ) {
+      console.log(
+        "Content: Loading persisted text into behavior state:",
+        persistedText
+      );
+      setBehavior((prev) => ({ ...prev, temporaryText: persistedText ?? "" }));
+    }
+  }, [postType, persistedText, isLoadingPersistedText, setBehavior]);
+
+  const handleTabChange = (newType) => {
+    setBehavior((prev) => ({
+      ...prev,
+      postType: newType,
+      temporaryText: newType === "media" ? "" : prev.temporaryText,
+      isMediaAvailable: newType === "text" ? false : prev.isMediaAvailable,
+      isUserTyping: false,
+    }));
+  };
 
   return (
     <div className="w-full space-y-4">
       <Card className="border shadow-sm max-w-5xl mx-auto">
         <CardContent>
           <Tabs
-            defaultValue="media"
             value={postType}
-            onValueChange={setPostType}
+            onValueChange={handleTabChange}
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-white rounded-lg p-1 h-auto shadow-sm">
@@ -82,25 +76,15 @@ export function Content({ onContentChange }) {
             </TabsList>
 
             <TabsContent value="media">
-              <MediaPost onMediaChange={handleMediaChange} />
+              {postType === "media" && <MediaPosts />}
             </TabsContent>
 
             <TabsContent value="text">
-              <TextPost onTextChange={handleTextChange} />
+              {postType === "text" && <TextPost />}
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Submit Button */}
-      {/* <Button
-        className="max-w-5xl w-full mx-auto py-6 flex items-center justify-center gap-2 transition-all"
-        disabled={!canSubmit}
-        variant={canSubmit ? "default" : "secondary"}
-      >
-        <SendHorizontal className="h-5 w-5" />
-        <span className="text-base">Schedule Post</span>
-      </Button> */}
     </div>
   );
 }

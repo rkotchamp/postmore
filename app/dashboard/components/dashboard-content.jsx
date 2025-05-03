@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
   CheckCircle2,
@@ -13,6 +13,12 @@ import { Content } from "@/app/dashboard/content/Content";
 import { SelectAccount } from "@/app/dashboard/selectAccount/SelectAccount";
 import { Caption } from "@/app/dashboard/caption/Caption";
 import { Preview } from "@/app/dashboard/preview/Preview";
+import { TextPreview } from "@/app/dashboard/preview/TextPreview";
+import { useMediaMutations } from "@/app/hooks/useMediaMutations";
+import { useMediaItems } from "@/app/hooks/useMediaQueries";
+import { useProgressCount } from "@/app/context/ProgressCountContext";
+import { usePostData } from "@/app/context/PostDataContext";
+import { useMediaTextFlow } from "@/app/context/MediaTextFlowContext";
 
 // Steps for post creation process
 const steps = [
@@ -22,152 +28,162 @@ const steps = [
 ];
 
 export function DashboardContent() {
-  // Current step in the process
-  const [currentStep, setCurrentStep] = useState(0);
+  // --- Context Hooks ---
+  const { progressCount, setProgressCount } = useProgressCount();
+  const {
+    postData,
+    setPostData,
+    addSelectedAccount,
+    removeSelectedAccount,
+    setSchedule,
+    resetPostData,
+  } = usePostData();
+  const { behavior, setBehavior } = useMediaTextFlow();
+  const { currentStep } = progressCount;
+  const {
+    selectedAccounts,
+    scheduleType,
+    scheduledAt,
+    captionMode,
+    singleCaption,
+    multiCaptions,
+  } = postData;
+  const {
+    postType: temporaryContentType,
+    temporaryText,
+    isMediaAvailable: sessionHasMedia,
+    showPreviews,
+  } = behavior;
+  // ---------------------
+
+  // --- TanStack Query State ---
+  const { data: sessionMediaItems = [], isLoading: isLoadingMedia } =
+    useMediaItems();
+  const { updateTextContent } = useMediaMutations();
+  // --------------------------
 
   // State to control preview visibility
-  const [showPreview, setShowPreview] = useState(false);
 
-  // Store data from each step
-  const [postData, setPostData] = useState({
-    content: { type: null, isValid: false, data: null },
-    accounts: [],
-    captions: {},
-  });
-
-  // Track whether each step is completed
-  const [stepsCompleted, setStepsCompleted] = useState({
-    content: false,
-    accounts: false,
-    caption: false,
-  });
-
-  // Update preview visibility whenever content changes
+  // Update preview visibility based on context/query state
   useEffect(() => {
-    setShowPreview(hasMediaContent());
-  }, [postData.content]);
+    const shouldShow =
+      (temporaryContentType === "media" && sessionHasMedia) ||
+      (temporaryContentType === "text" && temporaryText.trim() !== "");
+    setBehavior((prev) => ({ ...prev, showPreviews: shouldShow }));
+  }, [temporaryContentType, sessionHasMedia, temporaryText]);
 
-  // Check if current step is valid and can proceed to next
-  const canProceed = () => {
-    switch (currentStep) {
+  // --- Step Completion Logic (Inline Check) ---
+  const isStepComplete = (stepIndex) => {
+    switch (stepIndex) {
       case 0: // Content
-        return postData.content.isValid;
+        return (
+          (temporaryContentType === "media" && sessionHasMedia) ||
+          (temporaryContentType === "text" && temporaryText.trim() !== "")
+        );
       case 1: // Accounts
-        return postData.accounts.length > 0;
+        return selectedAccounts.length > 0;
       case 2: // Caption
-        return Object.keys(postData.captions).length > 0;
+        // Caption completeness might depend on the mode
+        // If single mode, singleCaption should not be empty (unless it's a media post where caption is optional)
+        // If multiple mode, captions for selected platforms should exist
+        // For now, let's consider it complete if accounts are selected (as caption is the last step)
+        // More robust validation could be added later if needed
+        return selectedAccounts.length > 0; // Simplistic check for now
       default:
         return false;
     }
   };
 
-  // Handle content changes - wrapped in useCallback for stable reference
-  const handleContentChange = useCallback((contentData) => {
-    setPostData((prev) => ({
-      ...prev,
-      content: contentData,
-    }));
-    setStepsCompleted((prev) => ({
-      ...prev,
-      content: contentData.isValid,
-    }));
-  }, []); // Empty dependency array to ensure stable reference
+  // Check if current step is valid and can proceed to next
+  const canProceed = () => {
+    return isStepComplete(currentStep);
+  };
 
-  // Handle account selection changes
-  const handleAccountSelection = useCallback((selectedAccounts) => {
-    console.log("Selection changed:", selectedAccounts);
-    // Only update state if we have a valid selection
-    if (Array.isArray(selectedAccounts)) {
-      setPostData((prev) => ({
-        ...prev,
-        accounts: selectedAccounts,
-      }));
-      setStepsCompleted((prev) => ({
-        ...prev,
-        accounts: selectedAccounts.length > 0,
-      }));
-    }
-  }, []);
-
-  // Handle caption changes
-  const handleCaptionChange = useCallback((captionData) => {
-    // Prevent unnecessary updates
-    if (!captionData || Object.keys(captionData).length === 0) return;
-
-    // Use functional updates to avoid stale closure issues
-    setPostData((prev) => {
-      // Skip update if captions haven't changed
-      if (JSON.stringify(prev.captions) === JSON.stringify(captionData)) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        captions: captionData,
-      };
-    });
-
-    // Update completion status
-    setStepsCompleted((prev) => {
-      const isComplete = Object.keys(captionData).length > 0;
-      // Skip update if completion status hasn't changed
-      if (prev.caption === isComplete) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        caption: isComplete,
-      };
-    });
-  }, []);
-
-  // Go to next step
+  // Go to next step - Persist text if moving from step 0
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
-      setCurrentStep((prev) => prev + 1);
+      if (currentStep === 0 && temporaryContentType === "text") {
+        console.log("Persisting text content:", temporaryText);
+        // Ensure temporaryText is defined before mutating
+        updateTextContent.mutate(temporaryText ?? "");
+      }
+      setProgressCount((prev) => ({
+        ...prev,
+        currentStep: prev.currentStep + 1,
+      }));
     }
   };
 
   // Go to previous step
   const handlePrevious = () => {
     if (currentStep > 0) {
-      setCurrentStep((prev) => prev - 1);
+      setProgressCount((prev) => ({
+        ...prev,
+        currentStep: prev.currentStep - 1,
+      }));
     }
   };
 
-  // Handle final submission
+  // Handle final submission - Also persist latest text
   const handleSubmit = () => {
-    console.log("Submitting post:", postData);
-    // Here you would send the data to your API
+    if (!canProceed()) {
+      console.error("Cannot submit, current step is not complete.");
+      alert("Please complete the current step before submitting.");
+      return;
+    }
+    // Always persist the latest text state before final submission if it's a text post.
+    if (temporaryContentType === "text") {
+      console.log("Persisting final text content:", temporaryText);
+      updateTextContent.mutate(temporaryText ?? "", {
+        onSuccess: () => {
+          console.log("Text persisted. Proceeding with submission...");
+          proceedWithSubmission();
+        },
+        onError: (error) => {
+          console.error("Failed to persist text before submission:", error);
+          alert("Failed to save post content. Please try again.");
+        },
+      });
+    } else {
+      // If it's a media post, proceed directly
+      proceedWithSubmission();
+    }
+  };
+
+  const proceedWithSubmission = () => {
+    // Construct submission data from contexts and query
+    const submissionData = {
+      contentType: temporaryContentType,
+      // Use temporaryText if text post, derive caption from PostDataContext otherwise
+      text:
+        temporaryContentType === "text"
+          ? temporaryText
+          : captionMode === "single"
+          ? singleCaption
+          : "", // Simplistic caption for now
+      media: temporaryContentType === "media" ? sessionMediaItems : [],
+      accounts: selectedAccounts,
+      // Pass full caption details from PostDataContext
+      captions: {
+        mode: captionMode,
+        single: singleCaption,
+        platforms: multiCaptions, // Assuming multiCaptions holds platform specifics
+        scheduleType: scheduleType,
+        scheduledAt: scheduledAt,
+      },
+    };
+    console.log("Submitting post:", submissionData);
     alert("Post scheduled! Check console for data.");
+    // TODO: Reset relevant states after successful submission
+    // resetPostData(); // Reset accounts, schedule, caption mode etc.
+    // setBehavior(initialBehaviorState); // Reset text flow context
+    // clearMedia.mutate(); // Clear media from TanStack Query cache
+    // setProgressCount({ currentStep: 0 }); // Reset step
   };
 
-  // Check if media content is available
-  const hasMediaContent = () => {
-    // For media type, ensure there's actually a media preview
-    if (postData.content.type === "media") {
-      return postData.content.data?.media ? true : false;
-    }
-
-    // For carousel, check if there's at least one item
-    if (postData.content.type === "carousel") {
-      return (
-        postData.content.data?.carousel &&
-        postData.content.data.carousel.length > 0
-      );
-    }
-
-    // For text posts, check if there's actual text content
-    if (postData.content.type === "text") {
-      return (
-        postData.content.data?.text && postData.content.data?.text.trim() !== ""
-      );
-    }
-
-    // Default case - no valid content
-    return false;
-  };
+  if (isLoadingMedia) {
+    return <div>Loading...</div>; // Add a loading indicator
+  }
 
   return (
     <div className="w-full max-w-full space-y-6 p-6">
@@ -180,7 +196,7 @@ export function DashboardContent() {
         {/* Left side: Progress Bar, Content, and Navigation buttons together */}
         <div
           className={`flex-1 flex flex-col space-y-6 ${
-            !showPreview ? "lg:w-full" : ""
+            !showPreviews ? "lg:w-full" : ""
           }`}
         >
           {/* Progress Bar */}
@@ -191,6 +207,7 @@ export function DashboardContent() {
                   {/* Step circle with number or check */}
                   <div
                     className={`flex items-center justify-center h-10 w-10 rounded-full border-2 ${
+                      // Use isStepComplete for previous steps check
                       index < currentStep
                         ? "border-primary bg-primary text-primary-foreground"
                         : index === currentStep
@@ -198,7 +215,7 @@ export function DashboardContent() {
                         : "border-muted-foreground/30 text-muted-foreground"
                     }`}
                   >
-                    {index < currentStep ? (
+                    {index < currentStep ? ( // Show checkmark only if step is strictly less than current
                       <CheckCircle2 className="h-6 w-6" />
                     ) : (
                       <span className="text-sm font-medium">{index + 1}</span>
@@ -220,6 +237,7 @@ export function DashboardContent() {
                   {index < steps.length - 1 && (
                     <div
                       className={`h-0.5 w-10 md:w-24 lg:w-36 ${
+                        // Line color based on completion of the *previous* step
                         index < currentStep
                           ? "bg-primary"
                           : "bg-muted-foreground/30"
@@ -235,18 +253,19 @@ export function DashboardContent() {
           <Card className="border-none shadow-none flex-1 p-0">
             <CardContent className="p-6">
               {currentStep === 0 && (
-                <Content onContentChange={handleContentChange} />
+                // Removed onContentChange prop
+                <Content />
               )}
 
               {currentStep === 1 && (
-                <SelectAccount onSelectionChange={handleAccountSelection} />
+                // Removed onSelectionChange prop - SelectAccount uses PostDataContext directly
+                <SelectAccount />
               )}
 
               {currentStep === 2 && (
-                <Caption
-                  selectedAccounts={postData.accounts}
-                  onCaptionChange={handleCaptionChange}
-                />
+                // Removed onCaptionChange prop - Caption uses PostDataContext directly
+                // Pass selectedAccounts from context
+                <Caption selectedAccounts={selectedAccounts} />
               )}
             </CardContent>
           </Card>
@@ -280,20 +299,24 @@ export function DashboardContent() {
                 size="lg"
               >
                 <SendHorizontal className="h-5 w-5" />
-                Schedule Post
+                Schedule Post{" "}
+                {/* TODO: Text should adapt based on scheduleType */}
               </Button>
             )}
           </div>
         </div>
 
-        {/* Right side: Preview Panel - Only show when media content is available */}
-        {showPreview && (
+        {/* Right side: Preview Panel */}
+        {showPreviews && (
           <div className="lg:w-[360px] mx-auto lg:mx-0">
-            <Preview
-              content={postData.content}
-              accounts={postData.accounts}
-              captions={postData.captions}
-            />
+            {/* Pass necessary data from context/query to previews */}
+            {temporaryContentType === "text" ? (
+              // TextPreview needs temporaryText and accounts from context
+              <TextPreview />
+            ) : (
+              // Preview needs sessionMediaItems, temporaryText, accounts, captions etc from context/query
+              <Preview />
+            )}
           </div>
         )}
       </div>
