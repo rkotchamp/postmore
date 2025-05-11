@@ -1,20 +1,54 @@
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import GithubProvider from "next-auth/providers/github";
+import CredentialsProvider from "next-auth/providers/credentials";
 import User from "@/app/models/userSchema";
 import { connectToMongoose } from "@/app/lib/db/mongoose";
 
-// Debug message for troubleshooting
-console.log("NextAuth OAuth configuration:");
-console.log(
-  "- Google Callback URL: http://localhost:3000/api/auth/callback/google"
-);
-console.log(
-  "- GitHub Callback URL: http://localhost:3000/api/auth/callback/github"
-);
+// Get the proper base URL for callbacks
+const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
 
 export const authOptions = {
   providers: [
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        try {
+          await connectToMongoose();
+
+          // Find user by email and explicitly select the password field
+          const user = await User.findOne({ email: credentials.email }).select(
+            "+password"
+          );
+
+          if (!user) {
+            throw new Error("Invalid email or password");
+          }
+
+          // Check if password matches
+          const isMatch = await user.matchPassword(credentials.password);
+
+          if (!isMatch) {
+            throw new Error("Invalid email or password");
+          }
+
+          // Return user object without password
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name,
+            image: user.image,
+          };
+        } catch (error) {
+          console.error("Credentials auth error:", error);
+          throw error;
+        }
+      },
+    }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -25,14 +59,20 @@ export const authOptions = {
           response_type: "code",
         },
       },
+      callbackUrl: `${baseUrl}/api/auth/callback/google`,
     }),
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      callbackUrl: `${baseUrl}/api/auth/callback/github`,
     }),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
+      if (account.provider === "credentials") {
+        return true; // Allow credential login
+      }
+
       console.log(
         `${account.provider} signIn callback running with profile:`,
         profile?.email || profile?.login

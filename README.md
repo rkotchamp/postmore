@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# PostMore Application
 
-## Getting Started
+## Media Handling Implementation
 
-First, run the development server:
+### Blob URL Handling
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+The application handles media files (images and videos) using JavaScript's Blob URL API. Here are the key implementation details:
+
+#### MediaPlayer Component
+
+We've created a reusable `MediaPlayer` component that properly manages blob URLs:
+
+- Creates blob URLs only once when the component mounts or when the file changes
+- Uses proper cleanup on unmount to avoid memory leaks
+- Handles both image and video files with appropriate HTML elements
+- Provides loading states and error handling
+- Ensures blob URLs are only revoked when the component unmounts
+
+#### Preview Implementation
+
+The Preview component displays uploaded media files:
+
+- Uses the `MediaPlayer` component for consistent media handling
+- Creates blob URLs from File objects passed through TanStack Query's cache
+- Ensures blob URLs are not revoked prematurely
+- Adds small delay when creating blob URLs to ensure browser has time to process them
+
+#### Media Upload Flow
+
+1. User drops files in the `MediaPosts` component
+2. Files are stored as File objects in TanStack Query's cache
+3. Both `MediaPosts` and `Preview` components display the media using the `MediaPlayer` component
+4. Blob URLs are properly cleaned up when components unmount
+
+#### Content Security Policy
+
+The application's CSP has been configured to allow blob URLs for media:
+
+```js
+// next.config.mjs
+media-src 'self' blob:;
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+This ensures browsers can load video and audio content from blob URLs.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Next Steps
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Consider implementing the next-video library for more advanced video handling:
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Enhanced video processing and optimization
+- Broader format compatibility
+- Better video streaming capabilities
+- Built-in analytics

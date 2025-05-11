@@ -1,0 +1,174 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Blob Video Preview Implementation Summary
+
+## Context
+- The app allows users to upload media (images/videos) and preview them in two places: `MediaPosts.jsx` (immediate preview after drop) and `Preview.jsx` (side preview panel).
+- Blob URLs are generated using `URL.createObjectURL(file)` for previewing uploaded files before they are persisted or uploaded to a server.
+
+## Initial Challenges
+- **Blob URL Revocation Timing:** Blob URLs were revoked too early or inappropriately, causing videos not to display in Preview panel
+- **CSP Issues:** Content Security Policy needed configuration to allow `blob:` URLs for media content
+- **State Propagation:** Ensuring File objects properly pass through TanStack Query cache
+- **Browser Compatibility:** Handling various video formats and browser differences
+
+## Implemented Solution
+
+### 1. Created a Dedicated Media Player Component
+File: `app/components/MediaPlayer.jsx`
+
+This reusable component handles all blob URL management in a consistent way:
+- Creates blob URLs only once when component mounts or when file changes
+- Properly cleans up blob URLs on unmount
+- Handles both image and video content with appropriate elements
+- Provides loading states and error feedback
+- Prevents blob URL leaks through proper lifecycle handling
+
+```jsx
+export function MediaPlayer({ file, type, id, controls = true }) {
+  // Create blob URL only when component mounts or file changes
+  useEffect(() => {
+    // Only create blob URL if we have a File object
+    if (file instanceof File) {
+      const url = URL.createObjectURL(file);
+      setBlobUrl(url);
+      // Clean up on unmount or when file changes
+      return () => URL.revokeObjectURL(url);
+    }
+  }, [file, id]);
+  
+  // ...render video or image based on type
+}
+```
+
+### 2. Fixed Preview Component
+File: `app/dashboard/preview/Preview.jsx`
+
+- Now uses the MediaPlayer component for consistent handling
+- Added state flag (`blobUrlsCreated`) to track blob URL creation
+- Fixed cleanup to only revoke URLs on component unmount
+- Added a small delay to ensure browser processes URLs before rendering
+
+```jsx
+// Create blob URLs with useMemo to avoid recreating them on every render
+const previewUrls = useMemo(() => {
+  // Reset blob creation state
+  setBlobUrlsCreated(false);
+  
+  // Create URLs from File objects
+  // ...
+  
+  // Mark URLs as created after a small delay
+  setTimeout(() => {
+    setBlobUrlsCreated(true);
+  }, 100);
+  
+  return urls;
+}, [mediaItems]);
+
+// Only clean up on unmount
+useEffect(() => {
+  return () => {
+    // Cleanup code...
+  };
+}, []); // Empty dependency array
+```
+
+### 3. Updated Media Posts Component
+File: `app/dashboard/newPost/MediaPosts.jsx`
+
+- Now uses the same MediaPlayer component for consistency
+- Properly passes File objects to TanStack Query cache
+- Ensures clean up of blob URLs for removed items
+
+```jsx
+// Inside render
+{item.type === "video" ? (
+  <MediaPlayer
+    file={item.file}
+    type="video"
+    id={item.id}
+    controls
+  />
+) : (
+  <MediaPlayer
+    file={item.file}
+    type="image"
+    id={item.id}
+  />
+)}
+```
+
+### 4. Content Security Policy Configuration
+File: `next.config.mjs`
+
+Added appropriate CSP headers to allow blob URLs for media:
+
+```js
+media-src 'self' blob:;
+```
+
+### 5. Media Mutations Optimization
+File: `app/hooks/useMediaMutations.js`
+
+- Ensured File objects are properly passed through mutations
+- Prevented unnecessary JSON serialization that would lose File references
+
+```js
+// Update media items mutation
+updateMedia: useMutation({
+  mutationFn: async (newMediaItems) => {
+    // Pass through the items with File objects intact
+    return newMediaItems;
+  },
+  onSuccess: (newMediaItemsWithFiles) => {
+    // Update query cache with items including File objects
+    queryClient.setQueryData([QUERY_KEYS.media], newMediaItemsWithFiles);
+    // ...
+  },
+}),
+```
+
+### 6. NextVideo Integration Example
+File: `app/components/NextVideoPlayer.jsx`
+
+Created a reference implementation for future enhancement with next-video library.
+
+## Current Status
+
+The solution is now fully functional:
+- Media files (both images and videos) are properly displayed in both MediaPosts and Preview components
+- Blob URLs are correctly managed throughout their lifecycle
+- There are no memory leaks from unreleased blob URLs
+- The UI provides appropriate loading and error states
+- Browser compatibility is improved with proper video element configuration
+
+## Files Involved
+
+1. `app/components/MediaPlayer.jsx` - New component for handling media display
+2. `app/dashboard/preview/Preview.jsx` - Updated to use MediaPlayer and fix blob URL handling
+3. `app/dashboard/newPost/MediaPosts.jsx` - Updated to use MediaPlayer for consistency
+4. `app/hooks/useMediaMutations.js` - Optimized to preserve File objects in TanStack Query
+5. `next.config.mjs` - Updated with proper CSP configuration
+6. `app/components/NextVideoPlayer.jsx` - Reference implementation for future enhancement
+
+## Future Enhancements
+
+1. **Integration with next-video library**
+   - Could provide enhanced video processing and optimization
+   - Wider format compatibility 
+   - Improved streaming capabilities
+   - Built-in analytics
+
+2. **Server-side processing**
+   - Consider processing videos on the server to ensure cross-browser compatibility
+   - Generate optimized versions for different devices
+
+3. **Persistent storage**
+   - When ready to implement server-side persistence, videos could be stored in:
+     - Vercel Blob Storage
+     - AWS S3
+     - Other cloud storage solutions

@@ -40,7 +40,7 @@ export function DashboardLayout({ children }) {
           initialExpanded={null} // Let component decide based on viewport
         />
         <div className={getContentClasses()}>
-          <header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b bg-background px-4 md:px-8 py-4 shadow-sm">
+          <header className="sticky top-0 z-10 flex h-20 items-center justify-between  bg-background px-4 md:px-8 py-4 shadow-sm">
             {/* App Logo */}
             <Link href="/">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">

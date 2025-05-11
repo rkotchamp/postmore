@@ -1,59 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlignLeft } from "lucide-react";
 import { Textarea } from "@/app/components/ui/textarea";
+import { useUIStateStore } from "@/app/lib/store/uiStateStore";
+import { Card, CardContent } from "@/app/components/ui/card";
 
-export function TextPost({ onTextChange }) {
-  const [text, setText] = useState("");
-  const maxLength = 280;
+export function TextPost() {
+  const textPostContent = useUIStateStore((state) => state.textPostContent);
+  const setTextPostContent = useUIStateStore(
+    (state) => state.setTextPostContent
+  );
+  const [isUserTyping, setIsUserTyping] = useState(false);
+
+  const maxLength = 5000;
 
   const handleTextChange = (e) => {
     const newText = e.target.value;
     if (newText.length <= maxLength) {
-      setText(newText);
-      if (onTextChange) onTextChange(newText);
+      setTextPostContent(newText);
+      if (!isUserTyping) {
+        setIsUserTyping(true);
+      }
     }
+  };
+
+  const handleBlur = () => {
+    setIsUserTyping(false);
   };
 
   return (
     <div className="w-full space-y-4">
       <h2 className="text-xl font-semibold">Text Post</h2>
 
-      <div className="border rounded-lg p-4 bg-muted/5">
-        <Textarea
-          placeholder="What's on your mind?"
-          className="min-h-[200px] resize-none border-0 focus-visible:ring-0 p-0 text-base"
-          value={text}
-          onChange={handleTextChange}
-        />
+      <Card className="border shadow-sm bg-muted/5">
+        <CardContent className="p-4 flex flex-col min-h-[200px]">
+          <Textarea
+            placeholder="What's on your mind?"
+            className="flex-grow resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 text-base bg-transparent text-foreground placeholder:text-muted-foreground/50"
+            value={textPostContent}
+            onChange={handleTextChange}
+            onBlur={handleBlur}
+            aria-label="Text post content"
+          />
 
-        <div className="flex items-center justify-between mt-4 pt-4 border-t">
-          <div className="flex items-center text-sm text-muted-foreground">
-            <AlignLeft className="h-4 w-4 mr-2" />
-            <span>Text post</span>
+          <div className="flex items-center justify-between mt-auto pt-4 border-t border-muted-foreground/10">
+            <div className="flex items-center text-sm text-muted-foreground">
+              <AlignLeft className="h-4 w-4 mr-2" />
+              <span>Text post</span>
+            </div>
+
+            <div className="text-sm font-mono">
+              <span
+                className={
+                  textPostContent.length > maxLength * 0.9
+                    ? "text-orange-500"
+                    : textPostContent.length > maxLength * 0.7
+                    ? "text-yellow-500"
+                    : "text-muted-foreground/80"
+                }
+              >
+                {textPostContent.length}
+              </span>
+              <span className="text-muted-foreground/50"> / {maxLength}</span>
+            </div>
           </div>
-
-          <div className="text-sm">
-            <span
-              className={
-                text.length > maxLength * 0.8
-                  ? "text-amber-500"
-                  : "text-muted-foreground"
-              }
-            >
-              {text.length}
-            </span>
-            <span className="text-muted-foreground">/{maxLength}</span>
-          </div>
-        </div>
-      </div>
-
-      {text.length > 0 && (
-        <div className="rounded-lg border p-4 bg-card">
-          <p className="whitespace-pre-wrap break-words">{text}</p>
-        </div>
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

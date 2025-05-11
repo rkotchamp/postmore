@@ -1,129 +1,105 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/app/components/ui/card";
-import { ImageIcon, Type, Layers, SendHorizontal } from "lucide-react";
+import { ImageIcon, Type } from "lucide-react";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { MediaPost } from "@/app/dashboard/newPost/Media";
+import { MediaPosts } from "@/app/dashboard/newPost/MediaPosts";
 import { TextPost } from "@/app/dashboard/newPost/Text";
-import { CarouselPost } from "@/app/dashboard/newPost/Carousel";
-import { Button } from "@/app/components/ui/button";
+import { useUIStateStore } from "@/app/lib/store/uiStateStore";
+// import { useTextContent } from "@/app/hooks/useMediaQueries"; // Removed
 
-export function Content({ onContentChange }) {
-  const [postType, setPostType] = useState("media");
-  const [hasMedia, setHasMedia] = useState(false);
-  const [hasText, setHasText] = useState(false);
-  const [hasCarouselItems, setHasCarouselItems] = useState(false);
-  const [canSubmit, setCanSubmit] = useState(false);
+export function Content() {
+  const postType = useUIStateStore((state) => state.postType);
+  const setPostType = useUIStateStore((state) => state.setPostType);
+  // const temporaryText = useUIStateStore((state) => state.temporaryText); // Not directly used for this logic anymore
+  // const setTemporaryText = useUIStateStore((state) => state.setTemporaryText); // Not directly used for this logic anymore
+  // const { data: persistedText, isLoading: isLoadingPersistedText } = useTextContent(); // Removed
 
-  // Check if the post can be submitted based on the current post type and content
+  // The useEffect below is removed because uiStateStore now handles persistence
+  // of textPostContent directly. Components like TextPost.jsx will consume
+  // textPostContent from uiStateStore, which is rehydrated on load.
+  /*
   useEffect(() => {
-    // Determine validity based on the current post type
-    const isValid =
-      postType === "media"
-        ? hasMedia
-        : postType === "text"
-        ? hasText
-        : postType === "carousel"
-        ? hasCarouselItems
-        : false;
-
-    // Update canSubmit without causing another render cycle
-    if (canSubmit !== isValid) {
-      setCanSubmit(isValid);
+    if (
+      postType === "text" &&
+      !isLoadingPersistedText &&
+      typeof persistedText === "string"
+    ) {
+      if (temporaryText !== persistedText) {
+        console.log(
+          "Content: Loading persisted text into UI store temporaryText state:",
+          persistedText
+        );
+        setTemporaryText(persistedText);
+      }
     }
+  }, [
+    postType,
+    persistedText,
+    isLoadingPersistedText,
+    temporaryText,
+    setTemporaryText,
+  ]);
+  */
 
-    // Notify parent component about content state
-    if (onContentChange) {
-      const contentState = {
-        type: postType,
-        isValid: isValid,
-        data: {
-          media: hasMedia,
-          text: hasText,
-          carousel: hasCarouselItems,
-        },
-      };
-      onContentChange(contentState);
+  const handleTabChange = (newType) => {
+    if (newType === "media" || newType === "text") {
+      setPostType(newType);
+    } else {
+      console.warn("Content: Invalid tab type selected", newType);
     }
-  }, [postType, hasMedia, hasText, hasCarouselItems, onContentChange]);
-
-  // Handlers for content state updates
-  const handleMediaChange = (mediaFile) => {
-    setHasMedia(!!mediaFile);
-  };
-
-  const handleTextChange = (text) => {
-    setHasText(!!text && text.trim().length > 0);
-  };
-
-  const handleCarouselChange = (items) => {
-    setHasCarouselItems(items && items.length > 0);
   };
 
   return (
     <div className="w-full space-y-4">
       <Card className="border shadow-sm max-w-5xl mx-auto">
-        <CardContent>
+        <CardContent className="p-4 md:p-6">
           <Tabs
-            defaultValue="media"
             value={postType}
-            onValueChange={setPostType}
+            onValueChange={handleTabChange}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-3 mb-8 bg-white rounded-lg p-1 h-auto shadow-sm">
+            <TabsList className="grid w-full grid-cols-2 mb-6 md:mb-8 bg-muted/60 rounded-lg p-1 h-auto shadow-inner">
               <TabsTrigger
                 value="media"
-                className="flex items-center gap-2 py-3 data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
+                className="flex items-center justify-center gap-2 py-2.5 md:py-3 text-sm md:text-base data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-md transition-all duration-200"
               >
-                <ImageIcon className="h-4 w-4" />
+                <ImageIcon className="h-4 w-4 md:h-5 md:w-5" />
                 <span>Media</span>
               </TabsTrigger>
               <TabsTrigger
                 value="text"
-                className="flex items-center gap-2 py-3 data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
+                className="flex items-center justify-center gap-2 py-2.5 md:py-3 text-sm md:text-base data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-md transition-all duration-200"
               >
-                <Type className="h-4 w-4" />
+                <Type className="h-4 w-4 md:h-5 md:w-5" />
                 <span>Text</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="carousel"
-                className="flex items-center gap-2 py-3 data-[state=active]:bg-primary/20 data-[state=active]:text-primary"
-              >
-                <Layers className="h-4 w-4" />
-                <span>Carousel</span>
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="media">
-              <MediaPost onMediaChange={handleMediaChange} />
+            <TabsContent
+              value="media"
+              forceMount={true}
+              className="focus-visible:ring-0 focus-visible:ring-offset-0"
+            >
+              {postType === "media" && <MediaPosts />}
             </TabsContent>
 
-            <TabsContent value="text">
-              <TextPost onTextChange={handleTextChange} />
-            </TabsContent>
-
-            <TabsContent value="carousel">
-              <CarouselPost onItemsChange={handleCarouselChange} />
+            <TabsContent
+              value="text"
+              forceMount={true}
+              className="focus-visible:ring-0 focus-visible:ring-offset-0"
+            >
+              {postType === "text" && <TextPost />}
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
-
-      {/* Submit Button */}
-      {/* <Button
-        className="max-w-5xl w-full mx-auto py-6 flex items-center justify-center gap-2 transition-all"
-        disabled={!canSubmit}
-        variant={canSubmit ? "default" : "secondary"}
-      >
-        <SendHorizontal className="h-5 w-5" />
-        <span className="text-base">Schedule Post</span>
-      </Button> */}
     </div>
   );
 }

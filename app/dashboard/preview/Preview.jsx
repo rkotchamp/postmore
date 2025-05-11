@@ -1,174 +1,481 @@
 "use client";
 
-import { useState } from "react";
-import { Badge } from "@/app/components/ui/badge";
-import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/app/components/ui/card";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/app/components/ui/carousel";
+import { format } from "date-fns";
 import {
   Instagram,
   Twitter,
   Facebook,
   AtSign,
   Youtube,
-  Calendar,
+  Clock,
 } from "lucide-react";
+import { useMediaItems } from "@/app/hooks/useMediaQueries";
+import { usePostStore } from "@/app/lib/store/postStore";
+import { SelectedAccountsPreview } from "../selectAccount/SelectedAccountsPreview";
+import { MediaPlayer } from "@/app/dashboard/VideoPlayer/MediaPlayer";
 
-export function Preview({ content, accounts, captions }) {
-  // Platform display names and icons
-  const platformInfo = {
-    instagram: { name: "Instagram", icon: Instagram },
-    twitter: { name: "Twitter", icon: Twitter },
-    facebook: { name: "Facebook", icon: Facebook },
-    threads: { name: "Threads", icon: AtSign },
-    youtube: { name: "YouTube", icon: Youtube },
-  };
+const TikTokIcon = ({ className }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M9 12a4 4 0 1 0 4 4V4c.23 2.58 1.32 4.19 4 5v3c-1.5-.711-2.717-.216-4 1v3" />
+  </svg>
+);
 
-  // Default scheduled date is tomorrow
-  const [scheduledDate, setScheduledDate] = useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split("T")[0];
-  });
+const BlueskyIcon = ({ className }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M2.5 12a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z" />
+    <path d="M9 9.75C9 8.784 9.784 8 10.75 8h2.5c.966 0 1.75.784 1.75 1.75v4.5A1.75 1.75 0 0 1 13.25 16h-2.5A1.75 1.75 0 0 1 9 14.25v-4.5z" />
+  </svg>
+);
 
-  // Get active platforms from accounts
-  const activePlatforms = [
-    ...new Set(accounts.map((account) => account.platform)),
-  ];
+const platformConfig = {
+  instagram: { name: "Instagram", Icon: Instagram, color: "#E1306C" },
+  twitter: { name: "Twitter (X)", Icon: Twitter, color: "#1DA1F2" },
+  facebook: { name: "Facebook", Icon: Facebook, color: "#1877F2" },
+  threads: { name: "Threads", Icon: AtSign, color: "#000000" },
+  tiktok: { name: "TikTok", Icon: TikTokIcon, color: "#000000" },
+  ytShorts: { name: "YouTube Shorts", Icon: Youtube, color: "#FF0000" },
+  bluesky: { name: "Bluesky", Icon: BlueskyIcon, color: "#007AFF" },
+};
 
-  // Get the appropriate caption for display
-  const getCaption = () => {
-    // If no captions or platforms, return empty string
+export function Preview() {
+  const { data: mediaItems = [], isLoading: isLoadingMedia } = useMediaItems();
+  const [blobUrlsCreated, setBlobUrlsCreated] = useState(false);
+
+  const scheduleType = usePostStore((state) => state.scheduleType);
+  const scheduledAt = usePostStore((state) => state.scheduledAt);
+  const selectedAccounts = usePostStore((state) => state.selectedAccounts);
+  const singleCaption = usePostStore((state) => state.singleCaption);
+  const multiCaptions = usePostStore((state) => state.multiCaptions);
+  const captionMode = usePostStore((state) => state.captionMode);
+  const getCaptionForAccount = usePostStore(
+    (state) => state.getCaptionForAccount
+  );
+
+  const [activeAccount, setActiveAccount] = useState(null);
+  const [captionIndex, setCaptionIndex] = useState(0);
+
+  // Create blob URLs with useMemo to avoid recreating them on every render
+  const previewUrls = useMemo(() => {
+    const urls = {};
+
+    if (!mediaItems?.length) return urls;
+
+    // Use a try-catch block around the entire creation process
+    try {
+      mediaItems.forEach((item) => {
+        if (item.file instanceof File) {
+          // Create a new blob URL for each file
+          urls[item.id] = URL.createObjectURL(item.file);
+        }
+      });
+    } catch (error) {
+      console.error("Error creating blob URLs:", error);
+    }
+
+    return urls;
+  }, [mediaItems]); // Only recreate when mediaItems change
+
+  // Use a separate effect to handle the blobUrlsCreated state
+  useEffect(() => {
+    // Reset blob creation state when mediaItems change
+    setBlobUrlsCreated(false);
+
+    // Set a timer to mark blob URLs as created after a small delay
+    const timer = setTimeout(() => {
+      setBlobUrlsCreated(true);
+    }, 100); // Small delay to ensure browser processes the URLs
+
+    return () => clearTimeout(timer); // Clean up timer on unmount or when mediaItems change
+  }, [mediaItems]);
+
+  // Use a ref to track the latest previewUrls for cleanup
+  const previewUrlsRef = useRef(previewUrls);
+
+  // Update the ref whenever previewUrls changes
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
+
+  // IMPORTANT: Separate cleanup effect with EMPTY dependency array to run ONLY on unmount
+  useEffect(() => {
+    // Cleanup function that runs ONLY when component unmounts
+    return () => {
+      Object.values(previewUrlsRef.current).forEach((url) => {
+        if (url?.startsWith?.("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []); // Empty dependency array - only runs on unmount
+
+  const contentType = useMemo(() => {
+    if (!mediaItems || mediaItems.length === 0) return "none";
+    if (mediaItems[0].type === "video") return "video";
+    if (mediaItems.length === 1 && mediaItems[0].type === "image")
+      return "singleImage";
     if (
-      !captions ||
-      Object.keys(captions).length === 0 ||
-      activePlatforms.length === 0
+      mediaItems.length > 1 &&
+      mediaItems.every((item) => item.type === "image")
+    )
+      return "carousel";
+    return "mixed";
+  }, [mediaItems]);
+
+  const formattedScheduledDateTime = useMemo(() => {
+    if (scheduleType === "scheduled" && scheduledAt) {
+      try {
+        return format(new Date(scheduledAt), "MMM d, yyyy 'at' h:mm a");
+      } catch (error) {
+        console.error("Error formatting date:", error, "Value:", scheduledAt);
+        return "Invalid Date";
+      }
+    } else if (scheduleType === "immediate") {
+      return "Immediately";
+    } else {
+      return "Not scheduled";
+    }
+  }, [scheduleType, scheduledAt]);
+
+  // Group accounts by platform
+  const accountsByPlatform = useMemo(() => {
+    const grouped = {};
+    if (selectedAccounts && selectedAccounts.length > 0) {
+      selectedAccounts.forEach((account) => {
+        if (!grouped[account.platform]) {
+          grouped[account.platform] = [];
+        }
+        grouped[account.platform].push(account);
+      });
+    }
+    return grouped;
+  }, [selectedAccounts]);
+
+  // Set active account based on selected accounts and reset caption index when accounts change
+  useEffect(() => {
+    if (!activeAccount && selectedAccounts.length > 0) {
+      setActiveAccount(selectedAccounts[0]);
+      setCaptionIndex(0);
+    } else if (
+      activeAccount &&
+      !selectedAccounts.some((acc) => acc.id === activeAccount.id)
     ) {
-      return "";
+      setActiveAccount(selectedAccounts[0] || null);
+      setCaptionIndex(0);
+    }
+  }, [selectedAccounts, activeAccount]);
+
+  // When caption mode changes, reset caption index
+  useEffect(() => {
+    setCaptionIndex(0);
+  }, [captionMode]);
+
+  // Get current caption based on active account or caption mode
+  const currentCaption = useMemo(() => {
+    if (captionMode === "single") {
+      return singleCaption || "";
     }
 
-    // Just return the caption for the first platform for simplicity
-    // In a real app, you might want to show platform-specific captions
-    return captions[activePlatforms[0]] || "";
-  };
-
-  // Get preview media based on content type
-  const getPreviewMedia = () => {
-    if (!content || !content.data) return null;
-
-    if (content.type === "media" && content.data.media) {
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center">
-          {content.data.media ? (
-            <img
-              src={content.data.media}
-              alt="Preview"
-              className="max-w-full max-h-full object-contain"
-            />
-          ) : (
-            <div className="text-muted-foreground">No media selected</div>
-          )}
-        </div>
-      );
-    } else if (content.type === "text" && content.data.text) {
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center p-4">
-          <div className="text-center">{content.data.text}</div>
-        </div>
-      );
-    } else if (content.type === "carousel" && content.data.carousel) {
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center">
-          {content.data.carousel[0] ? (
-            <img
-              src={content.data.carousel[0]}
-              alt="Preview"
-              className="max-w-full max-h-full object-contain"
-            />
-          ) : (
-            <div className="text-muted-foreground">No carousel items</div>
-          )}
-        </div>
-      );
+    if (activeAccount) {
+      return getCaptionForAccount(activeAccount.id) || "";
     }
 
-    return (
-      <div className="w-full h-full bg-muted flex items-center justify-center">
-        <div className="text-muted-foreground">No content selected</div>
-      </div>
+    return "";
+  }, [captionMode, singleCaption, activeAccount, getCaptionForAccount]);
+
+  // Current platform icon based on active account
+  const CurrentPlatformIcon = activeAccount
+    ? platformConfig[activeAccount.platform]?.Icon
+    : null;
+
+  // Navigate through account captions in multi-caption mode
+  const goToNextCaption = () => {
+    if (selectedAccounts.length <= 1) return;
+    setCaptionIndex((prev) => (prev + 1) % selectedAccounts.length);
+    setActiveAccount(
+      selectedAccounts[(captionIndex + 1) % selectedAccounts.length]
     );
   };
 
+  const goToPrevCaption = () => {
+    if (selectedAccounts.length <= 1) return;
+    setCaptionIndex(
+      (prev) => (prev - 1 + selectedAccounts.length) % selectedAccounts.length
+    );
+    setActiveAccount(
+      selectedAccounts[
+        (captionIndex - 1 + selectedAccounts.length) % selectedAccounts.length
+      ]
+    );
+  };
+
+  if (isLoadingMedia) {
+    return (
+      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>Loading preview...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (contentType === "none" && selectedAccounts.length === 0) {
+    return (
+      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center py-4">
+            Add content and select accounts to see preview.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <div>
-      <div className="flex flex-col w-full max-w-[360px] rounded-3xl bg-muted/30 p-4 shadow-sm">
-        {/* Phone mockup container */}
-        <div className="flex flex-col h-full rounded-xl overflow-hidden">
-          {/* Content preview area */}
-          <div className="w-full aspect-[4/5] bg-gray-200">
-            {getPreviewMedia()}
-          </div>
-
-          {/* Social accounts */}
-          <div className="flex items-center gap-1 my-3">
-            <span className="text-xs text-muted-foreground mr-1">
-              Selected Accounts:
-            </span>
-            <div className="flex gap-1">
-              {accounts && accounts.length > 0 ? (
-                accounts.slice(0, 5).map((account, index) => {
-                  const PlatformIcon =
-                    platformInfo[account.platform]?.icon || Instagram;
-                  return (
-                    <div
-                      key={index}
-                      className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center"
-                      title={`${account.name} (${
-                        platformInfo[account.platform]?.name || account.platform
-                      })`}
-                    >
-                      <PlatformIcon className="w-3 h-3" />
-                    </div>
+    <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24 overflow-hidden border shadow-sm">
+      <CardHeader className="border-b bg-muted/30 py-3 px-4">
+        <CardTitle className="text-base font-medium flex items-center justify-between">
+          <span>Preview</span>
+          {selectedAccounts.length > 1 && captionMode === "single" && (
+            <select
+              value={activeAccount?.id || ""}
+              onChange={(e) => {
+                const newAccount = selectedAccounts.find(
+                  (acc) => acc.id === e.target.value
+                );
+                if (newAccount) {
+                  setActiveAccount(newAccount);
+                  // Find index of the new account in selectedAccounts
+                  const newIndex = selectedAccounts.findIndex(
+                    (acc) => acc.id === newAccount.id
                   );
-                })
-              ) : (
-                <div className="text-xs text-muted-foreground">
-                  No accounts selected
-                </div>
-              )}
-
-              {accounts && accounts.length > 5 && (
-                <div className="w-5 h-5 rounded-full bg-gray-300 flex items-center justify-center">
-                  <span className="text-xs">+{accounts.length - 5}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Caption preview */}
-          <div className="w-full h-24 bg-gray-300 mb-3 p-2 rounded overflow-y-auto">
-            <p className="text-xs line-clamp-6">{getCaption()}</p>
-          </div>
-
-          {/* Date selector */}
-          <div className="flex justify-center">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="text-xs flex items-center gap-1"
+                  if (newIndex >= 0) {
+                    setCaptionIndex(newIndex);
+                  }
+                }
+              }}
+              className="text-xs p-1 rounded border bg-background text-foreground ml-2"
             >
-              <Calendar className="w-3 h-3" />
-              <span>Selected Date: {scheduledDate}</span>
-            </Button>
-          </div>
+              {selectedAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} (
+                  {platformConfig[account.platform]?.name || account.platform})
+                </option>
+              ))}
+            </select>
+          )}
+          {selectedAccounts.length === 1 &&
+            activeAccount &&
+            CurrentPlatformIcon && (
+              <span className="flex items-center gap-1.5 text-xs ml-2 text-muted-foreground">
+                <CurrentPlatformIcon className="h-3 w-3" />
+                {activeAccount.name}
+              </span>
+            )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-4">
+        <SelectedAccountsPreview accounts={selectedAccounts} />
+
+        <div className="aspect-square w-full bg-muted/40 rounded-md overflow-hidden flex items-center justify-center relative">
+          {contentType === "none" && (
+            <p className="text-muted-foreground text-sm p-4 text-center">
+              Add media to see preview
+            </p>
+          )}
+          {contentType === "video" &&
+            mediaItems[0] &&
+            previewUrls[mediaItems[0].id] && (
+              <MediaPlayer
+                key={`video-${mediaItems[0].id}-${
+                  blobUrlsCreated ? "loaded" : "loading"
+                }`}
+                file={mediaItems[0].file}
+                type="video"
+                id={mediaItems[0].id}
+                controls
+              />
+            )}
+          {contentType === "singleImage" &&
+            mediaItems[0] &&
+            previewUrls[mediaItems[0].id] && (
+              <MediaPlayer
+                key={`img-${mediaItems[0].id}-${
+                  blobUrlsCreated ? "loaded" : "loading"
+                }`}
+                file={mediaItems[0].file}
+                type="image"
+                id={mediaItems[0].id}
+              />
+            )}
+          {contentType === "carousel" && mediaItems.length > 0 && (
+            <Carousel className="w-full h-full">
+              <CarouselContent className="h-full">
+                {mediaItems.map((item, index) => (
+                  <CarouselItem
+                    key={`carousel-${item.id}-${
+                      blobUrlsCreated ? "loaded" : "loading"
+                    }`}
+                    className="h-full"
+                  >
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      {item.file ? (
+                        <MediaPlayer
+                          file={item.file}
+                          type="image"
+                          id={item.id}
+                        />
+                      ) : (
+                        <div className="text-muted-foreground text-xs">
+                          Loading media...
+                        </div>
+                      )}
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              {mediaItems.length > 1 && (
+                <>
+                  <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
+                  <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
+                </>
+              )}
+            </Carousel>
+          )}
         </div>
 
-        {/* Thumbnail selector */}
-      </div>
-      <div className="mt-4">
-        <Button variant="secondary" className="w-full">
-          Select Cover Image/Thumbnail
-        </Button>
-      </div>
-    </div>
+        {(contentType !== "none" || selectedAccounts.length > 0) && (
+          <div className="text-sm space-y-1 relative">
+            {/* Caption title area with navigation for multi-caption mode */}
+            {captionMode === "multiple" && selectedAccounts.length > 0 && (
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  {activeAccount && (
+                    <>
+                      {platformConfig[activeAccount.platform]?.Icon && (
+                        <span className="flex items-center">
+                          {(() => {
+                            const IconComponent =
+                              platformConfig[activeAccount.platform].Icon;
+                            return (
+                              <IconComponent className="h-3.5 w-3.5 mr-1.5" />
+                            );
+                          })()}
+                        </span>
+                      )}
+                      <span className="text-xs font-medium">
+                        {activeAccount.name}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {selectedAccounts.length > 1 && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <button
+                      onClick={goToPrevCaption}
+                      className="p-1 hover:bg-muted rounded-full"
+                      aria-label="Previous caption"
+                      disabled={selectedAccounts.length <= 1}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="lucide lucide-chevron-left"
+                      >
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </button>
+                    <span>
+                      {captionIndex + 1}/{selectedAccounts.length}
+                    </span>
+                    <button
+                      onClick={goToNextCaption}
+                      className="p-1 hover:bg-muted rounded-full"
+                      aria-label="Next caption"
+                      disabled={selectedAccounts.length <= 1}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="lucide lucide-chevron-right"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Caption content */}
+            <p className="text-foreground whitespace-pre-wrap break-words">
+              {currentCaption ||
+                (contentType === "none" && selectedAccounts.length > 0 ? (
+                  ""
+                ) : (
+                  <span className="text-muted-foreground italic">
+                    No caption added yet...
+                  </span>
+                ))}
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t mt-auto">
+          <Clock className="h-3.5 w-3.5" />
+          <span>{formattedScheduledDateTime}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
