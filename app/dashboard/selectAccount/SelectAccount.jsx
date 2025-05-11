@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -8,19 +8,11 @@ import {
   AccordionTrigger,
 } from "@/app/components/ui/accordion";
 import { Username } from "@/app/authenticate/components/Username";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import { Button } from "@/app/components/ui/button";
-import {
-  Instagram,
-  Twitter,
-  Facebook,
-  AtSign,
-  Youtube,
-  Music,
-} from "lucide-react";
+import { Instagram, Twitter, Facebook, AtSign, Youtube } from "lucide-react";
 import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 import { useRouter } from "next/navigation";
-import { usePostData } from "@/app/context/PostDataContext";
+import { usePostStore } from "@/app/lib/store/postStore";
 
 // --- Add Icon Components from Authenticate/page.jsx ---
 const TikTokIcon = ({ className }) => (
@@ -58,10 +50,13 @@ export function SelectAccount() {
   const router = useRouter();
   // Fetch accounts from context
   const { accounts, isLoading, error } = useFetchAllAccountsContext();
-  // --- Post Data Context ---
-  const { postData, addSelectedAccount, removeSelectedAccount } = usePostData();
-  const { selectedAccounts: contextSelectedAccounts } = postData; // Get currently selected accounts from context
-  // -----------------------
+  // --- Zustand Store --- //
+  const selectedAccounts = usePostStore((state) => state.selectedAccounts);
+  const addSelectedAccount = usePostStore((state) => state.addSelectedAccount);
+  const removeSelectedAccount = usePostStore(
+    (state) => state.removeSelectedAccount
+  );
+  // -------------------- //
 
   // State for processed accounts grouped by platform
   const [processedPlatformAccounts, setProcessedPlatformAccounts] = useState(
@@ -139,7 +134,7 @@ export function SelectAccount() {
     setExpandedPlatforms(value ? [value] : []);
   };
 
-  // Toggle account selection using context functions
+  // Toggle account selection using store actions
   const toggleAccountSelection = (platform, accountId) => {
     const idKey = accountId.toString();
     // Find the full account object from processed accounts
@@ -156,32 +151,30 @@ export function SelectAccount() {
       return;
     }
 
-    // Check if the account is currently selected in the context
-    const isCurrentlySelected = contextSelectedAccounts.some(
+    // Check if the account is currently selected in the store
+    const isCurrentlySelected = selectedAccounts.some(
       (acc) => acc.id.toString() === idKey
     );
 
     if (isCurrentlySelected) {
-      // If selected, remove it using the context function
+      // If selected, remove it using the store action
       console.log("Removing account:", accountId);
       removeSelectedAccount(accountId);
     } else {
-      // If not selected, add it using the context function
-      // Ensure we pass the necessary account details expected by addSelectedAccount
-      console.log("Adding account:", accountObject);
+      // If not selected, add it using the store action
+
       addSelectedAccount(accountObject); // Pass the full object
     }
   };
 
-  // Check if any account is selected for a platform (using context state)
+  // Check if any account is selected for a platform (using store state)
   const hasSelectedAccounts = (platform) => {
-    return contextSelectedAccounts.some((acc) => acc.platform === platform);
+    return selectedAccounts.some((acc) => acc.platform === platform);
   };
 
-  // Count selected accounts for a platform (using context state)
+  // Count selected accounts for a platform (using store state)
   const countSelectedAccounts = (platform) => {
-    return contextSelectedAccounts.filter((acc) => acc.platform === platform)
-      .length;
+    return selectedAccounts.filter((acc) => acc.platform === platform).length;
   };
 
   // Get icon for platform
@@ -252,10 +245,10 @@ export function SelectAccount() {
                     </span>
                   </div>
 
-                  {/* Use context-based check */}
+                  {/* Use store-based check */}
                   {hasSelectedAccounts(platform) && (
                     <div className="ml-auto mr-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                      {/* Use context-based count */}
+                      {/* Use store-based count */}
                       {countSelectedAccounts(platform)} selected
                     </div>
                   )}
@@ -264,8 +257,8 @@ export function SelectAccount() {
                 <AccordionContent className="bg-background">
                   <div className="py-2 divide-y">
                     {accounts.map((account) => {
-                      // Determine if the current account is selected based on context
-                      const isSelected = contextSelectedAccounts.some(
+                      // Determine if the current account is selected based on store
+                      const isSelected = selectedAccounts.some(
                         (acc) => acc.id.toString() === account.id.toString()
                       );
                       return (
@@ -286,7 +279,7 @@ export function SelectAccount() {
                             />
                           </div>
                           <div>
-                            {/* Checkbox appearance based on context selection */}
+                            {/* Checkbox appearance based on store selection */}
                             <div
                               className={`ml-4 h-5 w-5 rounded border flex items-center justify-center cursor-pointer ${
                                 isSelected
@@ -298,7 +291,7 @@ export function SelectAccount() {
                                 toggleAccountSelection(platform, account.id);
                               }}
                             >
-                              {/* Show checkmark based on context selection */}
+                              {/* Show checkmark based on store selection */}
                               {isSelected && (
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg"

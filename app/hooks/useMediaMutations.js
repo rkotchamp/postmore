@@ -18,49 +18,24 @@ export function useMediaMutations() {
   return {
     // Update media items - Updates only in-memory cache, NO localStorage persistence
     updateMedia: useMutation({
-      mutationFn: (newMediaItems) => {
-        // NOTE: Blob URL cleanup for *removed* items happens
-        // within the component where the temporary URLs are managed.
-
-        // Prepare data for IN-MEMORY cache: id, type, fileInfo
-        const itemsToCache = newMediaItems.map((item) => ({
-          id: item.id,
-          type: item.type,
-          fileInfo: item.file
-            ? {
-                name: item.file.name,
-                type: item.file.type,
-                size: item.file.size,
-              }
-            : item.fileInfo,
-          // Exclude File object from cache
-        }));
-
-        // localStorage.setItem("media-items", JSON.stringify(itemsToPersist)); // REMOVED
-
-        // Return the items including File objects for the component's local preview handling
-        return newMediaItems;
+      mutationFn: async (newMediaItems) => {
+        // The primary role of mutationFn is to perform the async operation (if any)
+        // and return the data that onSuccess will use.
+        // In this case, newMediaItems already contains the File objects from MediaPosts.jsx
+        // No need to create a separate itemsToCache here if it's not used for an async op.
+        return newMediaItems; // Pass through the items with File objects
       },
-      onSuccess: (newMediaItems) => {
-        // Update query cache with the *in-memory* data format
-        const itemsToCache = newMediaItems.map((item) => ({
-          id: item.id,
-          type: item.type,
-          fileInfo: item.file
-            ? {
-                name: item.file.name,
-                type: item.file.type,
-                size: item.file.size,
-              }
-            : item.fileInfo,
-        }));
-        queryClient.setQueryData([QUERY_KEYS.media], itemsToCache);
+      onSuccess: (newMediaItemsWithFiles) => {
+        // Renamed for clarity
+        // Update query cache with newMediaItemsWithFiles, which includes File objects
+        queryClient.setQueryData([QUERY_KEYS.media], newMediaItemsWithFiles);
 
-        // Also update carousel state in memory
+        // Also update carousel state in memory based on the items now in cache
+        // We should derive the mode from newMediaItemsWithFiles
         const newMode =
-          itemsToCache.length === 0
+          !newMediaItemsWithFiles || newMediaItemsWithFiles.length === 0
             ? "empty"
-            : itemsToCache[0].type === "video"
+            : newMediaItemsWithFiles[0].type === "video"
             ? "singleVideo"
             : "multiImage";
         queryClient.setQueryData([QUERY_KEYS.carousel], {
@@ -95,7 +70,7 @@ export function useMediaMutations() {
         }
       },
       onSuccess: (newText) => {
-        queryClient.setQueryData([QUERY_KEYS.text], newText);
+        queryClient.setQueryData([QUERY_KEYS.text], newText); // This key was removed, should be uiStateStore now
       },
     }),
 

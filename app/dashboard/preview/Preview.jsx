@@ -1,40 +1,45 @@
 "use client";
 
-import { useState, useEffect, useContext } from "react";
-import { Badge } from "@/app/components/ui/badge";
-import { Card } from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/app/components/ui/avatar";
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/app/components/ui/card";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/app/components/ui/carousel";
+import { format } from "date-fns";
 import {
   Instagram,
   Twitter,
   Facebook,
   AtSign,
   Youtube,
-  Calendar,
-  Image as ImageIcon,
-  FileVideo,
+  Clock,
 } from "lucide-react";
-import NextImage from "next/image";
 import { useMediaItems } from "@/app/hooks/useMediaQueries";
-import { usePostData } from "@/app/context/PostDataContext";
-import { useMediaTextFlow } from "@/app/context/MediaTextFlowContext";
+import { usePostStore } from "@/app/lib/store/postStore";
+import { SelectedAccountsPreview } from "../selectAccount/SelectedAccountsPreview";
+import { MediaPlayer } from "@/app/dashboard/VideoPlayer/MediaPlayer";
 
 const TikTokIcon = ({ className }) => (
   <svg
     className={className}
     viewBox="0 0 24 24"
     fill="none"
-    xmlns="http://www.w3.org/2000/svg"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
   >
-    <path
-      d="M19.321 5.562a5.124 5.124 0 0 1-5.16-4.956h-3.364v14.88c0 1.767-1.436 3.204-3.204 3.204a3.204 3.204 0 0 1-3.204-3.204 3.204 3.204 0 0 1 3.204-3.204c.282 0 .553.044.813.116v-3.364a6.552 6.552 0 0 0-.813-.052A6.568 6.568 0 0 0 1.025 15.55 6.568 6.568 0 0 0 7.593 22.12a6.568 6.568 0 0 0 6.568-6.568V9.658a8.464 8.464 0 0 0 5.16 1.752v-3.364a5.113 5.113 0 0 1-3.137-1.053 5.177 5.177 0 0 1-1.602-2.084V4.9"
-      fill="currentColor"
-    />
+    <path d="M9 12a4 4 0 1 0 4 4V4c.23 2.58 1.32 4.19 4 5v3c-1.5-.711-2.717-.216-4 1v3" />
   </svg>
 );
 
@@ -48,224 +53,429 @@ const BlueskyIcon = ({ className }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Z" />
-    <path d="M17 12c0 2.8-2.2 5-5 5s-5-2.2-5-5 2.2-5 5-5 5 2.2 5 5Z" />
-    <path d="M12 7v0" />
+    <path d="M2.5 12a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z" />
+    <path d="M9 9.75C9 8.784 9.784 8 10.75 8h2.5c.966 0 1.75.784 1.75 1.75v4.5A1.75 1.75 0 0 1 13.25 16h-2.5A1.75 1.75 0 0 1 9 14.25v-4.5z" />
   </svg>
 );
 
+const platformConfig = {
+  instagram: { name: "Instagram", Icon: Instagram, color: "#E1306C" },
+  twitter: { name: "Twitter (X)", Icon: Twitter, color: "#1DA1F2" },
+  facebook: { name: "Facebook", Icon: Facebook, color: "#1877F2" },
+  threads: { name: "Threads", Icon: AtSign, color: "#000000" },
+  tiktok: { name: "TikTok", Icon: TikTokIcon, color: "#000000" },
+  ytShorts: { name: "YouTube Shorts", Icon: Youtube, color: "#FF0000" },
+  bluesky: { name: "Bluesky", Icon: BlueskyIcon, color: "#007AFF" },
+};
+
 export function Preview() {
-  const { data: sessionMediaItems = [], isLoading: isLoadingMedia } =
-    useMediaItems();
-  const { postData } = usePostData();
-  const { behavior } = useMediaTextFlow();
+  const { data: mediaItems = [], isLoading: isLoadingMedia } = useMediaItems();
+  const [blobUrlsCreated, setBlobUrlsCreated] = useState(false);
 
-  const {
-    selectedAccounts: accounts,
-    captionMode,
-    singleCaption,
-    multiCaptions,
-    scheduleType,
-    scheduledAt,
-  } = postData;
-  const { temporaryText } = behavior;
+  const scheduleType = usePostStore((state) => state.scheduleType);
+  const scheduledAt = usePostStore((state) => state.scheduledAt);
+  const selectedAccounts = usePostStore((state) => state.selectedAccounts);
+  const singleCaption = usePostStore((state) => state.singleCaption);
+  const multiCaptions = usePostStore((state) => state.multiCaptions);
+  const captionMode = usePostStore((state) => state.captionMode);
+  const getCaptionForAccount = usePostStore(
+    (state) => state.getCaptionForAccount
+  );
 
-  const platformInfo = {
-    instagram: { name: "Instagram", icon: Instagram },
-    twitter: { name: "Twitter", icon: Twitter },
-    facebook: { name: "Facebook", icon: Facebook },
-    threads: { name: "Threads", icon: AtSign },
-    ytShorts: { name: "YouTube Shorts", icon: Youtube },
-    tiktok: { name: "TikTok", icon: TikTokIcon },
-    bluesky: { name: "Bluesky", icon: BlueskyIcon },
-  };
+  const [activeAccount, setActiveAccount] = useState(null);
+  const [captionIndex, setCaptionIndex] = useState(0);
 
-  const groupedByPlatform = accounts.reduce((acc, account) => {
-    const platform = account.platform;
-    if (!acc[platform]) {
-      acc[platform] = [];
-    }
-    acc[platform].push(account);
-    return acc;
-  }, {});
+  // Create blob URLs with useMemo to avoid recreating them on every render
+  const previewUrls = useMemo(() => {
+    const urls = {};
 
-  const platformOrder = [
-    "instagram",
-    "twitter",
-    "facebook",
-    "threads",
-    "ytShorts",
-    "tiktok",
-    "bluesky",
-  ];
+    if (!mediaItems?.length) return urls;
 
-  const sortedPlatforms = Object.keys(groupedByPlatform).sort((a, b) => {
-    const indexA = platformOrder.indexOf(a);
-    const indexB = platformOrder.indexOf(b);
-    if (indexA === -1) return 1;
-    if (indexB === -1) return -1;
-    return indexA - indexB;
-  });
-
-  const getFormattedScheduledDate = () => {
-    if (
-      scheduleType === "scheduled" &&
-      scheduledAt instanceof Date &&
-      !isNaN(scheduledAt)
-    ) {
-      return scheduledAt.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
+    // Use a try-catch block around the entire creation process
+    try {
+      mediaItems.forEach((item) => {
+        if (item.file instanceof File) {
+          // Create a new blob URL for each file
+          urls[item.id] = URL.createObjectURL(item.file);
+        }
       });
-    } else if (scheduleType === "scheduled") {
-      return "Invalid Date";
+    } catch (error) {
+      console.error("Error creating blob URLs:", error);
     }
-    return "Immediate";
-  };
-  const displayDate = getFormattedScheduledDate();
 
-  const activePlatforms = [
-    ...new Set(accounts.map((account) => account.platform)),
-  ];
+    return urls;
+  }, [mediaItems]); // Only recreate when mediaItems change
 
-  const getCaptionForDisplay = () => {
-    if (sessionMediaItems.length > 0) {
-      if (activePlatforms.length === 0) return "";
+  // Use a separate effect to handle the blobUrlsCreated state
+  useEffect(() => {
+    // Reset blob creation state when mediaItems change
+    setBlobUrlsCreated(false);
 
-      if (captionMode === "single") {
-        return singleCaption || "";
-      } else {
-        const firstActivePlatform = sortedPlatforms[0];
-        return multiCaptions?.[firstActivePlatform] || "";
+    // Set a timer to mark blob URLs as created after a small delay
+    const timer = setTimeout(() => {
+      setBlobUrlsCreated(true);
+    }, 100); // Small delay to ensure browser processes the URLs
+
+    return () => clearTimeout(timer); // Clean up timer on unmount or when mediaItems change
+  }, [mediaItems]);
+
+  // Use a ref to track the latest previewUrls for cleanup
+  const previewUrlsRef = useRef(previewUrls);
+
+  // Update the ref whenever previewUrls changes
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
+
+  // IMPORTANT: Separate cleanup effect with EMPTY dependency array to run ONLY on unmount
+  useEffect(() => {
+    // Cleanup function that runs ONLY when component unmounts
+    return () => {
+      Object.values(previewUrlsRef.current).forEach((url) => {
+        if (url?.startsWith?.("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, []); // Empty dependency array - only runs on unmount
+
+  const contentType = useMemo(() => {
+    if (!mediaItems || mediaItems.length === 0) return "none";
+    if (mediaItems[0].type === "video") return "video";
+    if (mediaItems.length === 1 && mediaItems[0].type === "image")
+      return "singleImage";
+    if (
+      mediaItems.length > 1 &&
+      mediaItems.every((item) => item.type === "image")
+    )
+      return "carousel";
+    return "mixed";
+  }, [mediaItems]);
+
+  const formattedScheduledDateTime = useMemo(() => {
+    if (scheduleType === "scheduled" && scheduledAt) {
+      try {
+        return format(new Date(scheduledAt), "MMM d, yyyy 'at' h:mm a");
+      } catch (error) {
+        console.error("Error formatting date:", error, "Value:", scheduledAt);
+        return "Invalid Date";
       }
+    } else if (scheduleType === "immediate") {
+      return "Immediately";
     } else {
-      return temporaryText || "";
+      return "Not scheduled";
     }
-  };
+  }, [scheduleType, scheduledAt]);
 
-  const renderPreviewMedia = () => {
-    if (isLoadingMedia) {
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
-          Loading Media...
-        </div>
-      );
+  // Group accounts by platform
+  const accountsByPlatform = useMemo(() => {
+    const grouped = {};
+    if (selectedAccounts && selectedAccounts.length > 0) {
+      selectedAccounts.forEach((account) => {
+        if (!grouped[account.platform]) {
+          grouped[account.platform] = [];
+        }
+        grouped[account.platform].push(account);
+      });
+    }
+    return grouped;
+  }, [selectedAccounts]);
+
+  // Set active account based on selected accounts and reset caption index when accounts change
+  useEffect(() => {
+    if (!activeAccount && selectedAccounts.length > 0) {
+      setActiveAccount(selectedAccounts[0]);
+      setCaptionIndex(0);
+    } else if (
+      activeAccount &&
+      !selectedAccounts.some((acc) => acc.id === activeAccount.id)
+    ) {
+      setActiveAccount(selectedAccounts[0] || null);
+      setCaptionIndex(0);
+    }
+  }, [selectedAccounts, activeAccount]);
+
+  // When caption mode changes, reset caption index
+  useEffect(() => {
+    setCaptionIndex(0);
+  }, [captionMode]);
+
+  // Get current caption based on active account or caption mode
+  const currentCaption = useMemo(() => {
+    if (captionMode === "single") {
+      return singleCaption || "";
     }
 
-    if (sessionMediaItems && sessionMediaItems.length > 0) {
-      const firstItem = sessionMediaItems[0];
-      return (
-        <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground p-4">
-          <div className="text-center">
-            {firstItem.type === "video" ? (
-              <FileVideo className="h-16 w-16 mx-auto mb-2" />
-            ) : (
-              <ImageIcon className="h-16 w-16 mx-auto mb-2" />
-            )}
-            <span className="text-sm break-all">
-              {firstItem.fileInfo?.name || "Media file"}
-            </span>
-            {sessionMediaItems.length > 1 && (
-              <Badge variant="secondary" className="mt-2">
-                + {sessionMediaItems.length - 1} more
-              </Badge>
-            )}
-          </div>
-        </div>
-      );
-    } else if (temporaryText && temporaryText.trim() !== "") {
-      return (
-        <div className="w-full h-full bg-background flex items-center justify-center p-4">
-          <p className="text-center text-sm whitespace-pre-wrap break-words line-clamp-[10]">
-            {temporaryText}
-          </p>
-        </div>
-      );
+    if (activeAccount) {
+      return getCaptionForAccount(activeAccount.id) || "";
     }
 
-    return (
-      <div className="w-full h-full bg-muted flex items-center justify-center">
-        <div className="text-muted-foreground text-sm">Content Preview</div>
-      </div>
+    return "";
+  }, [captionMode, singleCaption, activeAccount, getCaptionForAccount]);
+
+  // Current platform icon based on active account
+  const CurrentPlatformIcon = activeAccount
+    ? platformConfig[activeAccount.platform]?.Icon
+    : null;
+
+  // Navigate through account captions in multi-caption mode
+  const goToNextCaption = () => {
+    if (selectedAccounts.length <= 1) return;
+    setCaptionIndex((prev) => (prev + 1) % selectedAccounts.length);
+    setActiveAccount(
+      selectedAccounts[(captionIndex + 1) % selectedAccounts.length]
     );
   };
 
-  return (
-    <div>
-      <div className="flex flex-col w-full max-w-[360px] rounded-3xl bg-muted/30 p-4 shadow-sm">
-        <div className="flex flex-col h-full rounded-xl overflow-hidden">
-          <div className="w-full aspect-[4/5] bg-gray-200">
-            {renderPreviewMedia()}
-          </div>
+  const goToPrevCaption = () => {
+    if (selectedAccounts.length <= 1) return;
+    setCaptionIndex(
+      (prev) => (prev - 1 + selectedAccounts.length) % selectedAccounts.length
+    );
+    setActiveAccount(
+      selectedAccounts[
+        (captionIndex - 1 + selectedAccounts.length) % selectedAccounts.length
+      ]
+    );
+  };
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 my-3">
-            {accounts && accounts.length > 0 ? (
-              sortedPlatforms.map((platform) => {
-                const PlatformIconComponent = platformInfo[platform]?.icon;
-                if (!PlatformIconComponent) {
-                  console.warn(
-                    `Preview: Icon not found for platform: ${platform}`
-                  );
-                  return null;
-                }
-                return (
-                  <div key={platform} className="flex items-center space-x-1.5">
-                    <PlatformIconComponent className="w-4 h-4 text-muted-foreground" />
-                    <div className="flex items-center -space-x-2">
-                      {groupedByPlatform[platform].map((account, index) => (
-                        <Avatar
-                          key={account.id || index}
-                          className="h-5 w-5 border border-background"
-                          title={account.name}
-                        >
-                          <AvatarImage
-                            src={account.imageUrl}
-                            alt={account.name}
-                          />
-                          <AvatarFallback className="text-[10px]">
-                            {account.name?.charAt(0)?.toUpperCase() || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
-                    </div>
-                  </div>
+  if (isLoadingMedia) {
+    return (
+      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>Loading preview...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (contentType === "none" && selectedAccounts.length === 0) {
+    return (
+      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center py-4">
+            Add content and select accounts to see preview.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24 overflow-hidden border shadow-sm">
+      <CardHeader className="border-b bg-muted/30 py-3 px-4">
+        <CardTitle className="text-base font-medium flex items-center justify-between">
+          <span>Preview</span>
+          {selectedAccounts.length > 1 && captionMode === "single" && (
+            <select
+              value={activeAccount?.id || ""}
+              onChange={(e) => {
+                const newAccount = selectedAccounts.find(
+                  (acc) => acc.id === e.target.value
                 );
-              })
-            ) : (
-              <div className="text-xs text-muted-foreground ml-1">
-                No accounts selected
+                if (newAccount) {
+                  setActiveAccount(newAccount);
+                  // Find index of the new account in selectedAccounts
+                  const newIndex = selectedAccounts.findIndex(
+                    (acc) => acc.id === newAccount.id
+                  );
+                  if (newIndex >= 0) {
+                    setCaptionIndex(newIndex);
+                  }
+                }
+              }}
+              className="text-xs p-1 rounded border bg-background text-foreground ml-2"
+            >
+              {selectedAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} (
+                  {platformConfig[account.platform]?.name || account.platform})
+                </option>
+              ))}
+            </select>
+          )}
+          {selectedAccounts.length === 1 &&
+            activeAccount &&
+            CurrentPlatformIcon && (
+              <span className="flex items-center gap-1.5 text-xs ml-2 text-muted-foreground">
+                <CurrentPlatformIcon className="h-3 w-3" />
+                {activeAccount.name}
+              </span>
+            )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-4">
+        <SelectedAccountsPreview accounts={selectedAccounts} />
+
+        <div className="aspect-square w-full bg-muted/40 rounded-md overflow-hidden flex items-center justify-center relative">
+          {contentType === "none" && (
+            <p className="text-muted-foreground text-sm p-4 text-center">
+              Add media to see preview
+            </p>
+          )}
+          {contentType === "video" &&
+            mediaItems[0] &&
+            previewUrls[mediaItems[0].id] && (
+              <MediaPlayer
+                key={`video-${mediaItems[0].id}-${
+                  blobUrlsCreated ? "loaded" : "loading"
+                }`}
+                file={mediaItems[0].file}
+                type="video"
+                id={mediaItems[0].id}
+                controls
+              />
+            )}
+          {contentType === "singleImage" &&
+            mediaItems[0] &&
+            previewUrls[mediaItems[0].id] && (
+              <MediaPlayer
+                key={`img-${mediaItems[0].id}-${
+                  blobUrlsCreated ? "loaded" : "loading"
+                }`}
+                file={mediaItems[0].file}
+                type="image"
+                id={mediaItems[0].id}
+              />
+            )}
+          {contentType === "carousel" && mediaItems.length > 0 && (
+            <Carousel className="w-full h-full">
+              <CarouselContent className="h-full">
+                {mediaItems.map((item, index) => (
+                  <CarouselItem
+                    key={`carousel-${item.id}-${
+                      blobUrlsCreated ? "loaded" : "loading"
+                    }`}
+                    className="h-full"
+                  >
+                    <div className="relative w-full h-full flex items-center justify-center">
+                      {item.file ? (
+                        <MediaPlayer
+                          file={item.file}
+                          type="image"
+                          id={item.id}
+                        />
+                      ) : (
+                        <div className="text-muted-foreground text-xs">
+                          Loading media...
+                        </div>
+                      )}
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              {mediaItems.length > 1 && (
+                <>
+                  <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
+                  <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
+                </>
+              )}
+            </Carousel>
+          )}
+        </div>
+
+        {(contentType !== "none" || selectedAccounts.length > 0) && (
+          <div className="text-sm space-y-1 relative">
+            {/* Caption title area with navigation for multi-caption mode */}
+            {captionMode === "multiple" && selectedAccounts.length > 0 && (
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  {activeAccount && (
+                    <>
+                      {platformConfig[activeAccount.platform]?.Icon && (
+                        <span className="flex items-center">
+                          {(() => {
+                            const IconComponent =
+                              platformConfig[activeAccount.platform].Icon;
+                            return (
+                              <IconComponent className="h-3.5 w-3.5 mr-1.5" />
+                            );
+                          })()}
+                        </span>
+                      )}
+                      <span className="text-xs font-medium">
+                        {activeAccount.name}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {selectedAccounts.length > 1 && (
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <button
+                      onClick={goToPrevCaption}
+                      className="p-1 hover:bg-muted rounded-full"
+                      aria-label="Previous caption"
+                      disabled={selectedAccounts.length <= 1}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="lucide lucide-chevron-left"
+                      >
+                        <path d="m15 18-6-6 6-6" />
+                      </svg>
+                    </button>
+                    <span>
+                      {captionIndex + 1}/{selectedAccounts.length}
+                    </span>
+                    <button
+                      onClick={goToNextCaption}
+                      className="p-1 hover:bg-muted rounded-full"
+                      aria-label="Next caption"
+                      disabled={selectedAccounts.length <= 1}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="lucide lucide-chevron-right"
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-          </div>
 
-          <div className="w-full h-24 bg-muted p-2 rounded overflow-y-auto text-sm leading-snug">
-            <p className="whitespace-pre-wrap break-words line-clamp-[6]">
-              {getCaptionForDisplay() || (
-                <span className="text-muted-foreground italic">
-                  Caption will appear here...
-                </span>
-              )}
+            {/* Caption content */}
+            <p className="text-foreground whitespace-pre-wrap break-words">
+              {currentCaption ||
+                (contentType === "none" && selectedAccounts.length > 0 ? (
+                  ""
+                ) : (
+                  <span className="text-muted-foreground italic">
+                    No caption added yet...
+                  </span>
+                ))}
             </p>
           </div>
+        )}
 
-          <div className="flex justify-center mt-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="text-xs flex items-center gap-1"
-            >
-              <Calendar className="w-3 h-3" />
-              <span>{displayDate}</span>
-            </Button>
-          </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t mt-auto">
+          <Clock className="h-3.5 w-3.5" />
+          <span>{formattedScheduledDateTime}</span>
         </div>
-      </div>
-      <div className="mt-4">
-        <Button variant="secondary" className="w-full">
-          Select Cover Image/Thumbnail
-        </Button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

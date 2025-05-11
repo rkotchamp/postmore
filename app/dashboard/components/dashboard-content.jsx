@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useEffect, memo } from "react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
   CheckCircle2,
@@ -16,9 +16,8 @@ import { Preview } from "@/app/dashboard/preview/Preview";
 import { TextPreview } from "@/app/dashboard/preview/TextPreview";
 import { useMediaMutations } from "@/app/hooks/useMediaMutations";
 import { useMediaItems } from "@/app/hooks/useMediaQueries";
-import { useProgressCount } from "@/app/context/ProgressCountContext";
-import { usePostData } from "@/app/context/PostDataContext";
-import { useMediaTextFlow } from "@/app/context/MediaTextFlowContext";
+import { useUIStateStore } from "@/app/lib/store/uiStateStore";
+import { usePostStore } from "@/app/lib/store/postStore";
 
 // Steps for post creation process
 const steps = [
@@ -27,162 +26,186 @@ const steps = [
   { id: "caption", name: "Caption" },
 ];
 
+// Memoize the step content components
+const MemoizedContent = memo(() => <Content />);
+const MemoizedSelectAccount = memo(() => <SelectAccount />);
+const MemoizedCaption = memo(() => <Caption />);
+
+// Use these memoized components in the conditional rendering
+// Replace the direct component usage with the memoized versions in the CardContent
+
+// Memoize the Preview rendering function to prevent unnecessary re-renders
+const MemoizedPreview = memo(() => <Preview />);
+const MemoizedTextPreview = memo(() => <TextPreview />);
+
 export function DashboardContent() {
-  // --- Context Hooks ---
-  const { progressCount, setProgressCount } = useProgressCount();
-  const {
-    postData,
-    setPostData,
-    addSelectedAccount,
-    removeSelectedAccount,
-    setSchedule,
-    resetPostData,
-  } = usePostData();
-  const { behavior, setBehavior } = useMediaTextFlow();
-  const { currentStep } = progressCount;
-  const {
-    selectedAccounts,
-    scheduleType,
-    scheduledAt,
-    captionMode,
-    singleCaption,
-    multiCaptions,
-  } = postData;
-  const {
-    postType: temporaryContentType,
-    temporaryText,
-    isMediaAvailable: sessionHasMedia,
-    showPreviews,
-  } = behavior;
-  // ---------------------
+  // --- UI Zustand State ---
+  const currentStep = useUIStateStore((state) => state.currentStep);
+  const setCurrentStep = useUIStateStore((state) => state.setCurrentStep);
+  const postType = useUIStateStore((state) => state.postType);
+  const textPostContent = useUIStateStore((state) => state.textPostContent);
+  const setTextPostContent = useUIStateStore(
+    (state) => state.setTextPostContent
+  );
+  const resetUIState = useUIStateStore((state) => state.resetUIState);
+  // ----------------------
+
+  // --- Post Config Zustand State & Actions ---
+  const selectedAccounts = usePostStore((state) => state.selectedAccounts);
+  const captionMode = usePostStore((state) => state.captionMode);
+  const singleCaption = usePostStore((state) => state.singleCaption);
+  const multiCaptions = usePostStore((state) => state.multiCaptions);
+  const scheduleType = usePostStore((state) => state.scheduleType);
+  const scheduledAt = usePostStore((state) => state.scheduledAt);
+  const resetPostConfig = usePostStore((state) => state.resetPostConfig);
+  // ------------------------------------------
 
   // --- TanStack Query State ---
   const { data: sessionMediaItems = [], isLoading: isLoadingMedia } =
     useMediaItems();
-  const { updateTextContent } = useMediaMutations();
+  const { updateTextContent, clearMedia } = useMediaMutations();
   // --------------------------
 
-  // State to control preview visibility
+  // --- Calculate derived state directly --- (Inputs now from Zustand stores)
+  const hasSessionMedia = sessionMediaItems.length > 0;
+  const canShowMedia = postType === "media" && hasSessionMedia;
+  const canShowText = postType === "text" && textPostContent.trim() !== "";
+  const showPreviews = canShowMedia || canShowText;
+  // ---------------------------------------
 
-  // Update preview visibility based on context/query state
-  useEffect(() => {
-    const shouldShow =
-      (temporaryContentType === "media" && sessionHasMedia) ||
-      (temporaryContentType === "text" && temporaryText.trim() !== "");
-    setBehavior((prev) => ({ ...prev, showPreviews: shouldShow }));
-  }, [temporaryContentType, sessionHasMedia, temporaryText]);
-
-  // --- Step Completion Logic (Inline Check) ---
+  // --- Step Completion Logic --- (Inputs now from Zustand stores)
   const isStepComplete = (stepIndex) => {
     switch (stepIndex) {
       case 0: // Content
-        return (
-          (temporaryContentType === "media" && sessionHasMedia) ||
-          (temporaryContentType === "text" && temporaryText.trim() !== "")
-        );
+        return canShowMedia || canShowText;
       case 1: // Accounts
         return selectedAccounts.length > 0;
       case 2: // Caption
-        // Caption completeness might depend on the mode
-        // If single mode, singleCaption should not be empty (unless it's a media post where caption is optional)
-        // If multiple mode, captions for selected platforms should exist
-        // For now, let's consider it complete if accounts are selected (as caption is the last step)
-        // More robust validation could be added later if needed
-        return selectedAccounts.length > 0; // Simplistic check for now
+        // Caption step is always considered completable once reached, maybe add validation?
+        // For now, just reaching it with selected accounts is enough.
+        return selectedAccounts.length > 0;
       default:
         return false;
     }
   };
 
-  // Check if current step is valid and can proceed to next
   const canProceed = () => {
     return isStepComplete(currentStep);
   };
 
-  // Go to next step - Persist text if moving from step 0
+  // --- Navigation Handlers --- (Use UI store actions)
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
-      if (currentStep === 0 && temporaryContentType === "text") {
-        console.log("Persisting text content:", temporaryText);
-        // Ensure temporaryText is defined before mutating
-        updateTextContent.mutate(temporaryText ?? "");
+      if (currentStep === 0 && postType === "text") {
+        updateTextContent.mutate(textPostContent ?? "");
       }
-      setProgressCount((prev) => ({
-        ...prev,
-        currentStep: prev.currentStep + 1,
-      }));
+      setCurrentStep((prev) => prev + 1);
     }
   };
 
-  // Go to previous step
   const handlePrevious = () => {
     if (currentStep > 0) {
-      setProgressCount((prev) => ({
-        ...prev,
-        currentStep: prev.currentStep - 1,
-      }));
+      setCurrentStep((prev) => prev - 1);
     }
   };
 
-  // Handle final submission - Also persist latest text
+  // --- Submission --- (Use state from both stores, TanStack)
   const handleSubmit = () => {
     if (!canProceed()) {
       console.error("Cannot submit, current step is not complete.");
+      // Consider using a toast notification library instead of alert
       alert("Please complete the current step before submitting.");
       return;
     }
-    // Always persist the latest text state before final submission if it's a text post.
-    if (temporaryContentType === "text") {
-      console.log("Persisting final text content:", temporaryText);
-      updateTextContent.mutate(temporaryText ?? "", {
+
+    // Ensure latest text is persisted if it's a text post
+    if (postType === "text") {
+      console.log(
+        "Persisting final text content before submission:",
+        textPostContent
+      );
+      updateTextContent.mutate(textPostContent ?? "", {
         onSuccess: () => {
-          console.log("Text persisted. Proceeding with submission...");
+          console.log("Text persisted just before submission. Proceeding...");
           proceedWithSubmission();
         },
         onError: (error) => {
           console.error("Failed to persist text before submission:", error);
-          alert("Failed to save post content. Please try again.");
+          alert(
+            "Failed to save post content right before submission. Please try again."
+          );
         },
       });
     } else {
-      // If it's a media post, proceed directly
+      // For media posts, TanStack Query cache should hold the latest media state
       proceedWithSubmission();
     }
   };
 
   const proceedWithSubmission = () => {
-    // Construct submission data from contexts and query
     const submissionData = {
-      contentType: temporaryContentType,
-      // Use temporaryText if text post, derive caption from PostDataContext otherwise
-      text:
-        temporaryContentType === "text"
-          ? temporaryText
-          : captionMode === "single"
-          ? singleCaption
-          : "", // Simplistic caption for now
-      media: temporaryContentType === "media" ? sessionMediaItems : [],
-      accounts: selectedAccounts,
-      // Pass full caption details from PostDataContext
+      contentType: postType, // From UI Store
+      text: postType === "text" ? textPostContent : "", // From UI Store
+      media: postType === "media" ? sessionMediaItems : [], // From TanStack Query
+      accounts: selectedAccounts, // From Post Store
       captions: {
+        // From Post Store
         mode: captionMode,
         single: singleCaption,
-        platforms: multiCaptions, // Assuming multiCaptions holds platform specifics
-        scheduleType: scheduleType,
-        scheduledAt: scheduledAt,
+        platforms: multiCaptions,
+      },
+      schedule: {
+        // From Post Store
+        type: scheduleType,
+        at: scheduledAt,
       },
     };
     console.log("Submitting post:", submissionData);
-    alert("Post scheduled! Check console for data.");
-    // TODO: Reset relevant states after successful submission
-    // resetPostData(); // Reset accounts, schedule, caption mode etc.
-    // setBehavior(initialBehaviorState); // Reset text flow context
-    // clearMedia.mutate(); // Clear media from TanStack Query cache
-    // setProgressCount({ currentStep: 0 }); // Reset step
+    // TODO: Replace alert with actual API call using TanStack Query mutation
+    alert(
+      `Post ${
+        scheduleType === "scheduled" ? "scheduled" : "submitted"
+      }! Check console for data.`
+    );
+
+    // --- Reset States --- //
+    // Reset core post configuration
+    resetPostConfig();
+    // Reset UI state (step, temporary text, etc.)
+    resetUIState();
+
+    // Clear media from server/cache if it was a media post
+    if (postType === "media" && hasSessionMedia) {
+      clearMedia.mutate();
+    }
+
+    // Clear text from server/cache if it was a text post (resetting temporaryText above handled UI)
+    if (postType === "text") {
+      updateTextContent.mutate("");
+    }
+    // ------------------- //
   };
 
+  // Decide which preview to show (Uses UI store state)
+  const renderPreview = () => {
+    if (!showPreviews) return null;
+
+    if (postType === "text") {
+      return <MemoizedTextPreview />;
+    } else {
+      return <MemoizedPreview />;
+    }
+  };
+
+  // Get button text (Uses Post store state)
+  const getSubmitButtonText = () => {
+    return scheduleType === "scheduled" ? "Schedule Post" : "Post Now";
+  };
+
+  // Loading state from TanStack Query
   if (isLoadingMedia) {
-    return <div>Loading...</div>; // Add a loading indicator
+    // Consider a more sophisticated loading skeleton
+    return <div>Loading Content Editor...</div>;
   }
 
   return (
@@ -196,18 +219,21 @@ export function DashboardContent() {
         {/* Left side: Progress Bar, Content, and Navigation buttons together */}
         <div
           className={`flex-1 flex flex-col space-y-6 ${
-            !showPreviews ? "lg:w-full" : ""
+            !showPreviews ? "lg:w-full" : "" // Adjust width if preview is hidden
           }`}
         >
-          {/* Progress Bar */}
+          {/* Progress Bar (Uses UI store state) */}
           <div className="mb-0">
-            <div className="flex items-center justify-center">
+            {" "}
+            {/* Removed mb-8, adjust spacing as needed */}
+            <div className="flex items-center justify-center space-x-0">
+              {" "}
+              {/* Use space-x-0 on parent */}
               {steps.map((step, index) => (
                 <div key={step.id} className="flex items-center">
-                  {/* Step circle with number or check */}
+                  {/* Step circle using UI store currentStep */}
                   <div
-                    className={`flex items-center justify-center h-10 w-10 rounded-full border-2 ${
-                      // Use isStepComplete for previous steps check
+                    className={`flex items-center justify-center h-10 w-10 rounded-full border-2 transition-colors duration-300 ${
                       index < currentStep
                         ? "border-primary bg-primary text-primary-foreground"
                         : index === currentStep
@@ -215,63 +241,62 @@ export function DashboardContent() {
                         : "border-muted-foreground/30 text-muted-foreground"
                     }`}
                   >
-                    {index < currentStep ? ( // Show checkmark only if step is strictly less than current
+                    {index < currentStep ? (
                       <CheckCircle2 className="h-6 w-6" />
                     ) : (
                       <span className="text-sm font-medium">{index + 1}</span>
                     )}
                   </div>
 
-                  {/* Step name */}
-                  <span
-                    className={`ml-2 text-sm font-medium ${
-                      index <= currentStep
-                        ? "text-foreground"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {step.name}
-                  </span>
-
-                  {/* Connector line */}
+                  {/* Connector line - Ensure it's correctly placed between circle+name and next circle */}
                   {index < steps.length - 1 && (
-                    <div
-                      className={`h-0.5 w-10 md:w-24 lg:w-36 ${
-                        // Line color based on completion of the *previous* step
-                        index < currentStep
-                          ? "bg-primary"
-                          : "bg-muted-foreground/30"
+                    <div className="flex items-center">
+                      <span
+                        className={`ml-2 mr-2 text-sm font-medium transition-colors duration-300 ${
+                          index <= currentStep
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.name}
+                      </span>
+                      <div
+                        className={`h-0.5 w-10 md:w-16 lg:w-20 xl:w-36 transition-colors duration-300 ${
+                          index < currentStep
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
+                        }`}
+                      />
+                    </div>
+                  )}
+                  {/* Render last step name separately */}
+                  {index === steps.length - 1 && (
+                    <span
+                      className={`ml-2 text-sm font-medium transition-colors duration-300 ${
+                        index <= currentStep
+                          ? "text-foreground"
+                          : "text-muted-foreground"
                       }`}
-                    />
+                    >
+                      {step.name}
+                    </span>
                   )}
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Step Content */}
+          {/* Step Content - Render conditionally based on UI store currentStep */}
           <Card className="border-none shadow-none flex-1 p-0">
             <CardContent className="p-6">
-              {currentStep === 0 && (
-                // Removed onContentChange prop
-                <Content />
-              )}
-
-              {currentStep === 1 && (
-                // Removed onSelectionChange prop - SelectAccount uses PostDataContext directly
-                <SelectAccount />
-              )}
-
-              {currentStep === 2 && (
-                // Removed onCaptionChange prop - Caption uses PostDataContext directly
-                // Pass selectedAccounts from context
-                <Caption selectedAccounts={selectedAccounts} />
-              )}
+              {currentStep === 0 && <MemoizedContent />}
+              {currentStep === 1 && <MemoizedSelectAccount />}
+              {currentStep === 2 && <MemoizedCaption />}
             </CardContent>
           </Card>
 
-          {/* Navigation Buttons */}
-          <div className="flex justify-between">
+          {/* Navigation Buttons (Uses UI store state/actions) */}
+          <div className="flex justify-between items-center pt-4 border-t">
             <Button
               variant="outline"
               onClick={handlePrevious}
@@ -285,40 +310,29 @@ export function DashboardContent() {
             {currentStep < steps.length - 1 ? (
               <Button
                 onClick={handleNext}
-                disabled={!canProceed()}
+                disabled={!canProceed()} // Based on step completion logic
                 className="flex items-center gap-1"
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
               </Button>
             ) : (
+              // Final Submit Button (Uses Post store state for text)
               <Button
                 onClick={handleSubmit}
-                disabled={!canProceed()}
-                className="flex items-center gap-2 py-6 px-8"
-                size="lg"
+                disabled={!canProceed()} // Ensure final step is considered completable
+                className="flex items-center gap-2 py-3 px-6 md:py-4 md:px-8 text-base" // Adjusted padding/size
+                size="lg" // Use size prop for consistency
               >
                 <SendHorizontal className="h-5 w-5" />
-                Schedule Post{" "}
-                {/* TODO: Text should adapt based on scheduleType */}
+                {getSubmitButtonText()}
               </Button>
             )}
           </div>
         </div>
 
-        {/* Right side: Preview Panel */}
-        {showPreviews && (
-          <div className="lg:w-[360px] mx-auto lg:mx-0">
-            {/* Pass necessary data from context/query to previews */}
-            {temporaryContentType === "text" ? (
-              // TextPreview needs temporaryText and accounts from context
-              <TextPreview />
-            ) : (
-              // Preview needs sessionMediaItems, temporaryText, accounts, captions etc from context/query
-              <Preview />
-            )}
-          </div>
-        )}
+        {/* Right side: Preview Panel - Conditionally render based on derived state */}
+        {renderPreview()}
       </div>
     </div>
   );

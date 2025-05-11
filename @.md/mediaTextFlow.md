@@ -42,12 +42,6 @@ This document outlines the flow and state management for handling media and text
 
 ## State Management
 
-- **Global State:** Consider using a context or a state management library to handle global state across components.
+- **Global State:** Consider using a state management library to handle global state across components.
 - **Immediate Updates:** Ensure that state updates trigger immediate re-renders where necessary, especially for previews.
 - **Component Communication:** Use props and callbacks to communicate between components, ensuring that changes in one component reflect in others.
-
-## Suggested Approach
-
-- **Use Context API:** For managing global state related to media, text, accounts, and captions.
-- **Optimize Re-renders:** Ensure components only re-render when necessary by using `React.memo` or similar techniques.
-- **Consistent UI/UX:** Maintain a consistent user experience by ensuring previews update immediately and accurately reflect the current state.

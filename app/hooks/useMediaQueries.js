@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 export const QUERY_KEYS = {
   media: "media",
   carousel: "carousel",
-  text: "text",
+  // text: "text", // Removed as text-only post content is now in uiStateStore
   // preview: "preview", // Preview state is now local to MediaPosts
 };
 
@@ -38,20 +38,4 @@ export function useCarouselState() {
   });
 }
 
-// Hook to get text content - Reads from localStorage
-export function useTextContent() {
-  return useQuery({
-    queryKey: [QUERY_KEYS.text],
-    queryFn: () => {
-      try {
-        const stored = localStorage.getItem("text-content");
-        // Return empty string if null/undefined, otherwise parse
-        return stored !== null ? JSON.parse(stored) : "";
-      } catch (error) {
-        console.error("Error reading text content from localStorage:", error);
-        return ""; // Fallback to empty string on error
-      }
-    },
-    staleTime: Infinity,
-  });
-}
+// useTextContent function removed as text-only post content is now managed by uiStateStore

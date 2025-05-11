@@ -7,7 +7,7 @@ import {
   AvatarImage,
 } from "@/app/components/ui/avatar";
 import { Instagram, Twitter, Facebook, Youtube } from "lucide-react";
-import { usePostData } from "@/app/context/PostDataContext";
+import { usePostStore } from "@/app/lib/store/postStore";
 
 // --- Icon Components (Copied from SelectAccount/Authenticate pages for consistency) ---
 const TikTokIcon = ({ className }) => (
@@ -68,10 +68,9 @@ const PlatformIcon = ({ platform }) => {
 // --- End Icon Components ---
 
 export function SelectedAccountsPreview() {
-  // --- Get Data from Context ---
-  const { postData } = usePostData();
-  const { selectedAccounts } = postData;
-  // ---------------------------
+  // --- Get Data from Zustand Store ---
+  const selectedAccounts = usePostStore((state) => state.selectedAccounts);
+  // ---------------------------------
 
   // Group selected accounts by platform
   const groupedByPlatform = selectedAccounts.reduce((acc, account) => {
@@ -104,8 +103,8 @@ export function SelectedAccountsPreview() {
     return indexA - indexB;
   });
 
-  // Condition based on context data
-  if (selectedAccounts.length === 0) {
+  // Condition based on store data
+  if (!selectedAccounts || selectedAccounts.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-muted-foreground">
         Select accounts to preview them here.

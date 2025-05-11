@@ -42,4 +42,5 @@ Follow these rules when you write code:
 -Dont Create two components in one file.Always create a new file for each compoent 
 -When creating codes for ui always think responsive and mobile first.
 -Let fonts,texts,size and everything that has to do with a design has to be consistent across different components in the Entire Project.Always use design basic principles 
+-Never touch ui designs when you have not been asked to 
 

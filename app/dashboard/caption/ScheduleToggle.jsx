@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useContext, useCallback } from "react";
-import { Clock, Calendar } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
+import { Clock } from "lucide-react";
 import { Switch } from "@/app/components/ui/switch";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -18,156 +18,232 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { usePostData } from "@/app/context/PostDataContext";
+import { usePostStore } from "@/app/lib/store/postStore";
 
-// Helper function to format time from Date object
+// Helper to format time, ensuring valid Date input
 const formatTimeFromDate = (date) => {
-  if (!(date instanceof Date) || isNaN(date)) {
-    return "12:00"; // Default time if date is invalid
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    return "00:00"; // Default or suitable fallback
   }
   const hours = date.getHours().toString().padStart(2, "0");
-  // Snap minutes to the nearest 30 minutes (00 or 30)
   const minutes = date.getMinutes() < 30 ? "00" : "30";
   return `${hours}:${minutes}`;
 };
 
-// Removed props: scheduled, initialDate, onToggle
+// New helper to create a valid Date object from local parts
+const createValidDateFromParts = (dateOnly, timeString_HH_MM) => {
+  try {
+    if (!(dateOnly instanceof Date) || isNaN(dateOnly.getTime())) {
+      // console.error("Invalid dateOnly part provided to createValidDateFromParts:", dateOnly);
+      return null;
+    }
+    if (
+      typeof timeString_HH_MM !== "string" ||
+      !timeString_HH_MM.match(/^\d{2}:\d{2}$/)
+    ) {
+      // console.error("Invalid timeString_HH_MM part provided to createValidDateFromParts:", timeString_HH_MM);
+      return null;
+    }
+
+    const [hours, minutes] = timeString_HH_MM.split(":").map(Number);
+    // Create new Date using local year, month, day from dateOnly, and new hours, minutes
+    const newDate = new Date(
+      dateOnly.getFullYear(),
+      dateOnly.getMonth(),
+      dateOnly.getDate(),
+      hours,
+      minutes,
+      0,
+      0
+    );
+
+    if (isNaN(newDate.getTime())) {
+      // console.error("Failed to create valid date from parts in createValidDateFromParts");
+      return null;
+    }
+    return newDate;
+  } catch (error) {
+    console.error("Exception in createValidDateFromParts:", error);
+    return null;
+  }
+};
+
+// Add this near the top of your component file
+const MemoizedSwitch = memo(({ checked, onCheckedChange, ...props }) => (
+  <Switch checked={checked} onCheckedChange={onCheckedChange} {...props} />
+));
+
+const PopoverButton = memo(function PopoverButton({
+  isCurrentlyScheduled,
+  formattedDateTime,
+  onClick,
+}) {
+  return (
+    <Button
+      variant="outline"
+      className={`flex items-center gap-2 px-4 py-2 rounded-l-full cursor-pointer transition-colors duration-200 h-auto ${
+        isCurrentlyScheduled
+          ? "bg-muted/20 border-muted-foreground/30 text-foreground hover:bg-muted/30"
+          : "border-muted-foreground/30 text-muted-foreground"
+      }`}
+      disabled={!isCurrentlyScheduled}
+      aria-label={
+        isCurrentlyScheduled && formattedDateTime
+          ? `Change schedule: ${formattedDateTime}`
+          : "Schedule for later"
+      }
+      onClick={onClick}
+    >
+      <Clock className="h-5 w-5" />
+      <span className="text-sm font-medium whitespace-nowrap">
+        {isCurrentlyScheduled && formattedDateTime
+          ? formattedDateTime
+          : "Schedule"}
+      </span>
+    </Button>
+  );
+});
+
 export function ScheduleToggle() {
-  // --- Get Data and Setter from Context ---
-  const { postData, setSchedule } = usePostData();
-  const { scheduleType, scheduledAt } = postData;
+  // --- Zustand Store ---
+  const scheduleType = usePostStore((state) => state.scheduleType);
+  const scheduledAt = usePostStore((state) => state.scheduledAt);
+  const setSchedule = usePostStore((state) => state.setSchedule);
+
   const isCurrentlyScheduled = scheduleType === "scheduled";
-  // ---------------------------------------
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const currentDate =
-    scheduledAt instanceof Date && !isNaN(scheduledAt)
-      ? scheduledAt
-      : new Date();
-  const currentTime = formatTimeFromDate(scheduledAt);
+  // displayDate is now memoized and ensures a valid Date object is returned
+  const displayDate = useMemo(() => {
+    if (!scheduledAt) return new Date();
 
-  // Generate time options (every 30 minutes)
-  const timeOptions = [];
-  for (let hour = 0; hour < 24; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      const formattedHour = hour.toString().padStart(2, "0");
-      const formattedMinute = minute.toString().padStart(2, "0");
-      timeOptions.push(`${formattedHour}:${formattedMinute}`);
-    }
-  }
-
-  // Helper to combine local date/time state into a Date object
-  const getCombinedDateTime = (currentDate, currentTime) => {
     try {
-      const dateString = currentDate.toISOString().split("T")[0];
-      combinedDateTime = new Date(`${dateString}T${currentTime}`);
-      if (isNaN(combinedDateTime.getTime())) {
-        throw new Error("Invalid Date object created from local state");
+      const date = new Date(scheduledAt);
+      // Check if the result is a valid date
+      if (isNaN(date.getTime())) {
+        console.warn("Invalid scheduledAt in ScheduleToggle:", scheduledAt);
+        return new Date(); // Return current date as fallback
       }
-      return combinedDateTime;
+      return date;
     } catch (error) {
-      console.error("Error creating combined date from local state:", error);
-      return null; // Indicate failure
+      console.error("Error parsing scheduledAt in ScheduleToggle:", error);
+      return new Date(); // Return current date as fallback
     }
-  };
+  }, [scheduledAt]);
 
-  // Handle toggle - Calls context setter
+  // displayTime is string "HH:MM" derived from displayDate
+  const displayTime = useMemo(() => {
+    return formatTimeFromDate(displayDate);
+  }, [displayDate]);
+
+  // --- Time Options ---
+  const timeOptions = useMemo(() => {
+    const options = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const formattedHour = hour.toString().padStart(2, "0");
+        const formattedMinute = minute.toString().padStart(2, "0");
+        options.push(`${formattedHour}:${formattedMinute}`);
+      }
+    }
+    return options;
+  }, []);
+  // --- End Time Options ---
+
+  // --- Handlers ---
   const handleToggle = useCallback(
     (newScheduledState) => {
-      if (newScheduledState === isCurrentlyScheduled) {
-        console.log(
-          "ScheduleToggle handleToggle: No change detected, skipping setSchedule."
-        );
-        if (!newScheduledState && showDatePicker) {
-          setShowDatePicker(false);
-        }
-        return;
-      }
+      const desiredScheduleType = newScheduledState ? "scheduled" : "immediate";
 
-      const newScheduleType = newScheduledState ? "scheduled" : "immediate";
-      let dateTimeToSend = null;
-      if (newScheduledState) {
-        dateTimeToSend = getCombinedDateTime(date, time);
-        if (!dateTimeToSend) return; // Don't update context if date creation failed
-        setShowDatePicker(true); // Show picker only if turning on
-      } else {
-        setShowDatePicker(false); // Hide picker if turning off
-      }
-      console.log(
-        "ScheduleToggle: Calling setSchedule from handleToggle",
-        newScheduleType,
-        dateTimeToSend
-      );
-      setSchedule(newScheduleType, dateTimeToSend);
-    },
-    // Dependencies for handleToggle
-    [
-      isCurrentlyScheduled,
-      currentDate,
-      currentTime,
-      showDatePicker,
-      setSchedule,
-      setShowDatePicker,
-    ]
-  );
-
-  // Handle date change - Updates local state and calls context setter
-  const handleDateChange = useCallback(
-    (newDate) => {
-      if (!newDate) {
-        return;
-        const newDateTime = new Date(newDate);
-        newDateTime.setHours(
-          parseInt(currentTime.split(":")[0]),
-          parseInt(currentTime.split(":")[1])
-        );
+      if (desiredScheduleType === "scheduled") {
+        const newDateTime =
+          createValidDateFromParts(displayDate, displayTime) || new Date();
         setSchedule("scheduled", newDateTime);
+      } else {
+        setSchedule("immediate", null);
+      }
+      setShowDatePicker(newScheduledState);
+    },
+    [displayDate, displayTime, setSchedule]
+  );
+
+  const handleDateChange = useCallback(
+    (newDateFromCalendar) => {
+      if (!newDateFromCalendar) return;
+      const combinedDateTime = createValidDateFromParts(
+        newDateFromCalendar,
+        displayTime
+      );
+      if (combinedDateTime) {
+        console.log(
+          "Setting schedule with combined date/time",
+          combinedDateTime.toISOString()
+        );
+        setSchedule("scheduled", combinedDateTime);
+      } else {
+        console.error(
+          "ScheduleToggle: Failed to create valid date in handleDateChange"
+        );
       }
     },
-    [currentTime, setSchedule] // scheduleType is not needed as we hardcode "scheduled"
+    [displayTime, setSchedule]
   );
 
-  // Handle time change - Updates local state and calls context setter
   const handleTimeChange = useCallback(
-    (newTime) => {
-      const [hours, minutes] = newTime.split(":");
-      const newDateTime = new Date(currentDate);
-      newDateTime.setHours(hours, minutes);
-      setSchedule("scheduled", newDateTime);
+    (newTime_HH_MM) => {
+      const combinedDateTime = createValidDateFromParts(
+        displayDate,
+        newTime_HH_MM
+      );
+      if (combinedDateTime) {
+        setSchedule("scheduled", combinedDateTime);
+      } else {
+        console.error(
+          "ScheduleToggle: Failed to create valid date in handleTimeChange"
+        );
+      }
     },
-    // Dependencies for handleTimeChange
-    [currentDate, setSchedule] // scheduleType is not needed as we hardcode "scheduled"
+    [displayDate, setSchedule]
   );
 
-  // Format the selected date and time for display using local state
-  const formattedDateTime = isCurrentlyScheduled
-    ? `${format(date, "MMM d, yyyy")} at ${time}`
-    : "";
+  const handleOpenChange = useCallback((open) => {
+    setShowDatePicker(open);
+  }, []);
+
+  const handleButtonClick = useCallback(() => {
+    if (isCurrentlyScheduled) {
+      setShowDatePicker(true);
+    }
+  }, [isCurrentlyScheduled]);
+
+  // Create formatted date time string
+  const formattedDateTime = useMemo(() => {
+    // Only format when scheduled and display date is valid
+    if (
+      isCurrentlyScheduled &&
+      displayDate instanceof Date &&
+      !isNaN(displayDate.getTime())
+    ) {
+      try {
+        // Use the date and displayTime string which is already formatted
+        return `${format(displayDate, "MMM d, yyyy")} at ${displayTime}`;
+      } catch (error) {
+        console.error("Error formatting date in ScheduleToggle:", error);
+        return "Invalid date"; // Fallback text
+      }
+    }
+    return "";
+  }, [isCurrentlyScheduled, displayDate, displayTime]);
 
   return (
     <div className="flex items-center mt-4 mb-2 gap-2">
-      <Popover
-        open={showDatePicker && isCurrentlyScheduled} // Visibility depends on context
-        onOpenChange={setShowDatePicker}
-      >
+      <Popover open={showDatePicker} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className={`flex items-center gap-2 px-4 py-2 rounded-l-full cursor-pointer transition-colors duration-200 h-auto ${
-              // Use rounded-l-full
-              isCurrentlyScheduled // Style based on context
-                ? "bg-muted/20 border-muted-foreground/30 text-foreground hover:bg-muted/30" // Style when scheduled
-                : "border-muted-foreground/30 text-muted-foreground" // Style when not scheduled
-            }`}
-            disabled={!isCurrentlyScheduled} // Disable based on context
-            aria-label="Open date time picker"
-          >
-            <Clock className="h-5 w-5" />
-            <span className="text-sm font-medium whitespace-nowrap">
-              {/* Display based on context */}
-              {isCurrentlyScheduled ? formattedDateTime : "Schedule"}
-            </span>
-          </Button>
+          <PopoverButton
+            isCurrentlyScheduled={isCurrentlyScheduled}
+            formattedDateTime={formattedDateTime}
+            onClick={handleButtonClick}
+          />
         </PopoverTrigger>
         <PopoverContent
           className="w-auto p-0"
@@ -181,20 +257,16 @@ export function ScheduleToggle() {
               <h5 className="text-sm font-medium">Date</h5>
               <CalendarComponent
                 mode="single"
-                selected={currentDate} // Use local state for picker
+                selected={displayDate} // displayDate is the store's scheduledAt
                 onSelect={handleDateChange}
                 initialFocus
                 className="rounded-md border"
-                disabled={(date) =>
-                  date < new Date(new Date().setHours(0, 0, 0, 0))
-                }
+                disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} // Disable past dates
               />
             </div>
             <div className="space-y-1">
               <h5 className="text-sm font-medium">Time</h5>
-              <Select value={currentTime} onValueChange={handleTimeChange}>
-                {" "}
-                {/* Use local state for picker */}
+              <Select value={displayTime} onValueChange={handleTimeChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select time" />
                 </SelectTrigger>
@@ -220,13 +292,12 @@ export function ScheduleToggle() {
         </PopoverContent>
       </Popover>
 
-      <Switch
-        checked={isCurrentlyScheduled} // Control based on context
+      {/* Replace the Switch with MemoizedSwitch */}
+      <MemoizedSwitch
+        id="schedule-toggle"
+        checked={isCurrentlyScheduled}
         onCheckedChange={handleToggle}
-        className="scale-100 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input rounded-r-full border border-l-0 border-muted-foreground/30 px-1 h-[40px] w-[50px] data-[state=checked]:[&>span]:bg-primary-foreground data-[state=checked]:border-primary data-[state=unchecked]:hover:bg-muted/10"
-        aria-label={
-          isCurrentlyScheduled ? "Disable scheduling" : "Enable scheduling"
-        }
+        className="rounded-r-full rounded-l-none data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted-foreground/20 border border-muted-foreground/30 border-l-0 h-auto py-[9px] px-2.5"
       />
     </div>
   );
