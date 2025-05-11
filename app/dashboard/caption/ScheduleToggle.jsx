@@ -156,15 +156,22 @@ export function ScheduleToggle() {
       const desiredScheduleType = newScheduledState ? "scheduled" : "immediate";
 
       if (desiredScheduleType === "scheduled") {
-        const newDateTime =
-          createValidDateFromParts(displayDate, displayTime) || new Date();
-        setSchedule("scheduled", newDateTime);
+        // When enabling scheduling, set a future date (30 minutes from now)
+        const futureDate = new Date();
+        futureDate.setMinutes(futureDate.getMinutes() + 30);
+
+        // Make sure we're using 30-minute intervals
+        const minutes = futureDate.getMinutes();
+        futureDate.setMinutes(minutes - (minutes % 30));
+
+        setSchedule("scheduled", futureDate);
+        setShowDatePicker(true); // Show date picker immediately when scheduling is enabled
       } else {
         setSchedule("immediate", null);
+        setShowDatePicker(false);
       }
-      setShowDatePicker(newScheduledState);
     },
-    [displayDate, displayTime, setSchedule]
+    [setSchedule]
   );
 
   const handleDateChange = useCallback(
@@ -213,8 +220,11 @@ export function ScheduleToggle() {
   const handleButtonClick = useCallback(() => {
     if (isCurrentlyScheduled) {
       setShowDatePicker(true);
+    } else {
+      // If not scheduled, toggle to scheduled mode and show date picker
+      handleToggle(true);
     }
-  }, [isCurrentlyScheduled]);
+  }, [isCurrentlyScheduled, handleToggle]);
 
   // Create formatted date time string
   const formattedDateTime = useMemo(() => {
@@ -236,69 +246,107 @@ export function ScheduleToggle() {
   }, [isCurrentlyScheduled, displayDate, displayTime]);
 
   return (
-    <div className="flex items-center mt-4 mb-2 gap-2">
-      <Popover open={showDatePicker} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <PopoverButton
-            isCurrentlyScheduled={isCurrentlyScheduled}
-            formattedDateTime={formattedDateTime}
-            onClick={handleButtonClick}
-          />
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-auto p-0"
-          align="start"
-          side="bottom"
-          sideOffset={5}
-        >
-          <div className="space-y-3 p-3">
-            <h4 className="font-medium">Schedule Post</h4>
-            <div className="space-y-1">
-              <h5 className="text-sm font-medium">Date</h5>
-              <CalendarComponent
-                mode="single"
-                selected={displayDate} // displayDate is the store's scheduledAt
-                onSelect={handleDateChange}
-                initialFocus
-                className="rounded-md border"
-                disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} // Disable past dates
-              />
-            </div>
-            <div className="space-y-1">
-              <h5 className="text-sm font-medium">Time</h5>
-              <Select value={displayTime} onValueChange={handleTimeChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select time" />
-                </SelectTrigger>
-                <SelectContent>
-                  {timeOptions.map((timeOption) => (
-                    <SelectItem key={timeOption} value={timeOption}>
-                      {timeOption}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDatePicker(false)}
+    <div className="flex flex-col mt-4 mb-2">
+      <div className="flex justify-between items-center">
+        <div className="flex-1">
+          {isCurrentlyScheduled && (
+            <Popover open={showDatePicker} onOpenChange={handleOpenChange}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="inline-flex justify-between items-center max-w-fit bg-muted/10 rounded-full px-4 py-2 text-sm"
+                  onClick={() => setShowDatePicker(true)}
+                >
+                  <span>{formattedDateTime || "Select date and time"}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto p-0"
+                align="start"
+                side="bottom"
+                sideOffset={5}
               >
-                Done
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+                <div className="space-y-3 p-3">
+                  <h4 className="font-medium">Schedule Post</h4>
+                  <div className="space-y-1">
+                    <h5 className="text-sm font-medium">Date</h5>
+                    <CalendarComponent
+                      mode="single"
+                      selected={displayDate}
+                      onSelect={handleDateChange}
+                      initialFocus
+                      className="rounded-md border"
+                      disabled={(d) =>
+                        d < new Date(new Date().setHours(0, 0, 0, 0))
+                      } // Disable past dates
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <h5 className="text-sm font-medium">Time</h5>
+                    <Select
+                      value={displayTime}
+                      onValueChange={handleTimeChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {timeOptions.map((timeOption) => (
+                          <SelectItem key={timeOption} value={timeOption}>
+                            {timeOption}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="border-t mt-3 pt-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-primary">
+                        {formattedDateTime && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span>{formattedDateTime}</span>
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDatePicker(false)}
+                      >
+                        Done
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
 
-      {/* Replace the Switch with MemoizedSwitch */}
-      <MemoizedSwitch
-        id="schedule-toggle"
-        checked={isCurrentlyScheduled}
-        onCheckedChange={handleToggle}
-        className="rounded-r-full rounded-l-none data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted-foreground/20 border border-muted-foreground/30 border-l-0 h-auto py-[9px] px-2.5"
-      />
+        <div
+          className={`flex items-center gap-3 px-4 py-2 rounded-full cursor-pointer transition-colors duration-200 ${
+            isCurrentlyScheduled
+              ? "bg-primary/15 border border-primary/20"
+              : "bg-muted/15 border border-muted-foreground/20"
+          }`}
+          onClick={() => handleToggle(!isCurrentlyScheduled)}
+        >
+          <span
+            className={`text-sm font-medium ${
+              isCurrentlyScheduled ? "text-primary" : "text-muted-foreground"
+            }`}
+          >
+            Schedule Post
+          </span>
+          <MemoizedSwitch
+            id="schedule-toggle"
+            checked={isCurrentlyScheduled}
+            onCheckedChange={handleToggle}
+            className="h-5 w-9 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted-foreground/20"
+          />
+        </div>
+      </div>
     </div>
   );
 }
