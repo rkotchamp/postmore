@@ -19,6 +19,7 @@ import { useMediaItems } from "@/app/hooks/useMediaQueries";
 import { useUIStateStore } from "@/app/lib/store/uiStateStore";
 import { usePostStore } from "@/app/lib/store/postStore";
 import { toast } from "sonner";
+import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 
 // Steps for post creation process
 const steps = [
@@ -146,28 +147,112 @@ export function DashboardContent() {
     }
   };
 
+  // Add the Firebase storage hook
+  const {
+    uploadPostMedia,
+    isUploading: isUploadingToFirebase,
+    uploadResults,
+  } = useFirebaseStorage();
+
   const handlePostSubmission = () => {
+    // Show loading state right away
+    useUIStateStore.getState().setIsSubmitting(true);
+
+    // Check if we need to upload media first
+    if (
+      postType === "media" &&
+      sessionMediaItems &&
+      sessionMediaItems.length > 0
+    ) {
+      // Filter out items that need to be uploaded (no URL)
+      const itemsWithoutUrls = sessionMediaItems.filter((item) => !item.url);
+
+      if (itemsWithoutUrls.length > 0) {
+        console.log(
+          "Uploading media files to Firebase first:",
+          itemsWithoutUrls
+        );
+
+        // Extract File objects from items that need to be uploaded
+        const filesToUpload = itemsWithoutUrls.map((item) => item.file);
+
+        // Upload files to Firebase Storage
+        uploadPostMedia(filesToUpload)
+          .then((uploadResults) => {
+            console.log("Media upload successful:", uploadResults);
+
+            // Create a map of updated media items with the new URLs
+            const updatedMediaItems = sessionMediaItems.map((item) => {
+              // If this item already had a URL, keep it as is
+              if (item.url) return item;
+
+              // Find the corresponding upload result based on file name or other criteria
+              const uploadResult = uploadResults.find(
+                (result) =>
+                  result.originalName === item.file.name ||
+                  result.originalName === item.fileInfo?.name
+              );
+
+              if (uploadResult) {
+                // Return a new object with URL from Firebase
+                return {
+                  ...item,
+                  url: uploadResult.url,
+                  type: uploadResult.type || item.fileInfo?.type || item.type,
+                  size: uploadResult.size || item.fileInfo?.size || 0,
+                };
+              }
+
+              // Fallback - shouldn't reach here if uploads worked correctly
+              return item;
+            });
+
+            // Now proceed with post submission using updated media items
+            submitPost(updatedMediaItems);
+          })
+          .catch((error) => {
+            console.error("Failed to upload media to Firebase:", error);
+            toast.error("Media upload failed", {
+              description:
+                "We couldn't upload your media files. Please try again.",
+              duration: 5000,
+            });
+            useUIStateStore.getState().setIsSubmitting(false);
+          });
+      } else {
+        // All media already has URLs, proceed with submission
+        submitPost(sessionMediaItems);
+      }
+    } else {
+      // Text post or no media, proceed directly
+      submitPost([]);
+    }
+  };
+
+  // New function to handle the actual post submission after media is ready
+  const submitPost = (mediaItems) => {
     const submissionData = {
-      contentType: postType, // From UI Store
-      text: postType === "text" ? textPostContent : "", // From UI Store
-      media: postType === "media" ? sessionMediaItems : [], // From TanStack Query
-      accounts: selectedAccounts, // From Post Store
+      contentType: postType,
+      text: postType === "text" ? textPostContent : "",
+      media:
+        postType === "media"
+          ? mediaItems.length > 0
+            ? mediaItems
+            : sessionMediaItems
+          : [],
+      accounts: selectedAccounts,
       captions: {
-        // From Post Store
         mode: captionMode,
         single: singleCaption,
         multipleCaptions: multiCaptions,
       },
       schedule: {
-        // From Post Store
         type: scheduleType,
         at: scheduledAt,
       },
     };
-    console.log("Submitting post:", submissionData);
 
-    // Show loading state
-    useUIStateStore.getState().setIsSubmitting(true);
+    console.log("Submitting post with prepared media:", submissionData);
 
     // Send the data to our API endpoint
     fetch("/api/posts/submit", {
@@ -211,7 +296,7 @@ export function DashboardContent() {
           clearMedia.mutate();
         }
 
-        // Clear text from server/cache if it was a text post (resetting temporaryText above handled UI)
+        // Clear text from server/cache if it was a text post
         if (postType === "text") {
           updateTextContent.mutate("");
         }

@@ -1,0 +1,144 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Production Readiness Checklist
+
+## Firebase Storage Security
+
+- [ ] Implement proper Firebase Security Rules with authentication requirements
+  ```
+  rules_version = '2';
+  service firebase.storage {
+    match /b/{bucket}/o {
+      match /{userId}/{postId}/{fileName} {
+        // Allow read for everyone (public media)
+        allow read;
+        // Allow write only for authenticated users to their own folders
+        allow write: if request.auth != null;
+        // Add size limits for uploads
+        // allow write: if request.auth != null && request.resource.size < 10 * 1024 * 1024; // 10MB limit
+      }
+    }
+  }
+  ```
+
+- [ ] Consider enabling Firebase App Check to prevent abuse
+- [ ] Set up proper CORS configuration for your storage bucket
+- [ ] Create a cleanup process for unused media files
+
+## Authentication & Authorization
+
+- [ ] Implement a robust authentication flow including refresh token management
+- [ ] Add proper session timeout and token expiration handling
+- [ ] Implement rate limiting for API endpoints
+- [ ] Add role-based access control if applicable
+- [ ] Set up proper error handling for authentication failures
+
+## API Security & Performance
+
+- [ ] Add proper validation for all API inputs
+- [ ] Implement request throttling to prevent abuse
+- [ ] Set up proper error handling and logging
+- [ ] Configure appropriate timeouts for external API calls
+- [ ] Add monitoring for API endpoint performance and errors
+- [ ] Implement caching strategies where appropriate
+
+## Media Processing
+
+- [ ] Add media file validation (file type, size, content)
+- [ ] Implement image optimization/compression before storage
+- [ ] Consider adding video transcoding for wider compatibility
+- [ ] Implement a cleanup process for failed uploads
+- [ ] Add proper error handling for media processing failures
+- [ ] Consider implementing progressive loading for large media files
+
+## BlueSky Specific Optimizations
+
+- [ ] Add better error handling for BlueSky API rate limits
+- [ ] Implement token refresh for long-lived sessions
+- [ ] Add retry logic for transient BlueSky API errors
+- [ ] Consider implementing a queue for BlueSky posts during API outages
+- [ ] Monitor and log BlueSky API usage and errors
+
+## Error Handling & Logging
+
+- [ ] Implement structured logging throughout the application
+- [ ] Set up centralized error tracking (Sentry, LogRocket, etc.)
+- [ ] Add proper user feedback for errors (friendly error messages)
+- [ ] Implement monitoring and alerting for critical errors
+- [ ] Add detailed logging for debugging production issues
+
+## Environment Setup
+
+- [ ] Use separate Firebase projects for dev/staging/production
+- [ ] Set up proper environment variables for each environment
+- [ ] Review and lock down all environment secrets
+- [ ] Consider using Firebase environments feature
+
+## Performance Optimizations
+
+- [ ] Implement proper code splitting and lazy loading
+- [ ] Optimize media loading and display
+- [ ] Add proper caching strategies (SWR, React Query)
+- [ ] Implement service worker for offline capability
+- [ ] Optimize bundle size with proper tree shaking
+- [ ] Consider implementing server-side rendering for key pages
+
+## Testing
+
+- [ ] Add comprehensive unit tests for core functionality
+- [ ] Implement integration tests for critical user flows
+- [ ] Add end-to-end tests for key features
+- [ ] Set up testing for edge cases and error scenarios
+- [ ] Implement performance testing for media uploads/downloads
+
+## Deployment & CI/CD
+
+- [ ] Set up proper CI/CD pipeline for automated testing and deployment
+- [ ] Implement blue/green deployments or canary releases
+- [ ] Add automated rollback capability for failed deployments
+- [ ] Implement proper environment promotion workflow
+- [ ] Set up monitoring and alerting for deployment failures
+
+## Documentation
+
+- [ ] Document API endpoints and their usage
+- [ ] Create user documentation for key features
+- [ ] Document environment setup and deployment process
+- [ ] Create troubleshooting guides for common issues
+- [ ] Document security considerations and best practices
+
+## Legal & Compliance
+
+- [ ] Ensure proper Terms of Service are in place
+- [ ] Implement and document privacy policy
+- [ ] Consider data retention policies for user content
+- [ ] Review platform-specific terms and ensure compliance
+- [ ] Implement data export/deletion capabilities for user data
+
+## Monitoring & Analytics
+
+- [ ] Set up application performance monitoring
+- [ ] Implement user analytics for feature usage
+- [ ] Add monitoring for external API dependencies
+- [ ] Set up alerting for critical issues
+- [ ] Implement logging for security and audit purposes
+
+## Accessibility
+
+- [ ] Ensure application meets WCAG guidelines
+- [ ] Add proper aria labels and roles
+- [ ] Test with screen readers and accessibility tools
+- [ ] Implement keyboard navigation
+- [ ] Ensure proper color contrast and text sizing
+
+## Current Bug Investigation
+
+- [ ] Debug the current 500 error in the API endpoint:
+  1. Add detailed logging in the server API route
+  2. Check for validation issues with the post data
+  3. Verify MongoDB connection and schema validation
+  4. Inspect BlueSky service implementation for edge cases
+  5. Verify proper error handling in the API Manager

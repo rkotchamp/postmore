@@ -46,6 +46,109 @@ const platformServices = {
  */
 const postToPlatform = async (platform, account, data) => {
   try {
+    // Add detailed logging for debugging
+    console.log(`ApiManager: Posting to platform: ${platform}`);
+    console.log(
+      `ApiManager: Account data:`,
+      JSON.stringify(
+        {
+          ...account,
+          // Redact sensitive data
+          accessToken: account.accessToken ? "[REDACTED]" : undefined,
+          refreshToken: account.refreshToken ? "[REDACTED]" : undefined,
+          appPassword: account.appPassword ? "[REDACTED]" : undefined,
+        },
+        null,
+        2
+      )
+    );
+
+    // Map the incoming data
+    const mappedData = { ...data };
+
+    // Process media if present
+    if (
+      mappedData.media &&
+      Array.isArray(mappedData.media) &&
+      mappedData.media.length > 0
+    ) {
+      // Transform media array to have the expected structure
+      console.log(
+        `ApiManager: Original media count: ${mappedData.media.length}`
+      );
+
+      mappedData.media = mappedData.media
+        .map((item) => {
+          try {
+            // If this is a client-side structure with file and fileInfo
+            if (item.fileInfo) {
+              console.log(
+                `ApiManager: Converting client media format to service format for ${item.fileInfo.name}`
+              );
+
+              if (!item.url) {
+                console.warn(
+                  `ApiManager: Media item missing URL: ${item.fileInfo.name}`
+                );
+                return null;
+              }
+
+              return {
+                url: item.url,
+                type: item.fileInfo.type || item.type || "unknown/unknown",
+                size: item.fileInfo.size || 0,
+                originalName: item.fileInfo.name,
+                altText: item.altText || "",
+              };
+            }
+
+            // Already in the right format but check for URL
+            if (!item.url) {
+              console.warn(
+                `ApiManager: Media item missing URL: ${
+                  item.originalName || item.name || "unknown"
+                }`
+              );
+              return null;
+            }
+
+            return item;
+          } catch (mediaError) {
+            console.error(
+              `ApiManager: Error processing media item:`,
+              mediaError
+            );
+            return null;
+          }
+        })
+        .filter((item) => item !== null); // Filter out items without URLs as they can't be processed
+
+      console.log(
+        `ApiManager: Processed ${mappedData.media.length} valid media items`
+      );
+
+      // If we've lost all media items but this is a media post, return an error
+      if (mappedData.media.length === 0 && mappedData.contentType === "media") {
+        throw new Error(
+          "No valid media items found for media post. Ensure all files are uploaded properly with URLs."
+        );
+      }
+    }
+
+    console.log(
+      `ApiManager: Post data after mapping:`,
+      JSON.stringify(
+        {
+          contentType: mappedData.contentType,
+          mediaCount: mappedData.media?.length || 0,
+          hasText: !!mappedData.text,
+          captionMode: mappedData.captions?.mode,
+        },
+        null,
+        2
+      )
+    );
+
     // Get the platform service
     const service = platformServices[platform];
 
@@ -53,9 +156,59 @@ const postToPlatform = async (platform, account, data) => {
       throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    // Call the platform-specific post method with the original data structure
-    // maintaining consistent property names
-    const result = await service.post(account, data);
+    // Map account data for specific platforms
+    let mappedAccount = { ...account };
+
+    // If it's Bluesky, ensure the account data has the expected structure
+    if (platform === "bluesky") {
+      console.log("ApiManager: Mapping account data for Bluesky");
+      mappedAccount = {
+        id: account.id,
+        platformUsername: account.email || account.name, // Using email field which contains username.bsky.social
+        platformAccountId: account.platformId, // DID from database
+        accessToken: account.accessToken,
+        refreshToken: account.refreshToken,
+        // Add any other fields needed by the Bluesky service
+      };
+
+      // Validate Bluesky-specific account data
+      if (!mappedAccount.platformUsername) {
+        throw new Error(
+          "Missing platformUsername (handle) for Bluesky account"
+        );
+      }
+
+      if (!mappedAccount.platformAccountId) {
+        throw new Error("Missing platformAccountId (DID) for Bluesky account");
+      }
+
+      if (!mappedAccount.accessToken) {
+        throw new Error("Missing accessToken for Bluesky account");
+      }
+
+      console.log(
+        "ApiManager: Mapped Bluesky account:",
+        JSON.stringify(
+          {
+            ...mappedAccount,
+            platformUsername: mappedAccount.platformUsername,
+            platformAccountId: mappedAccount.platformAccountId,
+            accessToken: "[REDACTED]",
+            refreshToken: "[REDACTED]",
+          },
+          null,
+          2
+        )
+      );
+    }
+
+    // Call the platform-specific post method with the mapped account data
+    console.log(`ApiManager: Calling ${platform} service post method`);
+    const result = await service.post(mappedAccount, mappedData);
+    console.log(
+      `ApiManager: ${platform} post result:`,
+      JSON.stringify(result, null, 2)
+    );
 
     return {
       success: true,
@@ -64,13 +217,27 @@ const postToPlatform = async (platform, account, data) => {
       result,
     };
   } catch (error) {
-    console.error(`Error posting to ${platform}:`, error);
+    console.error(`ApiManager: Error posting to ${platform}:`, error);
+
+    // Provide more detailed error info for debugging
+    const errorInfo = {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+    };
+
+    console.error(
+      `ApiManager: Detailed error for ${platform}:`,
+      JSON.stringify(errorInfo, null, 2)
+    );
 
     return {
       success: false,
       platform,
       accountId: account?.id,
       error: error.message || `Failed to post to ${platform}`,
+      errorDetails: errorInfo,
     };
   }
 };
