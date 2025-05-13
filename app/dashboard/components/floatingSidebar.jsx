@@ -27,6 +27,8 @@ import {
 } from "@/app/components/ui/tooltip";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
 
+// Custom Bluesky icon component
+
 const navItems = [
   { icon: Plus, href: "/", label: "Create Post" },
   { icon: LayoutGrid, href: "/dashboard", label: "New Post" },
@@ -36,7 +38,6 @@ const navItems = [
     label: "Scheduled Posts",
   },
   { icon: Layers, href: "/all-posts", label: "All Posts" },
-
   { icon: Network, href: "/authenticate", label: "Authenticate" },
 
   // { icon: BarChart3, href: "/analytics", label: "Analytics" },

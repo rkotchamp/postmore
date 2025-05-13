@@ -18,6 +18,7 @@ import { useMediaMutations } from "@/app/hooks/useMediaMutations";
 import { useMediaItems } from "@/app/hooks/useMediaQueries";
 import { useUIStateStore } from "@/app/lib/store/uiStateStore";
 import { usePostStore } from "@/app/lib/store/postStore";
+import { toast } from "sonner";
 
 // Steps for post creation process
 const steps = [
@@ -39,6 +40,8 @@ const MemoizedPreview = memo(() => <Preview />);
 const MemoizedTextPreview = memo(() => <TextPreview />);
 
 export function DashboardContent() {
+  // Test toast function
+
   // --- UI Zustand State ---
   const currentStep = useUIStateStore((state) => state.currentStep);
   const setCurrentStep = useUIStateStore((state) => state.setCurrentStep);
@@ -48,6 +51,7 @@ export function DashboardContent() {
     (state) => state.setTextPostContent
   );
   const resetUIState = useUIStateStore((state) => state.resetUIState);
+  const isSubmitting = useUIStateStore((state) => state.isSubmitting);
   // ----------------------
 
   // --- Post Config Zustand State & Actions ---
@@ -138,11 +142,11 @@ export function DashboardContent() {
       });
     } else {
       // For media posts, TanStack Query cache should hold the latest media state
-      proceedWithSubmission();
+      handlePostSubmission();
     }
   };
 
-  const proceedWithSubmission = () => {
+  const handlePostSubmission = () => {
     const submissionData = {
       contentType: postType, // From UI Store
       text: postType === "text" ? textPostContent : "", // From UI Store
@@ -152,7 +156,7 @@ export function DashboardContent() {
         // From Post Store
         mode: captionMode,
         single: singleCaption,
-        platforms: multiCaptions,
+        multipleCaptions: multiCaptions,
       },
       schedule: {
         // From Post Store
@@ -161,29 +165,73 @@ export function DashboardContent() {
       },
     };
     console.log("Submitting post:", submissionData);
-    // TODO: Replace alert with actual API call using TanStack Query mutation
-    alert(
-      `Post ${
-        scheduleType === "scheduled" ? "scheduled" : "submitted"
-      }! Check console for data.`
-    );
 
-    // --- Reset States --- //
-    // Reset core post configuration
-    resetPostConfig();
-    // Reset UI state (step, temporary text, etc.)
-    resetUIState();
+    // Show loading state
+    useUIStateStore.getState().setIsSubmitting(true);
 
-    // Clear media from server/cache if it was a media post
-    if (postType === "media" && hasSessionMedia) {
-      clearMedia.mutate();
-    }
+    // Send the data to our API endpoint
+    fetch("/api/posts/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(submissionData),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("Post submission successful:", data);
 
-    // Clear text from server/cache if it was a text post (resetting temporaryText above handled UI)
-    if (postType === "text") {
-      updateTextContent.mutate("");
-    }
-    // ------------------- //
+        // Show success toast/notification
+        toast({
+          title: `Post ${
+            scheduleType === "scheduled" ? "scheduled" : "published"
+          } successfully!`,
+          description:
+            scheduleType === "scheduled"
+              ? `Your post will be published at ${new Date(
+                  scheduledAt
+                ).toLocaleString()}`
+              : "Your post has been published to the selected platforms.",
+          variant: "success",
+        });
+
+        // --- Reset States --- //
+        // Reset core post configuration
+        resetPostConfig();
+        // Reset UI state (step, temporary text, etc.)
+        resetUIState();
+
+        // Clear media from server/cache if it was a media post
+        if (postType === "media" && hasSessionMedia) {
+          clearMedia.mutate();
+        }
+
+        // Clear text from server/cache if it was a text post (resetting temporaryText above handled UI)
+        if (postType === "text") {
+          updateTextContent.mutate("");
+        }
+        // ------------------- //
+      })
+      .catch((error) => {
+        console.error("Error submitting post:", error);
+
+        // Show a more detailed error toast for debugging
+        toast.error("Failed to submit post", {
+          description: `Error: ${error.message || "Unknown error"}. ${
+            error.stack ? "Check console for details." : ""
+          }`,
+          duration: 5000,
+        });
+      })
+      .finally(() => {
+        // Hide loading state
+        useUIStateStore.getState().setIsSubmitting(false);
+      });
   };
 
   // Decide which preview to show (Uses UI store state)
@@ -320,12 +368,40 @@ export function DashboardContent() {
               // Final Submit Button (Uses Post store state for text)
               <Button
                 onClick={handleSubmit}
-                disabled={!canProceed()} // Ensure final step is considered completable
-                className="flex items-center gap-2 py-3 px-6 md:py-4 md:px-8 text-base" // Adjusted padding/size
-                size="lg" // Use size prop for consistency
+                disabled={!canProceed() || isSubmitting} // Add isSubmitting here
+                className="flex items-center gap-2 py-3 px-6 md:py-4 md:px-8 text-base"
+                size="lg"
               >
-                <SendHorizontal className="h-5 w-5" />
-                {getSubmitButtonText()}
+                {isSubmitting ? (
+                  <>
+                    <span className="animate-spin mr-1">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24">
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          fill="none"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                    </span>
+                    {scheduleType === "scheduled"
+                      ? "Scheduling..."
+                      : "Posting..."}
+                  </>
+                ) : (
+                  <>
+                    <SendHorizontal className="h-5 w-5" />
+                    {getSubmitButtonText()}
+                  </>
+                )}
               </Button>
             )}
           </div>

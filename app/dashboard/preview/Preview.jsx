@@ -14,6 +14,7 @@ import {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
+  CarouselApi,
 } from "@/app/components/ui/carousel";
 import { format } from "date-fns";
 import {
@@ -23,11 +24,15 @@ import {
   AtSign,
   Youtube,
   Clock,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useMediaItems } from "@/app/hooks/useMediaQueries";
 import { usePostStore } from "@/app/lib/store/postStore";
 import { SelectedAccountsPreview } from "../selectAccount/SelectedAccountsPreview";
 import { MediaPlayer } from "@/app/dashboard/VideoPlayer/MediaPlayer";
+import { ThumbnailSelector } from "@/app/dashboard/VideoPlayer/ThumbnailSelector";
+import { Button } from "@/app/components/ui/button";
+import { cn } from "@/app/lib/utils";
 
 const TikTokIcon = ({ className }) => (
   <svg
@@ -82,8 +87,21 @@ export function Preview() {
     (state) => state.getCaptionForAccount
   );
 
+  const setVideoThumbnail = usePostStore((state) => state.setVideoThumbnail);
+  const getVideoThumbnail = usePostStore((state) => state.getVideoThumbnail);
+
+  const [thumbnailSelectorOpen, setThumbnailSelectorOpen] = useState(false);
+  const [selectedVideoId, setSelectedVideoId] = useState(null);
+
   const [activeAccount, setActiveAccount] = useState(null);
   const [captionIndex, setCaptionIndex] = useState(0);
+
+  // State to track when a thumbnail is updated
+  const [thumbnailUpdateCounter, setThumbnailUpdateCounter] = useState(0);
+
+  // State for carousel
+  const [carouselApi, setCarouselApi] = useState(null);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   // Create blob URLs with useMemo to avoid recreating them on every render
   const previewUrls = useMemo(() => {
@@ -239,9 +257,63 @@ export function Preview() {
     );
   };
 
+  // Handle opening the thumbnail selector for a video
+  const handleEditThumbnail = (videoId) => {
+    setSelectedVideoId(videoId);
+    setThumbnailSelectorOpen(true);
+    // Force a refresh of the MediaPlayer when opening the selector
+    setThumbnailUpdateCounter((prev) => prev + 1);
+  };
+
+  // Handle thumbnail capture from the selector
+  const handleThumbnailCapture = (thumbnailFile) => {
+    if (selectedVideoId) {
+      setVideoThumbnail(selectedVideoId, thumbnailFile);
+      // Increment counter to force MediaPlayer refresh
+      setThumbnailUpdateCounter((prev) => prev + 1);
+    }
+  };
+
+  // Handle thumbnail upload from the selector
+  const handleThumbnailUpload = (thumbnailFile) => {
+    if (selectedVideoId) {
+      setVideoThumbnail(selectedVideoId, thumbnailFile);
+      // Increment counter to force MediaPlayer refresh
+      setThumbnailUpdateCounter((prev) => prev + 1);
+    }
+  };
+
+  // Handle closing the thumbnail selector
+  const handleThumbnailSelectorClose = () => {
+    setThumbnailSelectorOpen(false);
+  };
+
+  // Get the video file for the thumbnail selector
+  const selectedVideoFile = useMemo(() => {
+    if (!selectedVideoId) return null;
+    return mediaItems.find((item) => item.id === selectedVideoId)?.file || null;
+  }, [selectedVideoId, mediaItems]);
+
+  // Handle carousel changes
+  useEffect(() => {
+    if (!carouselApi) return;
+
+    const handleSelect = () => {
+      setCurrentSlide(carouselApi.selectedScrollSnap());
+    };
+
+    carouselApi.on("select", handleSelect);
+    // Get initial position
+    handleSelect();
+
+    return () => {
+      carouselApi.off("select", handleSelect);
+    };
+  }, [carouselApi]);
+
   if (isLoadingMedia) {
     return (
-      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+      <Card className="lg:w-[40%] xl:w-1/3 w-full h-fit sticky top-24">
         <CardHeader>
           <CardTitle>Preview</CardTitle>
         </CardHeader>
@@ -254,7 +326,7 @@ export function Preview() {
 
   if (contentType === "none" && selectedAccounts.length === 0) {
     return (
-      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+      <Card className="lg:w-[40%] xl:w-1/3 w-full h-fit sticky top-24">
         <CardHeader>
           <CardTitle>Preview</CardTitle>
         </CardHeader>
@@ -268,7 +340,7 @@ export function Preview() {
   }
 
   return (
-    <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24 overflow-hidden border shadow-sm">
+    <Card className="lg:w-[40%] xl:w-1/3 w-full h-fit sticky top-24 overflow-hidden border shadow-sm">
       <CardHeader className="border-b bg-muted/30 py-3 px-4">
         <CardTitle className="text-base font-medium flex items-center justify-between">
           <span>Preview</span>
@@ -313,7 +385,7 @@ export function Preview() {
       <CardContent className="p-4 space-y-4">
         <SelectedAccountsPreview accounts={selectedAccounts} />
 
-        <div className="aspect-square w-full bg-muted/40 rounded-md overflow-hidden flex items-center justify-center relative">
+        <div className="aspect-[16/13] w-full bg-muted/40 rounded-md overflow-hidden flex items-center justify-center relative">
           {contentType === "none" && (
             <p className="text-muted-foreground text-sm p-4 text-center">
               Add media to see preview
@@ -322,15 +394,30 @@ export function Preview() {
           {contentType === "video" &&
             mediaItems[0] &&
             previewUrls[mediaItems[0].id] && (
-              <MediaPlayer
-                key={`video-${mediaItems[0].id}-${
-                  blobUrlsCreated ? "loaded" : "loading"
-                }`}
-                file={mediaItems[0].file}
-                type="video"
-                id={mediaItems[0].id}
-                controls
-              />
+              <div className="relative w-full h-full">
+                <MediaPlayer
+                  key={`video-${mediaItems[0].id}-${
+                    blobUrlsCreated ? "loaded" : "loading"
+                  }-thumb-${thumbnailUpdateCounter}`}
+                  file={mediaItems[0].file}
+                  type="video"
+                  id={mediaItems[0].id}
+                  controls
+                />
+
+                {/* Edit Cover button for videos - positioned at the top-right */}
+                <div className="absolute top-2 right-2 z-[20]">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex items-center gap-1.5 bg-black/50 hover:bg-black/70 text-white"
+                    onClick={() => handleEditThumbnail(mediaItems[0].id)}
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    <span className="text-xs">Edit Cover</span>
+                  </Button>
+                </div>
+              </div>
             )}
           {contentType === "singleImage" &&
             mediaItems[0] &&
@@ -345,7 +432,7 @@ export function Preview() {
               />
             )}
           {contentType === "carousel" && mediaItems.length > 0 && (
-            <Carousel className="w-full h-full">
+            <Carousel className="w-full h-full" setApi={setCarouselApi}>
               <CarouselContent className="h-full">
                 {mediaItems.map((item, index) => (
                   <CarouselItem
@@ -374,6 +461,23 @@ export function Preview() {
                 <>
                   <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
                   <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
+
+                  {/* Carousel indicator dots */}
+                  <div className="absolute bottom-2 w-full flex justify-center gap-1 z-10">
+                    {mediaItems.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => carouselApi?.scrollTo(index)}
+                        className={cn(
+                          "h-2 w-2 rounded-full transition-all",
+                          currentSlide === index
+                            ? "bg-primary scale-125"
+                            : "bg-primary/50 hover:bg-primary/80"
+                        )}
+                        aria-label={`Go to slide ${index + 1}`}
+                      />
+                    ))}
+                  </div>
                 </>
               )}
             </Carousel>
@@ -381,7 +485,7 @@ export function Preview() {
         </div>
 
         {(contentType !== "none" || selectedAccounts.length > 0) && (
-          <div className="text-sm space-y-1 relative">
+          <div className="text-sm space-y-2 relative py-2 min-h-[90px]">
             {/* Caption title area with navigation for multi-caption mode */}
             {captionMode === "multiple" && selectedAccounts.length > 0 && (
               <div className="flex items-center justify-between mb-2">
@@ -476,6 +580,18 @@ export function Preview() {
           <span>{formattedScheduledDateTime}</span>
         </div>
       </CardContent>
+
+      {/* Thumbnail Selector Modal */}
+      {selectedVideoFile && (
+        <ThumbnailSelector
+          videoFile={selectedVideoFile}
+          videoId={selectedVideoId}
+          onThumbnailCapture={handleThumbnailCapture}
+          onThumbnailUpload={handleThumbnailUpload}
+          isOpen={thumbnailSelectorOpen}
+          onClose={handleThumbnailSelectorClose}
+        />
+      )}
     </Card>
   );
 }

@@ -103,7 +103,7 @@ export function TextPreview() {
   // No preview if no text and no accounts selected
   if (textPostContent.trim() === "" && selectedAccounts.length === 0) {
     return (
-      <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24">
+      <Card className="lg:w-1/3 xl:w-1/4 w-full h-fit sticky top-24">
         <CardHeader>
           <CardTitle>Preview</CardTitle>
         </CardHeader>
@@ -117,7 +117,7 @@ export function TextPreview() {
   }
 
   return (
-    <Card className="lg:w-1/3 xl:w-1/4 hidden lg:block h-fit sticky top-24 overflow-hidden border shadow-sm">
+    <Card className="lg:w-1/3 xl:w-1/4 w-full h-fit sticky top-24 overflow-hidden border shadow-sm">
       <CardHeader className="border-b bg-muted/30 py-3 px-4">
         <CardTitle className="text-base font-medium flex items-center justify-between">
           <span>Text Preview</span>

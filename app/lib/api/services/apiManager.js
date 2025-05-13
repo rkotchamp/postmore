@@ -1,51 +1,66 @@
 /**
- * Centralized API Manager for handling posts across different platforms
- * This file serves as the main entry point for all posting operations
+ * API Manager - Central service orchestrator for social media platforms
+ * Handles routing to platform-specific services and standardizes responses
  */
 
-import youtubeService from "./youtubeService";
-import tiktokService from "./tiktokService";
-import instagramService from "./instagramService";
+// Import platform services
 import blueSkyService from "./blueSkyService";
 
-// Map platform names to their corresponding service modules
+// Platform service registry
 const platformServices = {
-  youtube: youtubeService,
-  tiktok: tiktokService,
-  instagram: instagramService,
+  // These are simulations except for bluesky which is a real implementation
+  twitter: {
+    post: async (account, data) => ({
+      success: true,
+      platformId: "twitter",
+      postId: "sample-twitter-id",
+      message: "Posted to Twitter (simulation)",
+    }),
+  },
+  instagram: {
+    post: async (account, data) => ({
+      success: true,
+      platformId: "instagram",
+      postId: "sample-instagram-id",
+      message: "Posted to Instagram (simulation)",
+    }),
+  },
+  facebook: {
+    post: async (account, data) => ({
+      success: true,
+      platformId: "facebook",
+      postId: "sample-facebook-id",
+      message: "Posted to Facebook (simulation)",
+    }),
+  },
   bluesky: blueSkyService,
-  // Add more platforms as needed
 };
 
 /**
- * Post content to a specified platform using a specific user account
+ * Post to a single platform
  *
- * @param {string} platform - The platform to post to (youtube, tiktok, instagram)
- * @param {object} accountData - The account credentials and information
- * @param {object} postData - The content to post (text, media, etc.)
- * @returns {Promise<object>} - The result of the post operation
+ * @param {string} platform - Platform identifier
+ * @param {Object} account - Account information
+ * @param {Object} data - Post data
+ * @returns {Promise<Object>} Result from the platform
  */
-export async function postToPlatform(platform, accountData, postData) {
-  console.log(`Posting to ${platform} using account ${accountData.id}`, {
-    postData,
-  });
-
-  // Validate the platform
-  if (!platformServices[platform]) {
-    throw new Error(`Unsupported platform: ${platform}`);
-  }
-
+const postToPlatform = async (platform, account, data) => {
   try {
-    // Call the appropriate platform service
+    // Get the platform service
     const service = platformServices[platform];
-    const result = await service.post(accountData, postData);
 
-    console.log(`Successfully posted to ${platform}`, { result });
+    if (!service) {
+      throw new Error(`Unsupported platform: ${platform}`);
+    }
+
+    // Call the platform-specific post method with the original data structure
+    // maintaining consistent property names
+    const result = await service.post(account, data);
 
     return {
       success: true,
       platform,
-      accountId: accountData.id,
+      accountId: account.id,
       result,
     };
   } catch (error) {
@@ -54,69 +69,80 @@ export async function postToPlatform(platform, accountData, postData) {
     return {
       success: false,
       platform,
-      accountId: accountData.id,
-      error: error.message,
+      accountId: account?.id,
+      error: error.message || `Failed to post to ${platform}`,
     };
   }
-}
+};
 
 /**
- * Schedule a post to be published at a later time
+ * Post to multiple platforms
  *
- * @param {string} platform - The platform to post to
- * @param {object} accountData - The account credentials and information
- * @param {object} postData - The content to post
- * @param {Date} scheduledAt - When to publish the post
- * @returns {Promise<object>} - Information about the scheduled post
+ * @param {Array<Object>} targets - Array of {platform, account} objects
+ * @param {Object} data - Post data
+ * @returns {Promise<Array<Object>>} Results from all platforms
  */
-export async function schedulePost(
-  platform,
-  accountData,
-  postData,
-  scheduledAt
-) {
-  console.log(`Scheduling post for ${platform} at ${scheduledAt}`, {
-    platform,
-    accountId: accountData.id,
-  });
-
-  // Here you would integrate with your job queue (BullMQ)
-  // For now, we're just returning info about the scheduled post
-
-  return {
-    success: true,
-    platform,
-    accountId: accountData.id,
-    scheduledAt,
-    status: "scheduled",
-  };
-}
-
-/**
- * Post to multiple platforms and accounts at once
- *
- * @param {Array<{platform: string, account: object}>} targets - List of platforms and accounts to post to
- * @param {object} postData - The content to post
- * @returns {Promise<Array<object>>} - Results for each platform/account combination
- */
-export async function postToMultiplePlatforms(targets, postData) {
-  console.log(`Posting to ${targets.length} platform/account combinations`);
-
+const postToMultiplePlatforms = async (targets, data) => {
+  // Post to each platform in parallel
   const results = await Promise.all(
     targets.map(({ platform, account }) =>
-      postToPlatform(platform, account, postData)
+      postToPlatform(platform, account, data)
     )
   );
 
   return results;
-}
-
-// Additional functions for managing API rate limits, retries, etc. can be added here
-
-const apiManager = {
-  postToPlatform,
-  schedulePost,
-  postToMultiplePlatforms,
 };
 
-export default apiManager;
+/**
+ * Schedule a post for later publication
+ *
+ * @param {string} platform - Platform identifier
+ * @param {Object} account - Account information
+ * @param {Object} data - Post data
+ * @param {Date} scheduledTime - When to publish
+ * @returns {Promise<Object>} Scheduling result
+ */
+const schedulePost = async (platform, account, data, scheduledTime) => {
+  try {
+    // Here you would integrate with a job queue like BullMQ
+    // For this implementation, we'll simulate scheduling
+
+    return {
+      success: true,
+      platform,
+      accountId: account.id,
+      scheduledTime,
+      message: `Post scheduled for ${platform} at ${scheduledTime}`,
+    };
+  } catch (error) {
+    console.error(`Error scheduling post for ${platform}:`, error);
+
+    return {
+      success: false,
+      platform,
+      accountId: account.id,
+      error: error.message || `Failed to schedule post for ${platform}`,
+    };
+  }
+};
+
+/**
+ * Get caption for a specific platform
+ */
+function getCaptionForPlatform(captions, platform, accountId) {
+  if (!captions) return "";
+
+  if (captions.mode === "single") {
+    return captions.single || "";
+  }
+
+  // Return account-specific caption or fall back to default
+  return captions.multipleCaptions?.[accountId] || captions.single || "";
+}
+
+// Export the API Manager functions
+export const apiManager = {
+  postToPlatform,
+  postToMultiplePlatforms,
+  schedulePost,
+};

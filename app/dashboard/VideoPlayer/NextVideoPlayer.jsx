@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import Video from "next-video";
+import { usePostStore } from "@/app/lib/store/postStore";
 
 /**
  * NextVideoPlayer is an implementation using the next-video library
@@ -22,6 +23,10 @@ export function NextVideoPlayer({ file, id, controls = true }) {
   const [videoSource, setVideoSource] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Get the custom thumbnail for videos from postStore
+  const getVideoThumbnail = usePostStore((state) => state.getVideoThumbnail);
+  const [thumbnailUrl, setThumbnailUrl] = useState(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -59,6 +64,38 @@ export function NextVideoPlayer({ file, id, controls = true }) {
     };
   }, [file]);
 
+  // Create thumbnail URL from the custom thumbnail if available
+  useEffect(() => {
+    let url = null;
+
+    if (id) {
+      const thumbnailFile = getVideoThumbnail(id);
+
+      // Clear any existing thumbnail URL
+      if (thumbnailUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(thumbnailUrl);
+      }
+
+      if (thumbnailFile instanceof File) {
+        try {
+          url = URL.createObjectURL(thumbnailFile);
+          setThumbnailUrl(url);
+        } catch (err) {
+          console.error("Error creating thumbnail URL:", err);
+          setThumbnailUrl(null);
+        }
+      } else {
+        setThumbnailUrl(null);
+      }
+    }
+
+    return () => {
+      if (url?.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [id, getVideoThumbnail]);
+
   if (error) {
     return (
       <div className="flex items-center justify-center w-full h-full bg-muted/20 rounded text-destructive">
@@ -82,7 +119,7 @@ export function NextVideoPlayer({ file, id, controls = true }) {
         controls={controls}
         className="w-full h-full object-contain"
         // Additional next-video specific props:
-        poster={`poster-${id}`} // next-video can generate poster images
+        poster={thumbnailUrl || `poster-${id}`} // Use custom thumbnail if available, otherwise use next-video's generated poster
         muted={false}
         autoPlay={false}
         loop={false}

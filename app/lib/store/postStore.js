@@ -13,6 +13,7 @@ const initialState = {
   multiCaptions: {}, // { [accountId]: caption } - Changed from platform to accountId
   isPosted: false, // Might be useful later
   lastUpdatedAt: new Date(),
+  thumbnails: {}, // { [videoId]: File } - Store thumbnail File objects
   // Consider adding a field for draftId or postId if managing multiple drafts/posts in the store
 };
 
@@ -235,11 +236,53 @@ export const usePostStore = create((set, get) => ({
       };
     }),
 
+  // --- Thumbnail actions ---
+  setVideoThumbnail: (videoId, thumbnailFile) =>
+    set((state) => {
+      if (!videoId || !(thumbnailFile instanceof File)) {
+        console.warn(
+          "setVideoThumbnail: Invalid videoId or thumbnailFile provided.",
+          { videoId, thumbnailFile }
+        );
+        return state; // No change if parameters are invalid
+      }
+
+      return {
+        thumbnails: {
+          ...state.thumbnails,
+          [videoId]: thumbnailFile,
+        },
+        ...get()._updateTimestamp(),
+      };
+    }),
+
+  removeVideoThumbnail: (videoId) =>
+    set((state) => {
+      if (!videoId || !state.thumbnails[videoId]) {
+        return state; // No change if videoId is invalid or thumbnail doesn't exist
+      }
+
+      const updatedThumbnails = { ...state.thumbnails };
+      delete updatedThumbnails[videoId];
+
+      return {
+        thumbnails: updatedThumbnails,
+        ...get()._updateTimestamp(),
+      };
+    }),
+
+  // Getter for a specific video thumbnail
+  getVideoThumbnail: (videoId) => {
+    const state = get();
+    return state.thumbnails[videoId] || null;
+  },
+
   resetPostConfig: () =>
     set(() => ({
       ...initialState, // Resets to the defined initial state object
       _version: CURRENT_SCHEMA_VERSION, // Ensure version is part of the reset
       lastUpdatedAt: new Date(), // Explicitly set new timestamp for the reset action
+      thumbnails: {}, // Clear thumbnails on reset
       // Note: selectedAccounts is reset here. If it should persist across resets,
       // this logic would need to: get().selectedAccounts or similar.
     })),

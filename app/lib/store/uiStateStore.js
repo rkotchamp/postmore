@@ -11,19 +11,22 @@ import { persist, createJSONStorage } from "zustand/middleware";
  * @property {PostType} postType
  * @property {string} temporaryText // For active text editing, like captions
  * @property {string} textPostContent // For the body of a text-only post
+ * @property {boolean} isSubmitting // Track submission status
  * @property {(step: number | ((prevStep: number) => number)) => void} setCurrentStep
  * @property {(type: PostType) => void} setPostType
  * @property {(text: string) => void} setTemporaryText
  * @property {(text: string) => void} setTextPostContent
+ * @property {(isSubmitting: boolean) => void} setIsSubmitting
  * @property {() => void} resetUIState
  */
 
-/** @type {Pick<UIState, 'currentStep' | 'postType' | 'temporaryText' | 'textPostContent'>} */
+/** @type {Pick<UIState, 'currentStep' | 'postType' | 'temporaryText' | 'textPostContent' | 'isSubmitting'>} */
 const initialState = {
   currentStep: 0,
   postType: "media", // Default value
   temporaryText: "",
   textPostContent: "", // Added for text-only post content
+  isSubmitting: false, // Added for submission tracking
 };
 
 /** @type {import('zustand').UseBoundStore<import('zustand').StoreApi<UIState>>} */
@@ -81,7 +84,20 @@ export const useUIStateStore = create()(
           return { textPostContent: text };
         }),
 
-      resetUIState: () => set(initialState),
+      setIsSubmitting: (isSubmitting) =>
+        set((/** @type {UIState} */ state) => {
+          if (typeof isSubmitting !== "boolean") {
+            console.warn(
+              "setIsSubmitting: Value must be a boolean",
+              isSubmitting
+            );
+            return state;
+          }
+          if (state.isSubmitting === isSubmitting) return state; // No change
+          return { isSubmitting };
+        }),
+
+      resetUIState: () => set({ ...initialState, isSubmitting: false }),
     }),
     {
       name: "ui-state-storage", // Name for localStorage item
@@ -90,6 +106,7 @@ export const useUIStateStore = create()(
       partialize: (/** @type {UIState} */ state) => ({
         postType: state.postType,
         textPostContent: state.textPostContent, // Added to partialize
+        // Don't persist isSubmitting as we always want to start in non-submitting state
       }),
       // Versioning/migration could be added here later if needed
       // version: 1,
@@ -107,3 +124,5 @@ export const selectPostType = (state) => state.postType;
 export const selectTemporaryText = (state) => state.temporaryText;
 /** @param {UIState} state */
 export const selectTextPostContent = (state) => state.textPostContent; // Added selector
+/** @param {UIState} state */
+export const selectIsSubmitting = (state) => state.isSubmitting; // Added selector

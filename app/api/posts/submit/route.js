@@ -1,105 +1,217 @@
 import { NextResponse } from "next/server";
-import apiManager from "@/app/lib/api/services/apiManager";
-import { connectToMongoose } from "@/app/lib/db/mongoose";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getServerSession } from "next-auth/next";
+import mongoose from "mongoose";
+import { apiManager } from "@/app/lib/api/services/apiManager";
+
+// Add this to ensure we have the Post model available
+// This prevents errors with mongoose model initialization
+let Post;
+try {
+  Post = mongoose.model("Post");
+} catch (e) {
+  // Model not registered yet, so we need to import the schema
+  require("@/app/models/PostSchema");
+  Post = mongoose.model("Post");
+}
 
 /**
- * Handler for POST requests to submit a post
- * This endpoint accepts post data and handles immediate posting or scheduling
+ * POST handler for submitting posts
+ * This API endpoint handles both immediate and scheduled posts
  */
 export async function POST(request) {
   try {
-    // Get the session to verify the user is authenticated
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Check authentication
+    const session = await getServerSession();
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
     }
 
-    // Parse the request body
-    const data = await request.json();
-    const {
-      selectedAccounts,
-      textContent,
-      mediaFiles,
-      scheduleType,
-      scheduledAt,
-      title,
-      additionalParams = {}, // Platform-specific parameters
-    } = data;
+    // Parse request body
+    const postData = await request.json();
+    console.log("Received post data:", JSON.stringify(postData));
 
-    // Validate the request
-    if (!selectedAccounts || selectedAccounts.length === 0) {
+    // Validate required fields
+    if (!postData) {
       return NextResponse.json(
-        { error: "At least one account must be selected" },
+        { error: "Post data is required" },
         { status: 400 }
       );
     }
 
-    if (!textContent && (!mediaFiles || mediaFiles.length === 0)) {
+    // Extract and validate post content
+    const { contentType, text, media, accounts, captions, schedule } = postData;
+
+    // Validate content type and content
+    if (!contentType) {
       return NextResponse.json(
-        { error: "Post must contain text content or media files" },
+        { error: "Content type is required" },
         { status: 400 }
       );
     }
 
-    // Connect to database
-    await connectToMongoose();
+    if (contentType === "text" && !text) {
+      return NextResponse.json(
+        { error: "Text content is required for text posts" },
+        { status: 400 }
+      );
+    }
 
-    // Prepare the post data
-    const postData = {
-      textContent,
-      mediaFiles,
-      title,
+    if (contentType === "media" && (!media || media.length === 0)) {
+      return NextResponse.json(
+        { error: "Media files are required for media posts" },
+        { status: 400 }
+      );
+    }
+
+    // Validate accounts
+    if (!accounts || accounts.length === 0) {
+      return NextResponse.json(
+        { error: "At least one account is required" },
+        { status: 400 }
+      );
+    }
+
+    console.log("Processing accounts:", JSON.stringify(accounts));
+
+    // Ensure database connection
+    await ensureDbConnection();
+
+    // Construct Post object for the database
+    const postDocument = {
       userId: session.user.id,
-      ...additionalParams,
+      contentType,
+      text: text || "",
+      media: media || [],
+      accounts: accounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        email: account.email,
+        type: account.type,
+        platformId: account.platformId || account.id,
+      })),
+      captions: captions || {
+        mode: "single",
+        single: text || "",
+        multipleCaptions: {},
+      },
+      schedule: schedule || { type: "now" },
+      status: "pending",
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
-    // Process each selected account
-    const targets = selectedAccounts.map((account) => ({
-      platform: account.platform,
-      account,
-    }));
+    // Create a new post document in the database
+    console.log("Creating post document in database");
+    try {
+      const savedPost = await Post.create(postDocument);
+      console.log("Post created in database:", savedPost._id.toString());
 
-    let results;
+      // Extract platform/account targets
+      const targets = accounts.map((account) => ({
+        platform: account.type,
+        account: account,
+      }));
 
-    // Handle immediate vs. scheduled posting
-    if (scheduleType === "immediate") {
-      // Post immediately
-      results = await apiManager.postToMultiplePlatforms(targets, postData);
-    } else if (scheduleType === "scheduled" && scheduledAt) {
-      // Schedule the post
-      results = await Promise.all(
-        targets.map(({ platform, account }) =>
-          apiManager.schedulePost(
-            platform,
-            account,
-            postData,
-            new Date(scheduledAt)
+      // Prepare response variable
+      let results;
+
+      // Process based on schedule type
+      if (schedule?.type === "scheduled" && schedule?.at) {
+        console.log("Scheduling post for later");
+        // Schedule the post for later publication
+        results = await Promise.all(
+          targets.map(({ platform, account }) =>
+            apiManager.schedulePost(
+              platform,
+              account,
+              {
+                postId: savedPost._id.toString(),
+                text: text || "",
+                media: media || [],
+                caption: getCaptionForPlatform(captions, platform, account.id),
+              },
+              new Date(schedule.at)
+            )
           )
-        )
-      );
-    } else {
+        );
+
+        // Update post status
+        savedPost.status = "scheduled";
+        await savedPost.save();
+      } else {
+        console.log(
+          "Posting immediately to platforms:",
+          targets.map((t) => t.platform).join(", ")
+        );
+        // Post immediately
+        results = await apiManager.postToMultiplePlatforms(targets, {
+          postId: savedPost._id.toString(),
+          contentType: contentType,
+          text: text || "",
+          media: media || [],
+          captions,
+        });
+        console.log("Post results:", JSON.stringify(results));
+
+        // Update post status based on results
+        const allSucceeded = results.every((result) => result.success);
+        savedPost.status = allSucceeded ? "published" : "failed";
+        savedPost.results = results;
+        await savedPost.save();
+      }
+
+      // Return the post with results
+      return NextResponse.json({
+        success: true,
+        post: savedPost,
+        results,
+      });
+    } catch (dbError) {
+      console.error("Database error:", dbError);
       return NextResponse.json(
-        { error: "Invalid schedule type or missing scheduled time" },
-        { status: 400 }
+        { error: `Database error: ${dbError.message}` },
+        { status: 500 }
       );
     }
-
-    // Return the results
-    return NextResponse.json({
-      success: true,
-      message:
-        scheduleType === "immediate"
-          ? "Post published successfully"
-          : "Post scheduled successfully",
-      results,
-    });
   } catch (error) {
     console.error("Error submitting post:", error);
     return NextResponse.json(
-      { error: "Failed to submit post", message: error.message },
+      { error: error.message || "Failed to submit post" },
       { status: 500 }
     );
   }
+}
+
+/**
+ * Ensure database connection is established
+ */
+async function ensureDbConnection() {
+  if (mongoose.connection.readyState !== 1) {
+    // Not connected, so connect
+    const MONGODB_URI = process.env.MONGODB_URI;
+    if (!MONGODB_URI) {
+      throw new Error("MONGODB_URI not defined in environment variables");
+    }
+
+    console.log("Connecting to MongoDB...");
+    await mongoose.connect(MONGODB_URI);
+    console.log("Connected to MongoDB");
+  }
+}
+
+/**
+ * Helper function to get the appropriate caption for a platform
+ */
+function getCaptionForPlatform(captions, platform, accountId) {
+  if (!captions) return "";
+
+  if (captions.mode === "single") {
+    return captions.single || "";
+  }
+
+  // Return account-specific caption or fall back to default
+  return captions.multipleCaptions?.[accountId] || captions.single || "";
 }

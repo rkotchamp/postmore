@@ -330,18 +330,25 @@ export function MediaPosts() {
               >
                 {item.type === "video" ? (
                   previewUrl ? (
-                    <MediaPlayer
-                      file={item.file}
-                      type="video"
-                      id={item.id}
-                      controls
-                    />
+                    <div className="w-full h-full">
+                      <MediaPlayer
+                        file={item.file}
+                        type="video"
+                        id={item.id}
+                        controls
+                      />
+                      <div className="p-2 text-xs text-muted-foreground">
+                        <p>
+                          You can set a custom thumbnail in the Preview panel.
+                        </p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="text-center p-2">
-                      <FileVideo className="h-10 w-10 mx-auto mb-2" />
-                      <span className="text-xs break-all">
-                        {item.fileInfo?.name || "Video file"}
-                      </span>
+                      <FileVideo className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm truncate max-w-[180px] mx-auto">
+                        {item.fileInfo?.name || "Video"}
+                      </p>
                     </div>
                   )
                 ) : previewUrl ? (

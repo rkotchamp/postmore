@@ -10,16 +10,50 @@ const BSKY_SERVICE_URL = "https://bsky.social";
  * @param {string} accountData.identifier - The user's Bluesky handle (e.g., "username.bsky.social").
  * @param {string} accountData.appPassword - The user-generated App Password for this application. **MUST NOT** be the main account password.
  * @param {object} postData - The content to be posted.
- * @param {string} postData.textContent - The text content of the post.
- * @param {Array<File|string>} [postData.mediaFiles] - Array of media files (currently not implemented for Bluesky).
+ * @param {string} postData.contentType - The type of post ("text" or "media").
+ * @param {string} postData.text - The text content of post (used for text-only posts).
+ * @param {Array<object>} [postData.media] - Array of media files from our database.
+ * @param {object} [postData.captions] - Caption data with format {mode: "single"|"multiple", single: "text", multipleCaptions: {accountId: "text"}}.
  * @returns {Promise<object>} - A promise that resolves to a standardized result object.
  *                             Example success: { success: true, message: "...", platform: "bluesky", postId: "...", postUrl: "..." }
  *                             Example error: { success: false, message: "...", platform: "bluesky", error: ... }
  */
 const post = async (accountData, postData) => {
-  const { identifier, appPassword } = accountData;
-  const { textContent /*, mediaFiles */ } = postData; // mediaFiles placeholder for future use
+  console.log(
+    "BlueSky service received account data:",
+    JSON.stringify({
+      ...accountData,
+      appPassword: "REDACTED", // Don't log the password
+    })
+  );
+  console.log("BlueSky service received post data:", JSON.stringify(postData));
 
+  // Extract account credentials
+  const { identifier, appPassword } = accountData;
+  const accountId = accountData.id;
+
+  // Get the appropriate text content based on content type and caption mode
+  let postText = "";
+
+  if (postData.contentType === "text") {
+    // For text-only posts, use the text field
+    postText = postData.text || "";
+  } else if (postData.contentType === "media") {
+    // For media posts, use the appropriate caption
+    if (postData.captions?.mode === "single") {
+      postText = postData.captions.single || "";
+    } else if (postData.captions?.mode === "multiple") {
+      // Use the account-specific caption or fall back to single caption
+      postText =
+        postData.captions?.multipleCaptions?.[accountId] ||
+        postData.captions?.single ||
+        "";
+    }
+  }
+
+  const media = postData.media || [];
+
+  // Validate required fields
   if (!identifier || !appPassword) {
     return {
       success: false,
@@ -29,45 +63,67 @@ const post = async (accountData, postData) => {
     };
   }
 
-  if (!textContent) {
-    // TODO: Add check for mediaFiles once implemented
+  if (!postText) {
     return {
       success: false,
-      message: "Post content (text or media) is required for Bluesky.",
+      message: "Post content (text) is required for Bluesky.",
       platform: "bluesky",
       error: new Error("Missing post content"),
     };
   }
 
+  console.log(
+    `Attempting to post to Bluesky as ${identifier}: "${postText.substring(
+      0,
+      50
+    )}..."`
+  );
+
   const agent = new BskyAgent({ service: BSKY_SERVICE_URL });
 
   try {
     // 1. Login using the App Password
+    console.log("Logging in to Bluesky...");
     await agent.login({
       identifier,
       password: appPassword, // Use the App Password here
     });
+    console.log("Successfully logged in to Bluesky");
 
     // 2. Prepare the post record
-    // The SDK automatically handles facets (links, mentions)
     const record = {
-      text: textContent,
+      text: postText,
       createdAt: new Date().toISOString(),
-      // TODO: Add embed for images/media using agent.uploadBlob
-      // Example (pseudo-code):
-      // if (mediaFiles && mediaFiles.length > 0) {
-      //   const uploadedBlobs = await Promise.all(mediaFiles.map(file => agent.uploadBlob(file /* needs correct format */)));
-      //   record.embed = {
-      //     $type: 'app.bsky.embed.images',
-      //     images: uploadedBlobs.map(blobRes => ({ image: blobRes.data.blob, alt: '...' /* Add alt text */ }))
-      //   };
-      // }
     };
 
-    // 3. Create the post
-    const response = await agent.post(record);
+    // 3. Prepare media if available (not fully implemented yet)
+    // This code is a placeholder for future implementation
+    if (media && media.length > 0) {
+      console.log(
+        "Media files found, but not yet implemented for Bluesky posts"
+      );
+      // The below code is commented out as it's not fully implemented yet
+      /*
+      try {
+        // For testing purposes, log media info
+        console.log(`Found ${media.length} media files to upload`);
+        media.forEach((m, i) => {
+          console.log(`Media ${i+1}: ${m.url ? m.url : 'No URL'}`);
+        });
+        
+        // Handle images here when implemented
+      } catch (mediaError) {
+        console.error("Failed to process media for Bluesky:", mediaError);
+      }
+      */
+    }
 
-    // 4. Construct the success response
+    // 4. Create the post
+    console.log("Creating post on Bluesky...");
+    const response = await agent.post(record);
+    console.log("Post created successfully:", response);
+
+    // 5. Construct the success response
     // Extract the rkey (post ID) from the URI: at://did:plc:.../app.bsky.feed.post/POST_ID
     const rkey = response.uri.split("/").pop();
     const postUrl = `https://bsky.app/profile/${identifier}/post/${rkey}`;
