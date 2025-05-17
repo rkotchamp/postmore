@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import mongoose from "mongoose";
 import { apiManager } from "@/app/lib/api/services/apiManager";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 // Add this to ensure we have the Post model available
 // This prevents errors with mongoose model initialization
@@ -24,15 +25,23 @@ try {
  */
 export async function POST(request) {
   console.log("API Route: /api/posts/submit POST handler started");
+  let session; // Declare session at a higher scope
 
   try {
     // Check authentication
     try {
-      const session = await getServerSession();
-      if (!session || !session.user) {
-        console.log("API Route: Authentication failed, no valid session");
+      session = await getServerSession(authOptions);
+
+      console.log(
+        "API Route: Full session object after getServerSession:",
+        JSON.stringify(session, null, 2)
+      );
+      if (!session || !session.user || !session.user.id) {
+        console.log(
+          "API Route: Authentication failed, no valid session or user ID"
+        );
         return NextResponse.json(
-          { error: "Authentication required" },
+          { error: "Authentication required: Valid user session not found." },
           { status: 401 }
         );
       }
@@ -71,7 +80,7 @@ export async function POST(request) {
     // Add special debugging for Bluesky accounts
     if (postData.accounts) {
       const blueskyAccounts = postData.accounts.filter(
-        (account) => account.type === "bluesky"
+        (account) => account.platform === "bluesky"
       );
       if (blueskyAccounts.length > 0) {
         console.log(
@@ -81,7 +90,8 @@ export async function POST(request) {
               id: acc.id,
               name: acc.name,
               email: acc.email,
-              platformId: acc.platformId || "missing",
+              platformAccountId:
+                acc.originalData?.platformAccountId || "missing",
               accessToken: acc.accessToken ? "exists" : "missing",
               refreshToken: acc.refreshToken ? "exists" : "missing",
             })),
@@ -167,28 +177,59 @@ export async function POST(request) {
 
     // Construct Post object for the database
     console.log("API Route: Constructing post document");
+
+    // Helper function to map MIME types to schema-defined media types
+    const getSchemaMediaType = (mimeType) => {
+      if (!mimeType) return undefined; // Or a default type if appropriate
+      if (mimeType.startsWith("image/")) return "image";
+      if (mimeType.startsWith("video/")) return "video";
+      if (mimeType === "image/gif") return "gif";
+      return undefined; // Or handle as an unknown/unsupported type
+    };
+
     const postDocument = {
       userId: session.user.id,
       contentType,
       text: text || "",
-      media: media || [],
+      media: media
+        ? media.map((item) => ({
+            ...item,
+            id: item.id || new mongoose.Types.ObjectId().toString(), // Ensure ID exists
+            type: getSchemaMediaType(item.type), // Map to schema enum type
+            url: item.url, // Ensure URL is present
+          }))
+        : [],
       accounts: accounts.map((account) => ({
         id: account.id,
         name: account.name,
         email: account.email,
-        type: account.type,
-        platformId: account.platformId || account.id,
+        type: account.platform, // Use account.platform from client and assign to schema's 'type' field
+        platformAccountId:
+          account.originalData?.platformAccountId ||
+          account.platformId ||
+          account.id,
       })),
       captions: captions || {
         mode: "single",
         single: text || "",
         multipleCaptions: {},
       },
-      schedule: schedule || { type: "now" },
+      // Adjust schedule type to match schema enum
+      schedule: schedule
+        ? {
+            ...schedule,
+            type: schedule.type === "immediate" ? "now" : schedule.type,
+          }
+        : { type: "now" },
       status: "pending",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+
+    console.log(
+      "API Route: Final postDocument before Post.create:",
+      JSON.stringify(postDocument, null, 2)
+    );
 
     // Create a new post document in the database
     console.log("API Route: Creating post document in database");
@@ -209,7 +250,7 @@ export async function POST(request) {
 
     // Extract platform/account targets
     const targets = accounts.map((account) => ({
-      platform: account.type,
+      platform: account.platform,
       account: account,
     }));
     console.log(
@@ -228,18 +269,28 @@ export async function POST(request) {
       );
       // Schedule the post for later publication
       try {
+        console.log(
+          "API Route: Data sent to apiManager.schedulePost - Targets:",
+          JSON.stringify(targets, null, 2)
+        );
+        const schedulePostData = {
+          userId: session.user.id,
+          postId: savedPost._id.toString(),
+          contentType: contentType,
+          text: text || "",
+          media: media || [],
+          captions,
+        };
+        console.log(
+          "API Route: Data sent to apiManager.schedulePost - Post Data:",
+          JSON.stringify(schedulePostData, null, 2)
+        );
         results = await Promise.all(
           targets.map(({ platform, account }) =>
             apiManager.schedulePost(
               platform,
               account,
-              {
-                postId: savedPost._id.toString(),
-                contentType: contentType,
-                text: text || "",
-                media: media || [],
-                captions,
-              },
+              schedulePostData,
               new Date(schedule.at)
             )
           )
@@ -264,35 +315,28 @@ export async function POST(request) {
     } else {
       console.log("API Route: Posting immediately to platforms");
       // Post immediately
+      const immediatePostData = {
+        userId: session.user.id,
+        postId: savedPost._id.toString(),
+        contentType: contentType,
+        text: text || "",
+        media: media || [],
+        captions,
+      };
       console.log(
-        "API Route: Post data being sent to apiManager:",
-        JSON.stringify(
-          {
-            postId: savedPost._id.toString(),
-            contentType: contentType,
-            text: text || "",
-            mediaCount: media ? media.length : 0,
-            captions: {
-              mode: captions?.mode,
-              hasSingle: !!captions?.single,
-              hasMultiple:
-                !!captions?.multipleCaptions &&
-                Object.keys(captions.multipleCaptions).length > 0,
-            },
-          },
-          null,
-          2
-        )
+        "API Route: Post data being sent to apiManager.postToMultiplePlatforms - Targets:",
+        JSON.stringify(targets, null, 2)
+      );
+      console.log(
+        "API Route: Post data being sent to apiManager.postToMultiplePlatforms - Post Data:",
+        JSON.stringify(immediatePostData, null, 2)
       );
 
       try {
-        results = await apiManager.postToMultiplePlatforms(targets, {
-          postId: savedPost._id.toString(),
-          contentType: contentType,
-          text: text || "",
-          media: media || [],
-          captions,
-        });
+        results = await apiManager.postToMultiplePlatforms(
+          targets,
+          immediatePostData
+        );
         console.log(
           "API Route: Post results:",
           JSON.stringify(results, null, 2)

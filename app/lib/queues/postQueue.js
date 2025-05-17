@@ -4,7 +4,7 @@
  */
 
 import { Queue } from "bullmq";
-import apiManager from "../api/services/apiManager";
+import { apiManager } from "@/app/lib/api/services/apiManager";
 
 // Redis connection configuration
 const redisConnection = {

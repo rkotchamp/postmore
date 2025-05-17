@@ -134,16 +134,46 @@ export const authOptions = {
       }
     },
     async session({ session, token }) {
+      console.log(
+        "[NextAuth Callback - session] Received token:",
+        JSON.stringify(token, null, 2)
+      );
       // Add user ID to session
-      if (token.sub) {
-        session.user.id = token.sub;
+      if (token.id) {
+        session.user.id = token.id;
+        console.log(
+          "[NextAuth Callback - session] Added user.id to session:",
+          session.user.id
+        );
+      } else {
+        console.log(
+          "[NextAuth Callback - session] token.id was not found in the token."
+        );
       }
+      console.log(
+        "[NextAuth Callback - session] Returning session:",
+        JSON.stringify(session, null, 2)
+      );
       return session;
     },
     async jwt({ token, user }) {
+      console.log(
+        "[NextAuth Callback - jwt] Received user object (on sign-in only):",
+        JSON.stringify(user, null, 2)
+      );
       if (user) {
         token.id = user.id;
+        console.log("[NextAuth Callback - jwt] Added id to token:", token.id);
+      } else {
+        console.log(
+          "[NextAuth Callback - jwt] User object not present (subsequent calls), token.id should persist if set:",
+          token.id
+        );
       }
+      console.log(
+        "[NextAuth Callback - jwt] Returning token:",
+        JSON.stringify(token, null, 2)
+      );
       return token;
     },
     async redirect({ url, baseUrl }) {

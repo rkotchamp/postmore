@@ -7,6 +7,8 @@ alwaysApply: false
 
 ## Firebase Storage Security
 
+- [x] Update Next.js Content Security Policy to allow connections to Firebase Storage domains
+- [x] Configure temporary Firebase Security Rules for development
 - [ ] Implement proper Firebase Security Rules with authentication requirements
   ```
   rules_version = '2';
@@ -30,6 +32,7 @@ alwaysApply: false
 
 ## Authentication & Authorization
 
+- [x] Basic authentication flow implemented with NextAuth.js
 - [ ] Implement a robust authentication flow including refresh token management
 - [ ] Add proper session timeout and token expiration handling
 - [ ] Implement rate limiting for API endpoints
@@ -38,7 +41,8 @@ alwaysApply: false
 
 ## API Security & Performance
 
-- [ ] Add proper validation for all API inputs
+- [x] Added basic validation for API inputs in the submit endpoint
+- [x] Enhanced error handling and logging in API endpoints
 - [ ] Implement request throttling to prevent abuse
 - [ ] Set up proper error handling and logging
 - [ ] Configure appropriate timeouts for external API calls
@@ -47,6 +51,8 @@ alwaysApply: false
 
 ## Media Processing
 
+- [x] Basic media file uploads to Firebase Storage working
+- [x] Media URLs properly passed to API for posting
 - [ ] Add media file validation (file type, size, content)
 - [ ] Implement image optimization/compression before storage
 - [ ] Consider adding video transcoding for wider compatibility
@@ -56,6 +62,9 @@ alwaysApply: false
 
 ## BlueSky Specific Optimizations
 
+- [x] Basic BlueSky API integration working with text posts
+- [x] Image upload to BlueSky implemented with alt text support
+- [x] Video handling via link insertion in post text
 - [ ] Add better error handling for BlueSky API rate limits
 - [ ] Implement token refresh for long-lived sessions
 - [ ] Add retry logic for transient BlueSky API errors
@@ -64,6 +73,9 @@ alwaysApply: false
 
 ## Error Handling & Logging
 
+- [x] Added detailed logging in server API routes
+- [x] Enhanced error handling in platform service implementations
+- [x] Improved client-side error feedback
 - [ ] Implement structured logging throughout the application
 - [ ] Set up centralized error tracking (Sentry, LogRocket, etc.)
 - [ ] Add proper user feedback for errors (friendly error messages)
@@ -72,6 +84,7 @@ alwaysApply: false
 
 ## Environment Setup
 
+- [x] Basic Firebase configuration using environment variables
 - [ ] Use separate Firebase projects for dev/staging/production
 - [ ] Set up proper environment variables for each environment
 - [ ] Review and lock down all environment secrets
@@ -79,6 +92,7 @@ alwaysApply: false
 
 ## Performance Optimizations
 
+- [x] Basic media upload optimization implemented
 - [ ] Implement proper code splitting and lazy loading
 - [ ] Optimize media loading and display
 - [ ] Add proper caching strategies (SWR, React Query)
@@ -136,9 +150,16 @@ alwaysApply: false
 
 ## Current Bug Investigation
 
-- [ ] Debug the current 500 error in the API endpoint:
-  1. Add detailed logging in the server API route
-  2. Check for validation issues with the post data
-  3. Verify MongoDB connection and schema validation
-  4. Inspect BlueSky service implementation for edge cases
-  5. Verify proper error handling in the API Manager
+- [x] Debug the current 500 error in the API endpoint:
+  1. [x] Add detailed logging in the server API route
+  2. [x] Check for validation issues with the post data
+  3. [x] Verify MongoDB connection and schema validation
+  4. [x] Inspect BlueSky service implementation for edge cases
+  5. [x] Verify proper error handling in the API Manager
+
+- [ ] Further investigation needed for 500 error:
+  1. [ ] Check if BlueSky token authentication is still valid
+  2. [ ] Verify media URLs are accessible from the server
+  3. [ ] Test BlueSky posting with minimal content first (text only)
+  4. [ ] Add explicit validation for required BlueSky API parameters
+  5. [ ] Look for timing/race conditions in async promises

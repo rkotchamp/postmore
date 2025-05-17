@@ -94,14 +94,13 @@ export const uploadMultipleFiles = async (files, folder) => {
 /**
  * Upload post media files to appropriate folders
  * @param {Array<File>} mediaFiles - Array of media files
- * @param {string} postId - Unique post identifier (optional)
+ * @param {string} postId - Unique post identifier (optional) - Not used in simplified structure
  * @returns {Promise<Array<object>>} - Array of media file metadata
  */
 export const uploadPostMedia = async (mediaFiles, postId = null) => {
   try {
-    // Use post ID or generate a folder ID
-    const folderName = postId || uuidv4();
-    const folder = `posts/${folderName}`;
+    // Use a simple 'posts' folder without creating unique subfolders
+    const folder = "posts";
 
     const uploadedFiles = await uploadMultipleFiles(mediaFiles, folder);
     return uploadedFiles;

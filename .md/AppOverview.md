@@ -19,14 +19,6 @@ A Next.js app to schedule posts across multiple platforms (Facebook, Instagram, 
 - **Storage**: Firebase
 - **Scheduling**: BullMQ + Redis
 
-## Environment Variables
-
-MONGO_URI=your_mongodb_uri  
-REDIS_URL=redis://localhost:6379  
-FIREBASE_STORAGE_BUCKET=your-bucket  
-FACEBOOK_APP_ID=...  
-INSTAGRAM_APP_SECRET=...
-
 ## Posting and selecting user account and platform flow
 
 To manage API posting for multiple platforms (YouTube, TikTok, Instagram, etc.) on behalf of your users, especially when users can have multiple accounts for the same platform, you can consider the following structured approach:

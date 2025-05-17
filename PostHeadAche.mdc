@@ -11,11 +11,11 @@ This document summarizes the development progress for the PostMore application, 
 
 We have successfully laid a significant foundation for the PostMore application, encompassing backend services, data management, and frontend integration:
 
-1.  **MongoDB Data Modeling (`PostSchema.js`):**
+1.  **MongoDB Data Modeling (`PostSchema.js`):** ✅
     *   Established a comprehensive Mongoose schema to store post details, including `contentType`, textual content, media references (with a nested `MediaSchema`), associated accounts (`AccountSchema`), multi-faceted captions (`CaptionsSchema`), scheduling information (`ScheduleSchema`), post status, and platform-specific results (`ResultSchema`).
     *   Integrated helper methods like `findByUserId` and `findScheduled` for efficient data retrieval.
 
-2.  **Firebase Storage Integration (`firebase-config.js`, `firebase.js`):**
+2.  **Firebase Storage Integration (`firebase-config.js`, `firebase.js`):** ✅
     *   Modularized Firebase setup by separating configuration from implementation logic.
     *   Securely configured Firebase using environment variables.
     *   Developed robust utilities for file operations:
@@ -23,31 +23,37 @@ We have successfully laid a significant foundation for the PostMore application,
         *   Specialized uploads for post media (`uploadPostMedia`) and profile pictures (`uploadProfilePicture`).
         *   Ensured unique filenames using UUIDs.
         *   Structured file organization within Firebase Storage (e.g., `/posts/{postId}/{fileType}/`, `/profiles/{userId}/`).
+    *   Successfully updated Next.js Content Security Policy to allow Firebase Storage connections.
+    *   Updated Firebase Storage security rules to allow uploads during development.
 
-3.  **Custom React Hooks (`useFirebaseStorage.js`, `useMediaMutations.js`):**
+3.  **Custom React Hooks (`useFirebaseStorage.js`, `useMediaMutations.js`):** ✅
     *   `useFirebaseStorage`: A general-purpose hook for interacting with Firebase Storage, providing UI state for uploads (`isUploading`, `uploadProgress`) and error handling.
     *   `useMediaMutations`: A specialized hook tailored for post submissions. It leverages `useFirebaseStorage` to manage media uploads and prepares media data in the format required by the backend API.
 
-4.  **Core API Endpoint (`app/api/posts/submit/route.js`):**
+4.  **Core API Endpoint (`app/api/posts/submit/route.js`):** ✅
     *   Implemented a central `POST` API route to handle both immediate and scheduled post submissions.
     *   Features include: user authentication, request parsing and validation, MongoDB document creation and updates, and robust error handling.
     *   Dynamically ensures database connectivity.
     *   Delegates posting and scheduling logic to the `apiManager`.
     *   Manages caption selection through `getCaptionForPlatform`.
+    *   Enhanced logging for better debugging and error handling.
 
-5.  **Service Orchestration (`apiManager.js`):**
+5.  **Service Orchestration (`apiManager.js`):** ✅
     *   Designed an `apiManager` to act as a facade, routing requests to appropriate platform-specific services.
     *   Currently integrates a functional `blueSkyService.js` and includes placeholder/simulation logic for Twitter, Instagram, and Facebook.
     *   Standardizes service calls through `postToPlatform`, `postToMultiplePlatforms`, and `schedulePost` (simulated).
     *   Contains `getCaptionForPlatform` logic to select the correct caption based on `captions.mode` and `captions.multipleCaptions`.
+    *   Improved validation of BlueSky account data and media items.
 
-6.  **Bluesky Platform Integration (`blueSkyService.js`):**
+6.  **Bluesky Platform Integration (`blueSkyService.js`):** ✅
     *   Developed a service to post content to Bluesky using the `@atproto/api` SDK.
     *   Handles Bluesky authentication (user handle and app password).
     *   Correctly determines post text based on `postData.contentType` and the detailed captioning logic (single vs. multiple, account-specific).
-    *   Placeholder for media file embedding exists for future implementation.
+    *   Implemented media file embedding for images using `agent.uploadBlob`.
+    *   Added handling for videos as links in the post text.
+    *   Enhanced error handling and validation.
 
-7.  **Dashboard User Interface (`dashboard-content.jsx`):**
+7.  **Dashboard User Interface (`dashboard-content.jsx`):** ✅
     *   Successfully integrated the frontend dashboard with the `/api/posts/submit` API endpoint via `fetch`.
     *   Manages form state by aggregating data from `useUIStateStore` (for post type, text content) and `usePostStore` (for accounts, captions, scheduling).
     *   Constructs the `submissionData` payload, ensuring consistent property names (`text`, `type`, `at`, `multipleCaptions`) as per backend expectations.
@@ -55,60 +61,79 @@ We have successfully laid a significant foundation for the PostMore application,
     *   Addressed and resolved initial toast import issues.
     *   Implements state reset mechanisms post-submission.
 
-8.  **Data Consistency Across Layers:**
+8.  **Data Consistency Across Layers:** ✅
     *   Addressed and resolved inconsistencies in property naming (e.g., `textPostOnlyContent` vs. `text`, `scheduledType` vs. `type`, `captions.platforms` vs. `captions.multipleCaptions`) ensuring smooth data flow from frontend stores through the API to backend services.
 
 ### II. Current Challenges & Roadblocks
 
 Despite significant progress, we are encountering a few key issues:
 
-1.  **Persistent 500 API Error (Previously):**
-    *   We faced a recurring 500 HTTP error during post submissions. This was primarily attributed to:
-        *   Mismatches in data property names between the frontend payload and backend expectations.
-        *   Inconsistent handling of caption structures (specifically `platforms` vs. `multipleCaptions`).
-        *   Initial concerns regarding Mongoose model registration and database connection stability within the serverless API route environment.
-    *   *Status: Believed to be largely resolved with recent property name alignment and DB connection checks, but requires thorough verification.*
+1.  **500 API Error During Post Submission:** ⚠️
+    *   We are currently experiencing 500 Internal Server errors when submitting posts via the API endpoint.
+    *   While we've greatly improved error handling and logging, we're still troubleshooting the exact cause.
+    *   The error occurs after successfully uploading media to Firebase Storage, suggesting the issue is during the BlueSky API integration or in the database operations.
+    *   We suspect it could be related to one of the following:
+        *   Issues with BlueSky API authentication or token management
+        *   Problems with media processing in the BlueSky service
+        *   Database connectivity issues or validation errors
 
-2.  **Incomplete Bluesky Media Functionality:**
-    *   The `blueSkyService.js` currently includes only placeholder logic for media uploads. Actual embedding of images/videos using `agent.uploadBlob` is not yet implemented.
+2.  **BlueSky API Integration:** ⚠️
+    *   While we've implemented the full BlueSky posting functionality including media embedding, we're experiencing issues with the API integration.
+    *   This might be related to token expiration, authentication issues, or incorrect parameters being passed to the BlueSky API.
 
-3.  **Placeholder Platform Services:**
+3.  **Placeholder Platform Services:** 🔄
     *   The `apiManager.js` relies on simulated services for Twitter, Instagram, and Facebook. Full implementations for these platforms are pending.
 
-4.  **Simulated Scheduling System:**
+4.  **Simulated Scheduling System:** 🔄
     *   The `schedulePost` function within `apiManager.js` is a placeholder. A robust job queue system (e.g., BullMQ with Redis) needs to be integrated for reliable scheduled posting.
 
 ### III. Strategic Path Forward
 
 To address the current challenges and continue development, the following steps are recommended:
 
-1.  **Rigorous Testing & 500 Error Verification:**
-    *   Conduct thorough end-to-end testing of the post submission flow, with a primary focus on Bluesky.
-    *   Closely monitor server-side logs (Next.js console, any specific API logs) to confirm the 500 error is fully resolved. If it persists, dive deeper into the API route's execution path and database interactions.
+1.  **Debug Current 500 Error:** 🔍
+    *   Review and analyze server logs from the API endpoint to identify the exact error source.
+    *   Test each component of the API flow independently to isolate the issue:
+        *   Verify MongoDB connection and schema validation
+        *   Test BlueSky API authentication separately
+        *   Validate media processing functions
+        *   Check for potential race conditions or promise handling issues
+    *   Add more granular error handling with specific error types and messages.
 
-2.  **Implement Bluesky Media Uploads:**
-    *   Prioritize the implementation of media (image/video) uploading and embedding within `blueSkyService.js` using the `agent.uploadBlob` method and appropriate embed types (e.g., `app.bsky.embed.images`).
-    *   Ensure that media file data (Firebase URLs or fetched blobs) is correctly passed and processed by the service.
+2.  **Further Enhance BlueSky Integration:** 🚧
+    *   Add token refresh handling for expired BlueSky sessions.
+    *   Implement better error handling for API rate limits and temporary outages.
+    *   Add retry logic for transient API errors.
+    *   Consider caching authentication tokens securely.
 
-3.  **Develop Remaining Platform Services:**
-    *   Sequentially implement the `post` methods (including media handling) for other targeted social media platforms (Twitter, Instagram, Facebook, etc.).
-    *   Create dedicated service files for each, following the pattern of `blueSkyService.js`, and integrate them into the `platformServices` registry in `apiManager.js`.
+3.  **Develop Remaining Platform Services:** 📋
+    *   Once the BlueSky integration is stable, sequentially implement the remaining platform services.
+    *   Create dedicated service files for each platform (Twitter, Instagram, Facebook, etc.).
+    *   Follow the pattern of `blueSkyService.js` for consistency.
+    *   Update the `platformServices` registry in `apiManager.js` as each service is completed.
 
-4.  **Integrate a Job Queue for Scheduling:**
-    *   Select and implement a job queue solution (BullMQ with Redis is a common choice in Node.js environments).
-    *   Refactor `apiManager.schedulePost` to create and add jobs to this queue.
-    *   Develop worker processes that listen to the queue, pick up scheduled jobs, and execute `apiManager.postToPlatform` at the designated time.
+4.  **Implement Robust Scheduling:** ⏰
+    *   Select and implement a job queue solution (BullMQ with Redis recommended).
+    *   Create a worker process to handle scheduled posts.
+    *   Update the `schedulePost` function to create and enqueue jobs.
+    *   Add monitoring and error recovery for the scheduling system.
 
-5.  **Enhance Error Handling and Logging:**
-    *   Implement more granular and context-specific error handling at each layer (frontend, API, services).
-    *   Expand server-side logging to provide clearer insights into request processing and potential failure points.
+5.  **Security Enhancements:** 🔒
+    *   Implement proper Firebase Storage security rules for production.
+    *   Consider enabling Firebase App Check to prevent abuse.
+    *   Add rate limiting and additional validation for API endpoints.
+    *   Secure all sensitive tokens and credentials.
 
-6.  **Refine User Interface and Experience (UI/UX):**
-    *   Implement actual progress indicators for file uploads in `useFirebaseStorage` and propagate this to the UI.
-    *   Improve visual feedback for loading states and background operations.
+6.  **UI/UX Improvements:** 💻
+    *   Enhance error messages to provide more actionable information to users.
+    *   Implement better visual feedback for background operations.
+    *   Add retry capabilities for failed uploads or posts directly in the UI.
+    *   Optimize media preview and editing functionality.
 
-7.  **Comprehensive Testing Strategy:**
-    *   Develop unit tests for individual functions and services.
-    *   Create integration tests for API endpoints and critical user flows.
+7.  **Testing and Quality Assurance:** ✅
+    *   Develop comprehensive unit and integration tests for all core functionality.
+    *   Implement end-to-end testing for critical user flows.
+    *   Create a staging environment for pre-production validation.
+    *   Performance test media uploads and API endpoints.
 
-By systematically addressing these points, we can move towards a fully functional and robust PostMore application.
+By focusing first on resolving the current 500 error and stabilizing the BlueSky integration, we can establish a solid foundation for adding additional platform services and more advanced features.

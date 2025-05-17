@@ -125,10 +125,6 @@ export function DashboardContent() {
 
     // Ensure latest text is persisted if it's a text post
     if (postType === "text") {
-      console.log(
-        "Persisting final text content before submission:",
-        textPostContent
-      );
       updateTextContent.mutate(textPostContent ?? "", {
         onSuccess: () => {
           console.log("Text persisted just before submission. Proceeding...");
@@ -158,7 +154,8 @@ export function DashboardContent() {
     // Show loading state right away
     useUIStateStore.getState().setIsSubmitting(true);
 
-    // Check if we need to upload media first
+    // For all media posts, upload to Firebase first to satisfy database schema
+    // BUT also keep the file objects for BlueSky direct upload
     if (
       postType === "media" &&
       sessionMediaItems &&
@@ -168,46 +165,51 @@ export function DashboardContent() {
       const itemsWithoutUrls = sessionMediaItems.filter((item) => !item.url);
 
       if (itemsWithoutUrls.length > 0) {
-        console.log(
-          "Uploading media files to Firebase first:",
-          itemsWithoutUrls
-        );
-
         // Extract File objects from items that need to be uploaded
         const filesToUpload = itemsWithoutUrls.map((item) => item.file);
 
         // Upload files to Firebase Storage
         uploadPostMedia(filesToUpload)
           .then((uploadResults) => {
-            console.log("Media upload successful:", uploadResults);
-
-            // Create a map of updated media items with the new URLs
+            // Create a map of updated media items with the new URLs AND the file objects
             const updatedMediaItems = sessionMediaItems.map((item) => {
-              // If this item already had a URL, keep it as is
-              if (item.url) return item;
+              // Start with current item (may already have URL)
+              let updatedItem = { ...item };
 
-              // Find the corresponding upload result based on file name or other criteria
-              const uploadResult = uploadResults.find(
-                (result) =>
-                  result.originalName === item.file.name ||
-                  result.originalName === item.fileInfo?.name
-              );
+              // If this item doesn't have a URL, find the upload result
+              if (!item.url) {
+                const uploadResult = uploadResults.find(
+                  (result) =>
+                    result.originalName === item.file.name ||
+                    result.originalName === item.fileInfo?.name
+                );
 
-              if (uploadResult) {
-                // Return a new object with URL from Firebase
-                return {
-                  ...item,
-                  url: uploadResult.url,
-                  type: uploadResult.type || item.fileInfo?.type || item.type,
-                  size: uploadResult.size || item.fileInfo?.size || 0,
-                };
+                if (uploadResult) {
+                  // Keep the original file object, but add the URL from Firebase
+                  updatedItem = {
+                    ...item,
+                    url: uploadResult.url,
+                    type: uploadResult.type || item.fileInfo?.type || item.type,
+                    size: uploadResult.size || item.fileInfo?.size || 0,
+                  };
+                }
               }
 
-              // Fallback - shouldn't reach here if uploads worked correctly
-              return item;
+              // IMPORTANT: Always preserve the file object for BlueSky direct upload
+              return {
+                ...updatedItem,
+                // Keep file objects to support direct upload for BlueSky
+                file: item.file,
+                fileObject: item.file,
+                originalName:
+                  item.originalName ||
+                  item.file?.name ||
+                  item.fileInfo?.name ||
+                  "",
+              };
             });
 
-            // Now proceed with post submission using updated media items
+            // Now proceed with post submission (with both URLs and file objects)
             submitPost(updatedMediaItems);
           })
           .catch((error) => {
@@ -220,8 +222,17 @@ export function DashboardContent() {
             useUIStateStore.getState().setIsSubmitting(false);
           });
       } else {
-        // All media already has URLs, proceed with submission
-        submitPost(sessionMediaItems);
+        // All items have URLs but make sure we still add file objects for BlueSky
+        const enrichedMediaItems = sessionMediaItems.map((item) => ({
+          ...item,
+          file: item.file,
+          fileObject: item.file,
+          originalName:
+            item.originalName || item.file?.name || item.fileInfo?.name || "",
+        }));
+
+        // Proceed with submission with both URLs and file objects
+        submitPost(enrichedMediaItems);
       }
     } else {
       // Text post or no media, proceed directly
@@ -231,13 +242,36 @@ export function DashboardContent() {
 
   // New function to handle the actual post submission after media is ready
   const submitPost = (mediaItems) => {
+    // We need to include the original file objects for BlueSky videos
+    // so our API can handle the direct upload without Firebase URLs
+    const processedMediaItems = mediaItems.map((item) => {
+      // For videos, ensure we have both the Firebase URL (for database) and
+      // the raw file object (for direct upload to BlueSky)
+      const isVideo =
+        item.type?.startsWith("video/") ||
+        item.fileInfo?.type?.startsWith("video/") ||
+        (item.file && item.file.type?.startsWith("video/"));
+
+      return {
+        ...item,
+        // Include any original file object if available
+        fileObject: item.file || null,
+        // For videos, make sure we have the file object for direct BlueSky upload
+        file: item.file || null,
+        originalName:
+          item.originalName || item.file?.name || item.fileInfo?.name || "",
+        // Add a flag to help the API know this is a video that needs special BlueSky handling
+        isDirectUploadVideo: isVideo,
+      };
+    });
+
     const submissionData = {
       contentType: postType,
       text: postType === "text" ? textPostContent : "",
       media:
         postType === "media"
-          ? mediaItems.length > 0
-            ? mediaItems
+          ? processedMediaItems.length > 0
+            ? processedMediaItems
             : sessionMediaItems
           : [],
       accounts: selectedAccounts,
@@ -252,7 +286,16 @@ export function DashboardContent() {
       },
     };
 
-    console.log("Submitting post with prepared media:", submissionData);
+    console.log("Submitting post with prepared media:", {
+      ...submissionData,
+      media: submissionData.media.map((item) => ({
+        type: item.type,
+        url: item.url ? `${item.url.substring(0, 30)}...` : "none",
+        hasFile: !!item.fileObject,
+        isVideo: item.isDirectUploadVideo,
+        originalName: item.originalName,
+      })),
+    });
 
     // Send the data to our API endpoint
     fetch("/api/posts/submit", {
@@ -272,18 +315,19 @@ export function DashboardContent() {
         console.log("Post submission successful:", data);
 
         // Show success toast/notification
-        toast({
-          title: `Post ${
+        toast.success(
+          `Post ${
             scheduleType === "scheduled" ? "scheduled" : "published"
           } successfully!`,
-          description:
-            scheduleType === "scheduled"
-              ? `Your post will be published at ${new Date(
-                  scheduledAt
-                ).toLocaleString()}`
-              : "Your post has been published to the selected platforms.",
-          variant: "success",
-        });
+          {
+            description:
+              scheduleType === "scheduled"
+                ? `Your post will be published at ${new Date(
+                    scheduledAt
+                  ).toLocaleString()}`
+                : "Your post has been published to the selected platforms.",
+          }
+        );
 
         // --- Reset States --- //
         // Reset core post configuration
