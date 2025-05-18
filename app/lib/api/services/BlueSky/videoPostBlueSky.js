@@ -68,16 +68,58 @@ const archiveToFirebase = async (videoBytes, mediaItem, mediaType) => {
  * @param {BskyAgent} agent - Authenticated Bluesky agent
  * @param {string} videoUrl - URL to the video file
  * @param {object} mediaItem - Metadata about the video
+ * @param {File|null} thumbnail - Thumbnail image for the video
  * @returns {Promise<object>} Result of the upload operation
  */
-const uploadVideo = async (agent, videoUrl, mediaItem) => {
+const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
   console.log(
     `BlueSky: Uploading video ${mediaItem.originalName}, type: ${
       mediaItem.type || "unknown"
     }`
   );
 
+  let thumbBlob = null;
+
   try {
+    // First, if we have a thumbnail, upload it separately before doing anything else
+    if (thumbnail instanceof File && thumbnail.type.startsWith("image/")) {
+      try {
+        console.log(
+          `BlueSky: Uploading thumbnail for video ${mediaItem.originalName}`
+        );
+        const thumbResponse = await fetch(URL.createObjectURL(thumbnail));
+        const thumbBytes = await thumbResponse.arrayBuffer();
+
+        // Upload the thumbnail with explicit image/jpeg type
+        const thumbUploadResult = await agent.uploadBlob(
+          new Uint8Array(thumbBytes),
+          { encoding: thumbnail.type || "image/jpeg" }
+        );
+
+        if (thumbUploadResult.success) {
+          console.log(`BlueSky: Thumbnail upload successful`);
+          // Save the thumbnail blob for later use
+          thumbBlob = thumbUploadResult.data.blob;
+          // Ensure proper blob structure and force image MIME type
+          thumbBlob = {
+            $type: "blob",
+            ref: thumbBlob.ref,
+            mimeType: "image/jpeg", // Force image MIME type for thumb
+            size: thumbBlob.size,
+          };
+        } else {
+          console.error(`BlueSky: Thumbnail upload failed`);
+        }
+      } catch (thumbError) {
+        console.error(
+          `BlueSky: Error uploading thumbnail: ${thumbError.message}`
+        );
+        // Continue with video upload even if thumbnail fails
+      }
+    } else if (thumbnail) {
+      console.log(`BlueSky: Thumbnail provided but not a valid image file`);
+    }
+
     // 1. First check upload limits to see if the user can upload video
     console.log(
       `BlueSky: Checking video upload limits for ${mediaItem.originalName}`
@@ -293,6 +335,7 @@ const uploadVideo = async (agent, videoUrl, mediaItem) => {
         return {
           success: true,
           blob: uploadResponse.data.blob,
+          thumbBlob,
           firebase: firebaseResult,
           originalSize: videoBytes.byteLength,
           mimeType: uploadMimeType, // Return the MIME type we used for the upload

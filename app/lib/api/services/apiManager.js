@@ -122,6 +122,7 @@ const postToPlatform = async (platform, account, data) => {
                 // Pass through the file object for platforms that need direct file access (like BlueSky videos)
                 file: item.fileObject || item.file || null,
                 isDirectUploadVideo: !!item.isDirectUploadVideo,
+                id: item.id,
               };
             }
 
@@ -163,6 +164,7 @@ const postToPlatform = async (platform, account, data) => {
                     (item.file &&
                       item.file.type &&
                       item.file.type.startsWith("video/")))),
+              id: item.id,
             };
           } catch (mediaError) {
             console.error(

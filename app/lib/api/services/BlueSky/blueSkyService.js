@@ -6,6 +6,9 @@ import { uploadVideo, ALLOWED_VIDEO_FORMATS } from "./videoPostBlueSky";
 import { editPost } from "./editBlueSkyPost";
 import { deletePost, deletePosts } from "./deleteBlueSkyPost";
 
+// Import postStore to access thumbnails
+import { usePostStore } from "@/app/lib/store/postStore";
+
 // Constants
 const BSKY_SERVICE_URL = "https://bsky.social";
 const MAX_IMAGE_SIZE_BYTES = 1000000; // 1MB
@@ -420,6 +423,19 @@ const post = async (accountData, postData) => {
           );
 
           try {
+            // Check for a thumbnail in the store
+            let thumbnailFile = null;
+            if (mediaItem.id) {
+              thumbnailFile = usePostStore
+                .getState()
+                .getVideoThumbnail(mediaItem.id);
+              if (thumbnailFile) {
+                console.log(
+                  `BlueSky: Found thumbnail for video ${mediaItem.id}`
+                );
+              }
+            }
+
             // Check if we have a direct file object or need to fetch from URL
             if (mediaItem.file) {
               console.log(
@@ -437,38 +453,42 @@ const post = async (accountData, postData) => {
             const videoResult = await uploadVideo(
               agent,
               mediaItem.url,
-              mediaItem
+              mediaItem,
+              thumbnailFile // Pass the thumbnail to the upload function
             );
 
             if (videoResult.success && videoResult.blob) {
               console.log(`BlueSky: Video upload successful, creating embed`);
 
-              // Create a proper video embed with explicit validation to ensure all required fields are present
-              const validBlob = videoResult.blob;
-              if (!validBlob.ref || !validBlob.mimeType || !validBlob.size) {
-                console.error(
-                  "BlueSky: Invalid blob structure",
-                  JSON.stringify(validBlob)
-                );
-                throw new Error(
-                  "Invalid video blob structure returned from upload"
-                );
+              // Create an appropriate embed based on what we have
+              if (videoResult.thumbBlob) {
+                // We have both a video and a thumbnail, so use an external embed with the thumbnail
+                console.log(`BlueSky: Using external embed with thumbnail`);
+                videoEmbed = {
+                  $type: "app.bsky.embed.external",
+                  external: {
+                    uri:
+                      mediaItem.url ||
+                      "https://postmore.app/video/" + mediaItem.id,
+                    title: mediaItem.originalName || "Video",
+                    description: mediaItem.altText || "Video from Postmore",
+                    thumb: videoResult.thumbBlob,
+                  },
+                };
+              } else {
+                // We only have the video, so use a video embed
+                console.log(`BlueSky: Using direct video embed`);
+                videoEmbed = {
+                  $type: "app.bsky.embed.video",
+                  video: videoResult.blob,
+                  alt: mediaItem.altText || mediaItem.originalName || "Video",
+                };
               }
-
-              videoEmbed = {
-                $type: "app.bsky.embed.external",
-                external: {
-                  uri: mediaItem.url,
-                  title: mediaItem.originalName || "Video",
-                  description: mediaItem.altText || "Video from Postmore",
-                  thumb: validBlob,
-                },
-              };
 
               mediaUploadResults.push({
                 originalName: mediaItem.originalName,
                 status: "success",
-                blobCid: validBlob.ref?.$link,
+                blobCid: videoResult.blob.ref?.$link,
                 firebaseUrl: videoResult.firebase?.url,
               });
             } else {
@@ -669,6 +689,19 @@ const post = async (accountData, postData) => {
             }
 
             try {
+              // Get thumbnail if available
+              let thumbnailFile = null;
+              if (mediaItem.id) {
+                thumbnailFile = usePostStore
+                  .getState()
+                  .getVideoThumbnail(mediaItem.id);
+                if (thumbnailFile) {
+                  console.log(
+                    `BlueSky: Found thumbnail for special video ${mediaItem.id}`
+                  );
+                }
+              }
+
               // Determine best MIME type based on file extension
               let mimeType = mediaItem.type;
               if (mediaItem.originalName?.toLowerCase().endsWith(".mov")) {
@@ -690,15 +723,39 @@ const post = async (accountData, postData) => {
               const videoResult = await uploadVideo(
                 agent,
                 mediaItem.url,
-                modifiedMediaItem
+                modifiedMediaItem,
+                thumbnailFile // Pass the thumbnail
               );
 
               if (videoResult.success) {
-                videoEmbed = {
-                  $type: "app.bsky.embed.video",
-                  video: videoResult.blob,
-                  alt: mediaItem.altText || mediaItem.originalName || "",
-                };
+                // Create an appropriate embed based on what we have
+                if (videoResult.thumbBlob) {
+                  // We have both a video and a thumbnail, so use an external embed with the thumbnail
+                  console.log(
+                    `BlueSky: Using external embed with thumbnail for special video`
+                  );
+                  videoEmbed = {
+                    $type: "app.bsky.embed.external",
+                    external: {
+                      uri:
+                        mediaItem.url ||
+                        "https://postmore.app/video/" + mediaItem.id,
+                      title: mediaItem.originalName || "Video",
+                      description: mediaItem.altText || "Video from Postmore",
+                      thumb: videoResult.thumbBlob,
+                    },
+                  };
+                } else {
+                  // We only have the video, so use a video embed
+                  console.log(
+                    `BlueSky: Using direct video embed for special video`
+                  );
+                  videoEmbed = {
+                    $type: "app.bsky.embed.video",
+                    video: videoResult.blob,
+                    alt: mediaItem.altText || mediaItem.originalName || "Video",
+                  };
+                }
 
                 mediaUploadResults.push({
                   originalName: mediaItem.originalName,

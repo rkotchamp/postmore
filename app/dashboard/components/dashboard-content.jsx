@@ -312,8 +312,6 @@ export function DashboardContent() {
         return response.json();
       })
       .then((data) => {
-        console.log("Post submission successful:", data);
-
         // Show success toast/notification
         toast.success(
           `Post ${
