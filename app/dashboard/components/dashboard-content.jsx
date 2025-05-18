@@ -128,7 +128,7 @@ export function DashboardContent() {
       updateTextContent.mutate(textPostContent ?? "", {
         onSuccess: () => {
           console.log("Text persisted just before submission. Proceeding...");
-          proceedWithSubmission();
+          handlePostSubmission();
         },
         onError: (error) => {
           console.error("Failed to persist text before submission:", error);

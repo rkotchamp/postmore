@@ -867,7 +867,12 @@ const post = async (accountData, postData) => {
         record
       );
 
-      if (!postResponse || !postResponse.success) {
+      // If we have a cid and uri in the response, the post was successful
+      if (!postResponse || (!postResponse.cid && !postResponse.uri)) {
+        console.error(
+          "BlueSky: Post response missing required fields",
+          postResponse
+        );
         throw new Error("Failed to publish post");
       }
 
