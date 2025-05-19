@@ -28,15 +28,10 @@ const refreshTokenAndUpdate = async (agent, accountData) => {
   // Check if a refresh is already in progress for this account
   const accountId = accountData.platformAccountId;
   if (tokenRefreshLocks.get(accountId)) {
-    console.log(
-      `BlueSky: Refresh already in progress for ${accountData.platformUsername}, waiting...`
-    );
     // Wait for the existing refresh to complete
     try {
       const result = await tokenRefreshLocks.get(accountId);
-      console.log(
-        `BlueSky: Using result from existing refresh for ${accountData.platformUsername}`
-      );
+
       return result;
     } catch (error) {
       console.error(
@@ -73,23 +68,17 @@ const refreshTokenAndUpdate = async (agent, accountData) => {
     }
 
     // Login with the username and refresh token
-    console.log("BlueSky: Calling login with refresh token");
+
     const refreshResult = await agent.login({
       identifier: accountData.platformUsername,
       refreshJwt: accountData.refreshToken,
     });
-
-    console.log(
-      "BlueSky: Refresh result:",
-      refreshResult ? "success" : "failed"
-    );
 
     if (!refreshResult) {
       throw new Error("Refresh token request failed");
     }
 
     const { accessJwt, refreshJwt, did } = refreshResult.data;
-    console.log("BlueSky: Got new tokens, verifying DID");
 
     // Verify the did matches
     if (did !== accountData.platformAccountId) {
@@ -101,9 +90,7 @@ const refreshTokenAndUpdate = async (agent, accountData) => {
     }
 
     // Update tokens in database
-    console.log(
-      `BlueSky: Updating tokens in database for ${accountData.platformUsername}`
-    );
+
     const updatedAccount = await SocialAccount.findOneAndUpdate(
       {
         platformAccountId: accountData.platformAccountId,
@@ -126,7 +113,6 @@ const refreshTokenAndUpdate = async (agent, accountData) => {
       throw new Error("Failed to update account in database");
     }
 
-    console.log("BlueSky: Token refresh completed successfully");
     const result = {
       accessToken: accessJwt,
       refreshToken: refreshJwt,
@@ -186,13 +172,6 @@ const refreshTokenAndUpdate = async (agent, accountData) => {
  */
 const handleAuthentication = async (agent, accountData) => {
   try {
-    console.log("BlueSky: Authenticating with session data", {
-      username: accountData.platformUsername,
-      hasAccessToken: !!accountData.accessToken,
-      hasRefreshToken: !!accountData.refreshToken,
-      tokenExpiry: accountData.tokenExpiry || "not set",
-    });
-
     // Check if token is about to expire (10 minutes threshold)
     const TOKEN_EXPIRY_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
     const currentTime = Date.now();
@@ -201,18 +180,10 @@ const handleAuthentication = async (agent, accountData) => {
       : 0;
     const timeUntilExpiry = tokenExpiryTime - currentTime;
 
-    console.log("BlueSky: Token expiry check", {
-      currentTime,
-      tokenExpiryTime,
-      timeUntilExpiry,
-      tokenExpiryThreshold: TOKEN_EXPIRY_THRESHOLD_MS,
-    });
-
     const shouldRefreshToken =
       accountData.tokenExpiry && timeUntilExpiry < TOKEN_EXPIRY_THRESHOLD_MS;
 
     if (shouldRefreshToken) {
-      console.log("BlueSky: Token expiring soon, proactively refreshing");
       const refreshedTokens = await refreshTokenAndUpdate(agent, accountData);
 
       if (!refreshedTokens) {
@@ -222,7 +193,7 @@ const handleAuthentication = async (agent, accountData) => {
       }
 
       // Try resuming with new tokens
-      console.log("BlueSky: Resuming session with refreshed tokens");
+
       await agent.resumeSession({
         did: accountData.platformAccountId,
         handle: accountData.platformUsername,
@@ -239,7 +210,7 @@ const handleAuthentication = async (agent, accountData) => {
     }
 
     // Try to resume session with current tokens
-    console.log("BlueSky: Resuming session with existing tokens");
+
     await agent.resumeSession({
       did: accountData.platformAccountId,
       handle: accountData.platformUsername,
@@ -247,7 +218,6 @@ const handleAuthentication = async (agent, accountData) => {
       refreshJwt: accountData.refreshToken,
     });
 
-    console.log("BlueSky: Session resumed successfully");
     return accountData; // Current tokens worked fine
   } catch (error) {
     console.error("BlueSky: Authentication error:", {
@@ -258,8 +228,6 @@ const handleAuthentication = async (agent, accountData) => {
 
     // If token expired, try to refresh
     if (error.message && error.message.includes("Token has expired")) {
-      console.log("BlueSky: Access token expired, attempting refresh");
-
       const refreshedTokens = await refreshTokenAndUpdate(agent, accountData);
 
       if (!refreshedTokens) {
@@ -269,9 +237,7 @@ const handleAuthentication = async (agent, accountData) => {
       }
 
       // Try resuming with new tokens
-      console.log(
-        "BlueSky: Resuming session with newly refreshed tokens after expiry"
-      );
+
       await agent.resumeSession({
         did: accountData.platformAccountId,
         handle: accountData.platformUsername,
@@ -299,13 +265,6 @@ const handleAuthentication = async (agent, accountData) => {
  * @returns {Promise<object>} Result object
  */
 const post = async (accountData, postData) => {
-  console.log("BlueSky service: Starting post operation", {
-    accountId: accountData.id,
-    platform: accountData.platform,
-    username: accountData.platformUsername,
-    contentType: postData.contentType,
-  });
-
   // Initialize Bluesky agent with correct configuration
   const agent = new BskyAgent({
     service: BSKY_SERVICE_URL,
@@ -324,12 +283,11 @@ const post = async (accountData, postData) => {
     }
 
     // 1. Authentication with token refresh if needed
-    console.log("BlueSky: Attempting authentication");
+
     const updatedAccountData = await handleAuthentication(agent, accountData);
 
     // If tokens were refreshed, use the updated versions
     if (updatedAccountData.accessToken !== accountData.accessToken) {
-      console.log("BlueSky: Tokens were refreshed during authentication");
       accountData = updatedAccountData;
     }
 
@@ -353,19 +311,7 @@ const post = async (accountData, postData) => {
     let videoEmbed = null;
 
     if (postData.media && postData.media.length > 0) {
-      console.log(`BlueSky: Processing ${postData.media.length} media items`);
-
       // Log detailed media info to help debug
-      console.log(
-        "BlueSky: Media items details:",
-        postData.media.map((item) => ({
-          type: item.type || "unknown",
-          originalName: item.originalName || "unknown",
-          size: item.size || "unknown",
-          url: item.url ? item.url.substring(0, 60) + "..." : "missing",
-          hasAltText: !!item.altText,
-        }))
-      );
 
       // Determine the media type for proper handling
       const isVideo = (item) => {
@@ -407,9 +353,6 @@ const post = async (accountData, postData) => {
       for (const mediaItem of postData.media) {
         if (isVideo(mediaItem)) {
           if (videoEmbed) {
-            console.log(
-              "BlueSky: Only one video allowed per post, skipping additional videos"
-            );
             mediaUploadResults.push({
               originalName: mediaItem.originalName,
               status: "skipped",
@@ -417,10 +360,6 @@ const post = async (accountData, postData) => {
             });
             continue;
           }
-
-          console.log(
-            `BlueSky: Uploading video ${mediaItem.originalName} directly to BlueSky`
-          );
 
           try {
             // Check for a thumbnail in the store
@@ -430,25 +369,10 @@ const post = async (accountData, postData) => {
                 .getState()
                 .getVideoThumbnail(mediaItem.id);
               if (thumbnailFile) {
-                console.log(
-                  `BlueSky: Found thumbnail for video ${mediaItem.id}`
-                );
               }
             }
 
             // Check if we have a direct file object or need to fetch from URL
-            if (mediaItem.file) {
-              console.log(
-                `BlueSky: Using direct file object for ${mediaItem.originalName}`
-              );
-            } else {
-              console.log(
-                `BlueSky: Will fetch from URL: ${mediaItem.url.substring(
-                  0,
-                  30
-                )}...`
-              );
-            }
 
             const videoResult = await uploadVideo(
               agent,
@@ -463,7 +387,7 @@ const post = async (accountData, postData) => {
               // Create an appropriate embed based on what we have
               if (videoResult.thumbBlob) {
                 // We have both a video and a thumbnail, so use an external embed with the thumbnail
-                console.log(`BlueSky: Using external embed with thumbnail`);
+
                 videoEmbed = {
                   $type: "app.bsky.embed.external",
                   external: {
@@ -477,7 +401,7 @@ const post = async (accountData, postData) => {
                 };
               } else {
                 // We only have the video, so use a video embed
-                console.log(`BlueSky: Using direct video embed`);
+
                 videoEmbed = {
                   $type: "app.bsky.embed.video",
                   video: videoResult.blob,
@@ -508,9 +432,6 @@ const post = async (accountData, postData) => {
         // Process images
         if (mediaItem.type && mediaItem.type.startsWith("image/")) {
           if (images.length >= MAX_IMAGES_PER_POST) {
-            console.log(
-              "BlueSky: Maximum image count reached, skipping additional images"
-            );
             mediaUploadResults.push({
               originalName: mediaItem.originalName,
               status: "skipped",
@@ -520,7 +441,6 @@ const post = async (accountData, postData) => {
           }
 
           try {
-            console.log(`BlueSky: Uploading image ${mediaItem.originalName}`);
             const response = await fetch(mediaItem.url);
             if (!response.ok) {
               console.error(
@@ -530,9 +450,6 @@ const post = async (accountData, postData) => {
             }
 
             const imageBytes = await response.arrayBuffer();
-            console.log(
-              `BlueSky: Uploading ${imageBytes.byteLength} bytes for image ${mediaItem.originalName}`
-            );
 
             const uploadResult = await agent.uploadBlob(
               new Uint8Array(imageBytes),
@@ -542,9 +459,6 @@ const post = async (accountData, postData) => {
             );
 
             if (uploadResult.success) {
-              console.log(
-                `BlueSky: Successfully uploaded image ${mediaItem.originalName}`
-              );
               images.push({
                 image: uploadResult.data.blob,
                 alt: mediaItem.altText || mediaItem.originalName || "",
@@ -579,15 +493,8 @@ const post = async (accountData, postData) => {
             mediaItem.originalName?.toLowerCase().endsWith(".mpg") ||
             mediaItem.originalName?.toLowerCase().endsWith(".m4v"))
         ) {
-          console.log(
-            `BlueSky: Detected video from filename or partial type match: ${mediaItem.originalName}, type: ${mediaItem.type}`
-          );
-
           // Only process one video per post
           if (videoEmbed) {
-            console.log(
-              "BlueSky: Only one video allowed per post, skipping additional videos"
-            );
             mediaUploadResults.push({
               originalName: mediaItem.originalName,
               status: "skipped",
@@ -598,14 +505,8 @@ const post = async (accountData, postData) => {
 
           // Set a default video type if needed
           const videoType = mediaItem.type || "video/mp4";
-          console.log(
-            `BlueSky: Using video type: ${videoType} for ${mediaItem.originalName}`
-          );
 
           try {
-            console.log(
-              `BlueSky: Processing video with inferred type ${mediaItem.originalName}`
-            );
             // Pass mediaItem with corrected type
             const videoItemWithType = {
               ...mediaItem,
@@ -652,18 +553,6 @@ const post = async (accountData, postData) => {
         // Other media types
         else {
           // Add debug logging to see if we're getting here with video/quicktime
-          console.log(`BlueSky: DEBUG - Media not recognized properly:`, {
-            type: mediaItem.type,
-            isVideoQuicktime: mediaItem.type === "video/quicktime",
-            hasAllowedVideoFormats: !!ALLOWED_VIDEO_FORMATS,
-            allowedCount: ALLOWED_VIDEO_FORMATS
-              ? ALLOWED_VIDEO_FORMATS.length
-              : 0,
-            quicktimeInAllowed: ALLOWED_VIDEO_FORMATS
-              ? ALLOWED_VIDEO_FORMATS.includes("video/quicktime")
-              : false,
-            originalName: mediaItem.originalName || "unknown",
-          });
 
           // For video files that may have incorrect MIME type or need special handling
           if (
@@ -671,15 +560,8 @@ const post = async (accountData, postData) => {
             mediaItem.originalName?.toLowerCase().endsWith(".mov") ||
             mediaItem.originalName?.toLowerCase().endsWith(".mp4")
           ) {
-            console.log(
-              `BlueSky: Special handling for possible video ${mediaItem.originalName}`
-            );
-
             // Only process one video per post
             if (videoEmbed) {
-              console.log(
-                "BlueSky: Only one video allowed per post, skipping additional videos"
-              );
               mediaUploadResults.push({
                 originalName: mediaItem.originalName,
                 status: "skipped",
@@ -696,9 +578,6 @@ const post = async (accountData, postData) => {
                   .getState()
                   .getVideoThumbnail(mediaItem.id);
                 if (thumbnailFile) {
-                  console.log(
-                    `BlueSky: Found thumbnail for special video ${mediaItem.id}`
-                  );
                 }
               }
 
@@ -717,9 +596,6 @@ const post = async (accountData, postData) => {
                 type: mimeType,
               };
 
-              console.log(
-                `BlueSky: Processing video with determined type ${mimeType} for ${mediaItem.originalName}`
-              );
               const videoResult = await uploadVideo(
                 agent,
                 mediaItem.url,
@@ -731,9 +607,7 @@ const post = async (accountData, postData) => {
                 // Create an appropriate embed based on what we have
                 if (videoResult.thumbBlob) {
                   // We have both a video and a thumbnail, so use an external embed with the thumbnail
-                  console.log(
-                    `BlueSky: Using external embed with thumbnail for special video`
-                  );
+
                   videoEmbed = {
                     $type: "app.bsky.embed.external",
                     external: {
@@ -747,9 +621,7 @@ const post = async (accountData, postData) => {
                   };
                 } else {
                   // We only have the video, so use a video embed
-                  console.log(
-                    `BlueSky: Using direct video embed for special video`
-                  );
+
                   videoEmbed = {
                     $type: "app.bsky.embed.video",
                     video: videoResult.blob,
@@ -785,11 +657,7 @@ const post = async (accountData, postData) => {
             }
           } else {
             // Handle truly unsupported media types as links
-            console.log(
-              `BlueSky: Unsupported media type: ${
-                mediaItem.type || "unknown type"
-              } for file ${mediaItem.originalName || "unknown"}`
-            );
+
             if (postText) postText += "\n\n";
             postText += `Media: ${mediaItem.url}`;
 
@@ -812,40 +680,14 @@ const post = async (accountData, postData) => {
     // 5. Add media embeds if available - prioritize video over images
     if (videoEmbed) {
       record.embed = videoEmbed;
-      console.log("BlueSky: Added video embed to post record");
     } else if (images.length > 0) {
       record.embed = {
         $type: "app.bsky.embed.images",
         images: images,
       };
-      console.log(
-        `BlueSky: Added image embed with ${images.length} images to post record`
-      );
     }
 
     // Log the record structure for debugging
-    console.log("BlueSky: Final post record structure:", {
-      hasText: !!record.text?.trim(),
-      textLength: record.text?.length || 0,
-      embedType: record.embed?.$type || "none",
-      hasImages: record.embed?.$type === "app.bsky.embed.images",
-      imageCount:
-        record.embed?.$type === "app.bsky.embed.images"
-          ? record.embed.images?.length
-          : 0,
-      hasVideo:
-        record.embed?.$type === "app.bsky.embed.external" ||
-        record.embed?.$type === "app.bsky.embed.video",
-      videoDetails:
-        record.embed?.$type === "app.bsky.embed.external" ||
-        record.embed?.$type === "app.bsky.embed.video"
-          ? {
-              hasVideoBlob:
-                !!record.embed?.external?.thumb || !!record.embed?.video,
-              hasAlt: true,
-            }
-          : null,
-    });
 
     // Validate content existence
     if (!postText.trim() && images.length === 0 && !videoEmbed) {
@@ -859,7 +701,7 @@ const post = async (accountData, postData) => {
     }
 
     // Publish the post
-    console.log(`BlueSky: Publishing post`);
+
     try {
       // We'll use the direct API method to have more control over the embed structure
       const postResponse = await agent.api.app.bsky.feed.post.create(
@@ -877,10 +719,6 @@ const post = async (accountData, postData) => {
       }
 
       // Log the post success
-      console.log(`BlueSky: Post successful`, {
-        uri: postResponse.uri,
-        cid: postResponse.cid,
-      });
 
       // Return the post details
       return {

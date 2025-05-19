@@ -290,7 +290,7 @@ export function ScheduleToggle() {
                       <SelectTrigger>
                         <SelectValue placeholder="Select time" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[250px] overflow-y-auto">
                         {timeOptions.map((timeOption) => (
                           <SelectItem key={timeOption} value={timeOption}>
                             {timeOption}

@@ -47,26 +47,6 @@ const platformServices = {
  */
 const postToPlatform = async (platform, account, data) => {
   try {
-    // Add detailed logging for debugging
-    console.log(`ApiManager: postToPlatform called for platform: ${platform}`);
-    console.log(
-      `ApiManager: Received Account data for ${platform}:`,
-      JSON.stringify(
-        {
-          ...account,
-          accessToken: account.accessToken ? "[REDACTED]" : undefined,
-          refreshToken: account.refreshToken ? "[REDACTED]" : undefined,
-          appPassword: account.appPassword ? "[REDACTED]" : undefined,
-        },
-        null,
-        2
-      )
-    );
-    console.log(
-      `ApiManager: Received Post Data for ${platform}:`,
-      JSON.stringify(data, null, 2)
-    );
-
     // Map the incoming data
     const mappedData = { ...data };
 
@@ -83,19 +63,12 @@ const postToPlatform = async (platform, account, data) => {
       mappedData.media.length > 0
     ) {
       // Transform media array to have the expected structure
-      console.log(
-        `ApiManager: Original media count: ${mappedData.media.length}`
-      );
 
       mappedData.media = mappedData.media
         .map((item) => {
           try {
             // If this is a client-side structure with file and fileInfo
             if (item.fileInfo) {
-              console.log(
-                `ApiManager: Converting client media format to service format for ${item.fileInfo.name}`
-              );
-
               // For platforms that require direct file uploads (like BlueSky),
               // we can skip the URL validation if we have a file object
               const hasBlueSkyVideo =
@@ -176,25 +149,6 @@ const postToPlatform = async (platform, account, data) => {
         })
         .filter((item) => item !== null); // Filter out items without URLs or direct uploads
 
-      // Log count of valid media items
-      console.log(
-        `ApiManager: Processed ${mappedData.media.length} valid media items`
-      );
-
-      // Additional debug info about files for direct upload
-      if (platform === "bluesky") {
-        console.log(
-          `ApiManager: Media items for BlueSky:`,
-          mappedData.media.map((item) => ({
-            hasUrl: !!item.url,
-            hasFile: !!item.file,
-            type: item.type,
-            name: item.originalName,
-            isDirectUploadVideo: !!item.isDirectUploadVideo,
-          }))
-        );
-      }
-
       // If we've lost all media items but this is a media post, return an error
       if (mappedData.media.length === 0 && mappedData.contentType === "media") {
         throw new Error(
@@ -202,20 +156,6 @@ const postToPlatform = async (platform, account, data) => {
         );
       }
     }
-
-    console.log(
-      `ApiManager: Post data after mapping:`,
-      JSON.stringify(
-        {
-          contentType: mappedData.contentType,
-          mediaCount: mappedData.media?.length || 0,
-          hasText: !!mappedData.text,
-          captionMode: mappedData.captions?.mode,
-        },
-        null,
-        2
-      )
-    );
 
     // Get the platform service
     const service = platformServices[platform];
@@ -229,10 +169,6 @@ const postToPlatform = async (platform, account, data) => {
 
     // If it's Bluesky, ensure the account data has the expected structure
     if (platform === "bluesky") {
-      console.log(
-        "ApiManager: Mapping account data for Bluesky",
-        account.platformAccountId || account.originalData?.platformAccountId
-      );
       mappedAccount = {
         id: account.id,
         platformUsername: account.email || account.name, // Using email field which contains username.bsky.social
@@ -260,32 +196,11 @@ const postToPlatform = async (platform, account, data) => {
       if (!mappedAccount.accessToken) {
         throw new Error("Missing accessToken for Bluesky account");
       }
-
-      console.log(
-        "ApiManager: Mapped Bluesky account (before sending to service):",
-        JSON.stringify(
-          {
-            ...mappedAccount,
-            accessToken: "[REDACTED]",
-            refreshToken: "[REDACTED]",
-          },
-          null,
-          2
-        )
-      );
     }
-    console.log(
-      `ApiManager: Mapped Post Data (before sending to ${platform} service):`,
-      JSON.stringify(mappedData, null, 2)
-    );
 
     // Call the platform-specific post method with the mapped account data
-    console.log(`ApiManager: Calling ${platform} service post method`);
+
     const result = await service.post(mappedAccount, mappedData);
-    console.log(
-      `ApiManager: ${platform} service returned result:`,
-      JSON.stringify(result, null, 2)
-    );
 
     return {
       success: true,

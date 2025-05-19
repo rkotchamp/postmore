@@ -7,11 +7,11 @@
  */
 
 import { Worker } from "bullmq";
-import { processPostJob } from "./postQueue";
+import { processPostJob } from "./postQueue.js";
 import {
   processRefreshAllTokensJob,
   processRefreshAccountTokensJob,
-} from "./tokenRefreshQueue";
+} from "./tokenRefreshQueue.js";
 
 // Redis connection configuration
 const redisConnection = {

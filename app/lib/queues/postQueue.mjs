@@ -1,10 +1,29 @@
 /**
- * Post Queue Setup
+ * Post Queue Setup - Worker Compatible Version (.mjs)
  * Handles scheduling and processing of posts using BullMQ
  */
 
 import { Queue } from "bullmq";
-import { apiManager } from "@/app/lib/api/services/apiManager";
+import path from "path";
+import { fileURLToPath } from "url";
+import { connectToDatabase, postToPlatform } from "./api-bridge.mjs";
+
+// Get directory path
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Set up paths for absolute imports
+const appRoot = path.resolve(__dirname, "../../..");
+
+// Import the real apiManager (dynamically to avoid ES Module issues)
+import("../api/services/apiManager.js")
+  .then((module) => {
+    globalThis.realApiManager = module.apiManager;
+    console.log("Real API Manager imported successfully");
+  })
+  .catch((err) => {
+    console.error("Failed to import real API Manager:", err);
+  });
 
 // Redis connection configuration
 const redisConnection = {
@@ -108,16 +127,17 @@ export async function processPostJob(jobData) {
   const { platform, accountData, content } = jobData;
 
   console.log(
-    `Processing post job for platform: ${platform}, account: ${accountData.id}`
+    `Processing post job for platform: ${platform}, account: ${
+      accountData.id || accountData._id
+    }`
   );
 
   try {
-    // Use the API manager to post to the platform
-    const result = await apiManager.postToPlatform(
-      platform,
-      accountData,
-      content
-    );
+    // Ensure we're connected to the database
+    await connectToDatabase();
+
+    // Use the direct implementation from api-bridge.mjs
+    const result = await postToPlatform(platform, accountData, content);
 
     console.log(`Post processed successfully for ${platform}:`, result);
 
