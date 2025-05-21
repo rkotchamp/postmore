@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { Clock } from "lucide-react";
+import { Clock, ChevronUp, ChevronDown } from "lucide-react";
 import { Switch } from "@/app/components/ui/switch";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
+import { Input } from "@/app/components/ui/input";
 import { usePostStore } from "@/app/lib/store/postStore";
 
 // Helper to format time, ensuring valid Date input
@@ -27,6 +28,16 @@ const formatTimeFromDate = (date) => {
   }
   const hours = date.getHours().toString().padStart(2, "0");
   const minutes = date.getMinutes() < 30 ? "00" : "30";
+  return `${hours}:${minutes}`;
+};
+
+// New helper to format exact time with actual minutes
+const formatExactTimeFromDate = (date) => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    return "00:00"; // Default or suitable fallback
+  }
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${hours}:${minutes}`;
 };
 
@@ -104,6 +115,126 @@ const PopoverButton = memo(function PopoverButton({
   );
 });
 
+// Improved custom time input with compact controls
+const SimpleTimeInput = memo(function SimpleTimeInput({ value, onChange }) {
+  const [inputValue, setInputValue] = useState(value || "00:00");
+
+  useEffect(() => {
+    if (value) {
+      setInputValue(value);
+    }
+  }, [value]);
+
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+  };
+
+  const handleBlur = () => {
+    // Validate time format and apply changes
+    if (/^([01]?[0-9]|2[0-3]):([0-5][0-9])$/.test(inputValue)) {
+      // Format to ensure 2 digits
+      const [hours, minutes] = inputValue.split(":");
+      const formattedTime = `${hours.padStart(2, "0")}:${minutes}`;
+      setInputValue(formattedTime);
+      onChange(formattedTime);
+    } else {
+      // Reset to original value if invalid
+      setInputValue(value || "00:00");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleBlur();
+    }
+  };
+
+  const incrementTime = (e) => {
+    // Prevent default behavior and stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
+
+    const [hours, minutes] = inputValue.split(":").map(Number);
+    let newMinutes = minutes + 1;
+    let newHours = hours;
+
+    if (newMinutes >= 60) {
+      newMinutes = 0;
+      newHours = (newHours + 1) % 24;
+    }
+
+    const newTime = `${newHours.toString().padStart(2, "0")}:${newMinutes
+      .toString()
+      .padStart(2, "0")}`;
+    setInputValue(newTime);
+    onChange(newTime);
+  };
+
+  const decrementTime = (e) => {
+    // Prevent default behavior and stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
+
+    const [hours, minutes] = inputValue.split(":").map(Number);
+    let newMinutes = minutes - 1;
+    let newHours = hours;
+
+    if (newMinutes < 0) {
+      newMinutes = 59;
+      newHours = (newHours - 1 + 24) % 24;
+    }
+
+    const newTime = `${newHours.toString().padStart(2, "0")}:${newMinutes
+      .toString()
+      .padStart(2, "0")}`;
+    setInputValue(newTime);
+    onChange(newTime);
+  };
+
+  return (
+    <div
+      className="px-2 py-3 flex items-center justify-center"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="relative w-full max-w-[120px] mx-auto">
+        <Input
+          type="text"
+          value={inputValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          className="w-full h-9 px-2 text-center pr-8"
+          placeholder="HH:MM"
+          aria-label="Custom time input"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <div className="absolute right-1 top-0 bottom-0 flex flex-col justify-center">
+          <button
+            className="h-4 w-4 flex items-center justify-center text-gray-500 hover:text-gray-700 cursor-pointer"
+            onClick={incrementTime}
+            type="button"
+            aria-label="Increment time"
+            tabIndex={-1}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button
+            className="h-4 w-4 flex items-center justify-center text-gray-500 hover:text-gray-700 cursor-pointer"
+            onClick={decrementTime}
+            type="button"
+            aria-label="Decrement time"
+            tabIndex={-1}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export function ScheduleToggle() {
   // --- Zustand Store ---
   const scheduleType = usePostStore((state) => state.scheduleType);
@@ -134,6 +265,11 @@ export function ScheduleToggle() {
   // displayTime is string "HH:MM" derived from displayDate
   const displayTime = useMemo(() => {
     return formatTimeFromDate(displayDate);
+  }, [displayDate]);
+
+  // exactTime is like displayTime but keeps the exact minutes (not rounded to 30)
+  const exactTime = useMemo(() => {
+    return formatExactTimeFromDate(displayDate);
   }, [displayDate]);
 
   // --- Time Options ---
@@ -213,6 +349,23 @@ export function ScheduleToggle() {
     [displayDate, setSchedule]
   );
 
+  const handleCustomTimeChange = useCallback(
+    (newCustomTime) => {
+      const combinedDateTime = createValidDateFromParts(
+        displayDate,
+        newCustomTime
+      );
+      if (combinedDateTime) {
+        setSchedule("scheduled", combinedDateTime);
+      } else {
+        console.error(
+          "ScheduleToggle: Failed to create valid date in handleCustomTimeChange"
+        );
+      }
+    },
+    [displayDate, setSchedule]
+  );
+
   const handleOpenChange = useCallback((open) => {
     setShowDatePicker(open);
   }, []);
@@ -235,15 +388,15 @@ export function ScheduleToggle() {
       !isNaN(displayDate.getTime())
     ) {
       try {
-        // Use the date and displayTime string which is already formatted
-        return `${format(displayDate, "MMM d, yyyy")} at ${displayTime}`;
+        // Use the exactTime to show the precise schedule time
+        return `${format(displayDate, "MMM d, yyyy")} at ${exactTime}`;
       } catch (error) {
         console.error("Error formatting date in ScheduleToggle:", error);
         return "Invalid date"; // Fallback text
       }
     }
     return "";
-  }, [isCurrentlyScheduled, displayDate, displayTime]);
+  }, [isCurrentlyScheduled, displayDate, exactTime]);
 
   return (
     <div className="flex flex-col mt-4 mb-2">
@@ -283,22 +436,31 @@ export function ScheduleToggle() {
                   </div>
                   <div className="space-y-1">
                     <h5 className="text-sm font-medium">Time</h5>
-                    <Select
-                      value={displayTime}
-                      onValueChange={handleTimeChange}
-                    >
+                    <Select value={exactTime} onValueChange={handleTimeChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select time" />
                       </SelectTrigger>
-                      <SelectContent className="max-h-[250px] overflow-y-auto">
-                        {timeOptions.map((timeOption) => (
-                          <SelectItem key={timeOption} value={timeOption}>
-                            {timeOption}
-                          </SelectItem>
-                        ))}
+                      <SelectContent className="flex flex-col p-0">
+                        {/* Fixed custom time at the top */}
+                        <div className="px-2 py-2 sticky top-0 bg-white border-b z-10">
+                          <SimpleTimeInput
+                            value={exactTime}
+                            onChange={handleCustomTimeChange}
+                          />
+                        </div>
+
+                        {/* Scrollable preset times */}
+                        <div className="max-h-[200px] overflow-y-auto py-1">
+                          {timeOptions.map((timeOption) => (
+                            <SelectItem key={timeOption} value={timeOption}>
+                              {timeOption}
+                            </SelectItem>
+                          ))}
+                        </div>
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="border-t mt-3 pt-3">
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-primary">

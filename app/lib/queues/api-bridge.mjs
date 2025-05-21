@@ -38,6 +38,109 @@ export async function connectToDatabase() {
   }
 }
 
+// Constants for video handling
+const MAX_VIDEO_SIZE_BYTES = 100000000; // 100MB
+
+/**
+ * Upload a video to Bluesky - Simplified version for worker
+ * @param {BskyAgent} agent - Authenticated Bluesky agent
+ * @param {string} videoUrl - URL to the video file
+ * @param {object} mediaItem - Metadata about the video
+ * @param {File|null} thumbnail - Thumbnail image for the video
+ * @returns {Promise<object>} Result of the upload operation
+ */
+async function uploadVideo(agent, videoUrl, mediaItem) {
+  console.log(
+    `Worker: Uploading video ${mediaItem.originalName}, type: ${
+      mediaItem.type || "unknown"
+    }`
+  );
+
+  try {
+    // Fetch the video file from the URL
+    console.log(
+      `Worker: Fetching video file from URL: ${
+        videoUrl
+          ? videoUrl.substring(0, 60) + "..."
+          : "No URL, using file directly"
+      }`
+    );
+
+    let videoBytes;
+
+    try {
+      if (videoUrl) {
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+          throw new Error(
+            `Fetch failed: ${response.status} - ${response.statusText}`
+          );
+        }
+
+        const contentType = response.headers.get("content-type");
+        console.log(`Worker: Video content-type from server: ${contentType}`);
+
+        // Save content-type for later use
+        mediaItem.serverContentType = contentType;
+
+        videoBytes = await response.arrayBuffer();
+        console.log(
+          `Worker: Fetched ${videoBytes.byteLength} bytes for video ${mediaItem.originalName}`
+        );
+      } else {
+        throw new Error("No video URL provided");
+      }
+    } catch (fetchError) {
+      console.error(`Worker: Error fetching video: ${fetchError.message}`);
+      throw fetchError;
+    }
+
+    // Validate video size
+    if (videoBytes.byteLength > MAX_VIDEO_SIZE_BYTES) {
+      console.error(
+        `Worker: Video exceeds size limit (${videoBytes.byteLength} > ${MAX_VIDEO_SIZE_BYTES})`
+      );
+      return {
+        success: false,
+        error: `Video exceeds Bluesky's ${
+          MAX_VIDEO_SIZE_BYTES / 1000000
+        }MB size limit`,
+      };
+    }
+
+    // Use the agent's XRPC client to call the endpoint directly
+    const finalMediaType =
+      mediaItem.type || mediaItem.serverContentType || "video/mp4";
+    console.log(`Worker: Uploading blob with MIME type: ${finalMediaType}`);
+
+    const uploadResponse = await agent.api.com.atproto.repo.uploadBlob(
+      new Uint8Array(videoBytes),
+      { encoding: finalMediaType }
+    );
+
+    console.log("Worker: Upload blob successful:", {
+      success: !!uploadResponse,
+      hasBlob: !!uploadResponse?.data?.blob,
+      blobRef: uploadResponse?.data?.blob?.ref || "missing",
+      blobSize: uploadResponse?.data?.blob?.size || 0,
+      blobType: uploadResponse?.data?.blob?.mimeType || "unknown",
+    });
+
+    // Return the upload result
+    return {
+      success: true,
+      blob: uploadResponse.data.blob,
+      originalSize: videoBytes.byteLength,
+    };
+  } catch (error) {
+    console.error(`Worker: Video upload error: ${error.message}`);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
 // Simple BlueSky posting implementation that doesn't rely on importing the whole service
 async function postToBlueSky(account, postData) {
   console.log("Worker: Posting directly to BlueSky");
@@ -138,6 +241,8 @@ async function postToBlueSky(account, postData) {
 
     // Process media if present
     const images = [];
+    let videoEmbed = null;
+
     if (postData.media && postData.media.length > 0) {
       console.log(
         "Worker: Processing media for BlueSky post:",
@@ -146,6 +251,7 @@ async function postToBlueSky(account, postData) {
       );
 
       for (const mediaItem of postData.media) {
+        // Check if it's an image
         if (
           mediaItem.type === "image" ||
           (mediaItem.type && mediaItem.type.startsWith("image/"))
@@ -176,8 +282,56 @@ async function postToBlueSky(account, postData) {
           } catch (uploadError) {
             console.error("Worker: Image upload error:", uploadError.message);
           }
+        }
+        // Check if it's a video - only process one video per post
+        else if (
+          (mediaItem.type &&
+            (mediaItem.type.startsWith("video/") ||
+              mediaItem.type.includes("video") ||
+              mediaItem.type === "video/quicktime" ||
+              mediaItem.type === "video/mp4")) ||
+          (mediaItem.originalName &&
+            (mediaItem.originalName.toLowerCase().endsWith(".mp4") ||
+              mediaItem.originalName.toLowerCase().endsWith(".mov") ||
+              mediaItem.originalName.toLowerCase().endsWith(".webm")))
+        ) {
+          // Only process one video per post
+          if (videoEmbed) {
+            console.log(
+              "Worker: Skipping additional video, only one allowed per post"
+            );
+            continue;
+          }
+
+          console.log("Worker: Processing video upload for BlueSky");
+          try {
+            const videoResult = await uploadVideo(
+              agent,
+              mediaItem.url,
+              mediaItem
+            );
+
+            if (videoResult.success && videoResult.blob) {
+              console.log("Worker: Video upload successful, creating embed");
+
+              videoEmbed = {
+                $type: "app.bsky.embed.video",
+                video: videoResult.blob,
+                alt: mediaItem.altText || mediaItem.originalName || "Video",
+              };
+
+              console.log("Worker: Video embed created successfully");
+            } else {
+              throw new Error(videoResult.error || "Video upload failed");
+            }
+          } catch (videoError) {
+            console.error(`Worker: Video upload error: ${videoError.message}`);
+          }
         } else {
-          console.log("Worker: Skipping non-image media:", mediaItem.type);
+          console.log(
+            "Worker: Skipping unsupported media type:",
+            mediaItem.type
+          );
         }
       }
     }
@@ -188,12 +342,16 @@ async function postToBlueSky(account, postData) {
       createdAt: new Date().toISOString(),
     };
 
-    // Add media if we have any
-    if (images.length > 0) {
+    // Add media embeds if we have any
+    if (images.length > 0 && !videoEmbed) {
+      // If we only have images and no video
       record.embed = {
         $type: "app.bsky.embed.images",
         images: images,
       };
+    } else if (videoEmbed) {
+      // If we have a video, use that as the embed
+      record.embed = videoEmbed;
     }
 
     console.log(
@@ -201,7 +359,9 @@ async function postToBlueSky(account, postData) {
       JSON.stringify({
         text: record.text,
         hasEmbed: !!record.embed,
+        embedType: record.embed?.$type || "none",
         imageCount: images.length,
+        hasVideo: !!videoEmbed,
       })
     );
 

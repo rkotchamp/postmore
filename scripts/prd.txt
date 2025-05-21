@@ -1,0 +1,150 @@
+# PostMore Social Scheduler App – Product Requirements Document (PRD)
+
+## 1. Overview
+
+**PostMore** is a Next.js-based SaaS platform that allows users to schedule and publish posts (images/videos/captions) across multiple social media platforms including Facebook, Instagram, YouTube Shorts, TikTok, LinkedIn, and X (Twitter). Users can connect multiple accounts from the same or different platforms, schedule content using a calendar interface, and manage posts using an intuitive dashboard.
+
+---
+
+## 2. Goals
+
+* Allow users to schedule and publish content to multiple social platforms.
+* Support for multiple accounts per platform.
+* Centralized media upload and content planning.
+* Robust job queue for scheduled posts.
+* Notifications for success/failure of posts.
+* Scalable architecture to support growth and future integrations.
+
+---
+
+## 3. Key Features
+
+### 3.1 Multi-Platform Support
+
+* Platforms supported in v1:
+
+  * Facebook
+  * Instagram
+  * YouTube Shorts
+  * LinkedIn
+  * TikTok
+  * X (Twitter)
+
+### 3.2 Account Integration
+
+* Use OAuth2 to securely connect social media accounts.
+* Support multiple accounts per platform per user.
+* Token storage in encrypted form using MongoDB.
+
+### 3.3 Media Management
+
+* Users can upload images and videos.
+* Media stored in Firebase Storage.
+* Acceptable formats:
+
+  * Images: JPG, PNG, WEBP
+  * Videos: MP4 (under 200MB)
+
+### 3.4 Scheduling
+
+* Calendar-based scheduler (drag-and-drop optional for v2).
+* Posts can be scheduled to specific date and time.
+* Backend scheduling powered by BullMQ + Redis.
+* Each scheduled job includes:
+
+  * User ID
+  * Platform handler reference
+  * Access token
+  * Media URL(s)
+  * Caption/text
+  * Post time (UTC)
+
+### 3.5 Posting Flow
+
+* Post creation flow:
+
+  1. User uploads media or writes a text.
+  2. User selects platform accounts .
+  3. user adds captions&#x20;
+  4. User selects post time (now or scheduled).
+  5. Post is queued if scheduled, or immediately sent to the platform handler.
+  6. Worker picks scheduled job and sends to API.
+  7. Success/failure is logged and user notified.
+
+### 3.6 Centralized API Management
+
+* Central `postManager` module to route all post requests.
+* Platform-specific handlers (e.g., `facebookHandler`, `instagramHandler`) abstracted to keep logic modular.
+* Handlers implement shared interface with:
+
+  * `postNow(postData)`
+  * `schedulePost(postData)`
+  * `refreshToken(accountId)`
+
+### 3.7 Error Handling & Notifications
+
+* Errors from API responses are logged in MongoDB (`PostLogs` collection).
+* Users notified via in-app toast and dashboard status.
+* Retry mechanism (up to 3 attempts) for temporary failures (like token expiration).
+
+### 3.8 Dashboard & UI Components
+
+* 3-panel layout:
+
+  * Left: Calendar or Post Queue
+  * Middle: Platform & account selector
+  * Right: Post editor & preview
+* History of past posts with status icons (Success, Failed, Queued).
+* Filter/sort by platform, account, status, or time range.
+
+---
+
+## 4. Technical Architecture
+
+### 4.1 Frontend
+
+* **Framework**: Next.js (App Router)
+* **Styling**: Tailwind CSS + ShadCN UI
+* **State Management**: useState/useContext for local, React Query for remote
+
+### 4.2 Backend
+
+* **API Routes** (Next.js)
+* **Database**: MongoDB (Mongoose)
+
+  * Users
+  * Accounts (linked to Users)
+  * Posts
+  * PostLogs
+* **Redis** for BullMQ scheduling and job queue management
+
+### 4.3 Auth
+
+* **NextAuth.js**
+
+  * Providers: Google, Facebook (optionally), Email/Password
+  * OAuth tokens stored securely per platform
+
+### 4.4 Media Storage
+
+* Firebase Storage:
+
+  * Media uploaded with UUID-based naming
+  * Public access for media URLs required by some platforms
+
+---
+
+## 5. Data Models
+
+### 5.1 User
+
+```json
+{
+  _id: ObjectId,
+  name: String,
+  email: String,
+  password: String (hashed),
+  createdAt: Date,
+  updatedAt: Date
+}
+```

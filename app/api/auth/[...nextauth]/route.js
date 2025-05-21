@@ -73,22 +73,16 @@ export const authOptions = {
         return true; // Allow credential login
       }
 
-      console.log(
-        `${account.provider} signIn callback running with profile:`,
-        profile?.email || profile?.login
-      );
-
       try {
         await connectToMongoose();
 
         // Check if user already exists
         const email = profile.email || `${profile.login}@github.com`;
         const existingUser = await User.findOne({ email: email });
-        console.log("Existing user:", existingUser ? "Found" : "Not found");
 
         if (!existingUser) {
           // Create a new user
-          console.log(`Creating new user with ${account.provider}`);
+
           const newUser = new User({
             name: profile.name || profile.login,
             email: email,
@@ -105,7 +99,6 @@ export const authOptions = {
           }
 
           await newUser.save();
-          console.log("New user created successfully");
         } else {
           // Update existing user with the provider ID if not already set
           let needsUpdate = false;
@@ -119,11 +112,9 @@ export const authOptions = {
           }
 
           if (needsUpdate) {
-            console.log(`Updating existing user with ${account.provider} ID`);
             existingUser.image =
               existingUser.image || profile.picture || profile.avatar_url;
             await existingUser.save();
-            console.log("User updated successfully");
           }
         }
 
@@ -134,51 +125,23 @@ export const authOptions = {
       }
     },
     async session({ session, token }) {
-      console.log(
-        "[NextAuth Callback - session] Received token:",
-        JSON.stringify(token, null, 2)
-      );
       // Add user ID to session
       if (token.id) {
         session.user.id = token.id;
-        console.log(
-          "[NextAuth Callback - session] Added user.id to session:",
-          session.user.id
-        );
       } else {
-        console.log(
-          "[NextAuth Callback - session] token.id was not found in the token."
-        );
       }
-      console.log(
-        "[NextAuth Callback - session] Returning session:",
-        JSON.stringify(session, null, 2)
-      );
+
       return session;
     },
     async jwt({ token, user }) {
-      console.log(
-        "[NextAuth Callback - jwt] Received user object (on sign-in only):",
-        JSON.stringify(user, null, 2)
-      );
       if (user) {
         token.id = user.id;
-        console.log("[NextAuth Callback - jwt] Added id to token:", token.id);
       } else {
-        console.log(
-          "[NextAuth Callback - jwt] User object not present (subsequent calls), token.id should persist if set:",
-          token.id
-        );
       }
-      console.log(
-        "[NextAuth Callback - jwt] Returning token:",
-        JSON.stringify(token, null, 2)
-      );
+
       return token;
     },
     async redirect({ url, baseUrl }) {
-      console.log("NextAuth redirect called with:", { url, baseUrl });
-
       // After sign-in with either provider, redirect to dashboard
       if (url.includes("/api/auth/callback/")) {
         return `${baseUrl}/dashboard`;

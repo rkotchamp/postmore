@@ -23,13 +23,10 @@ if (!cached) {
  */
 export async function connectToMongoose() {
   if (cached.conn) {
-    console.log("Using existing mongoose connection");
     return cached.conn;
   }
 
   if (!cached.promise) {
-    console.log("Creating new mongoose connection to:", MONGODB_URI);
-
     const opts = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
