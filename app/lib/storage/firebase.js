@@ -29,8 +29,11 @@ export const uploadFile = async (file, folder, customFileName = null) => {
       : `${uuid}.${fileExtension}`;
 
     // Set the storage path - organize by folder and file type
+    // Check if folder already includes the file type to avoid paths like "posts/video/video"
     const fileType = file.type.split("/")[0]; // 'image', 'video', etc.
-    const storagePath = `${folder}/${fileType}/${fileName}`;
+    const storagePath = folder.includes(fileType)
+      ? `${folder}/${fileName}`
+      : `${folder}/${fileType}/${fileName}`;
 
     // Create a storage reference
     const storageRef = ref(storage, storagePath);
@@ -106,6 +109,32 @@ export const uploadPostMedia = async (mediaFiles, postId = null) => {
     return uploadedFiles;
   } catch (error) {
     console.error("Error uploading post media:", error);
+    throw error;
+  }
+};
+
+/**
+ * Upload video thumbnail
+ * @param {File} thumbnailFile - The thumbnail image file
+ * @param {string} videoId - ID of the video this thumbnail belongs to
+ * @returns {Promise<object>} - Thumbnail metadata including download URL
+ */
+export const uploadVideoThumbnail = async (thumbnailFile, videoId) => {
+  try {
+    // Validate that it's an image
+    if (!thumbnailFile.type.startsWith("image/")) {
+      throw new Error("Thumbnail must be an image file");
+    }
+
+    // Use path: posts/video/thumbnail/{videoId}
+    const folder = `posts/video/thumbnail`;
+
+    // Use videoId as part of filename for easy reference
+    const customFileName = `thumb_${videoId}`;
+
+    return await uploadFile(thumbnailFile, folder, customFileName);
+  } catch (error) {
+    console.error("Error uploading video thumbnail:", error);
     throw error;
   }
 };

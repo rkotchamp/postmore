@@ -20,6 +20,7 @@ import { useUIStateStore } from "@/app/lib/store/uiStateStore";
 import { usePostStore } from "@/app/lib/store/postStore";
 import { toast } from "sonner";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
+import { useRouter } from "next/navigation";
 
 // Steps for post creation process
 const steps = [
@@ -42,6 +43,7 @@ const MemoizedTextPreview = memo(() => <TextPreview />);
 
 export function DashboardContent() {
   // Test toast function
+  const router = useRouter();
 
   // --- UI Zustand State ---
   const currentStep = useUIStateStore((state) => state.currentStep);
@@ -242,6 +244,9 @@ export function DashboardContent() {
 
   // New function to handle the actual post submission after media is ready
   const submitPost = (mediaItems) => {
+    // Get all thumbnails from postStore for videos
+    const thumbnails = usePostStore.getState().thumbnails;
+
     // We need to include the original file objects for BlueSky videos
     // so our API can handle the direct upload without Firebase URLs
     const processedMediaItems = mediaItems.map((item) => {
@@ -251,6 +256,36 @@ export function DashboardContent() {
         item.type?.startsWith("video/") ||
         item.fileInfo?.type?.startsWith("video/") ||
         (item.file && item.file.type?.startsWith("video/"));
+
+      // If this is a video, check if we have a thumbnail for it
+      let thumbnailData = null;
+      if (isVideo) {
+        // Create a videoId from the item (use existing id or generate from filename)
+        const videoId =
+          item.id ||
+          `video-${item.file?.name.replace(/\.[^/.]+$/, "")}` ||
+          `video-${Math.random().toString(36).slice(2, 11)}`;
+
+        // Check if we have a thumbnail for this video in postStore
+        const thumbnailFile = thumbnails[videoId];
+
+        // If we found a thumbnail, upload it to Firebase
+        if (thumbnailFile) {
+          // Upload thumbnail immediately and capture promise
+          const uploadThumbnailPromise = import(
+            "@/app/lib/storage/firebase"
+          ).then(({ uploadVideoThumbnail }) => {
+            return uploadVideoThumbnail(thumbnailFile, videoId);
+          });
+
+          // Store promise for later resolution
+          thumbnailData = {
+            file: thumbnailFile,
+            videoId: videoId,
+            uploadPromise: uploadThumbnailPromise,
+          };
+        }
+      }
 
       return {
         ...item,
@@ -262,87 +297,147 @@ export function DashboardContent() {
           item.originalName || item.file?.name || item.fileInfo?.name || "",
         // Add a flag to help the API know this is a video that needs special BlueSky handling
         isDirectUploadVideo: isVideo,
+        // Add thumbnail data for later processing
+        _thumbnailData: thumbnailData,
       };
     });
 
-    const submissionData = {
-      contentType: postType,
-      text: postType === "text" ? textPostContent : "",
-      media:
-        postType === "media"
-          ? processedMediaItems.length > 0
-            ? processedMediaItems
-            : sessionMediaItems
-          : [],
-      accounts: selectedAccounts,
-      captions: {
-        mode: captionMode,
-        single: singleCaption,
-        multipleCaptions: multiCaptions,
-      },
-      schedule: {
-        type: scheduleType,
-        at: scheduledAt,
-      },
-    };
+    // Collect all thumbnail upload promises
+    const thumbnailPromises = processedMediaItems
+      .filter(
+        (item) => item._thumbnailData && item._thumbnailData.uploadPromise
+      )
+      .map((item) => item._thumbnailData.uploadPromise);
 
-    console.log("Submitting post with prepared media:", {
-      ...submissionData,
-      media: submissionData.media.map((item) => ({
-        type: item.type,
-        url: item.url ? `${item.url.substring(0, 30)}...` : "none",
-        hasFile: !!item.fileObject,
-        isVideo: item.isDirectUploadVideo,
-        originalName: item.originalName,
-      })),
-    });
+    // Wait for all thumbnail uploads to complete before continuing
+    Promise.all(thumbnailPromises)
+      .then((thumbnailResults) => {
+        // Process each media item to include its thumbnail URL if available
+        const finalMediaItems = processedMediaItems.map((item) => {
+          // Remove the temporary thumbnail data property
+          const { _thumbnailData, ...cleanItem } = item;
 
-    // Send the data to our API endpoint
-    fetch("/api/posts/submit", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(submissionData),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then((data) => {
-        // Show success toast/notification
-        toast.success(
-          `Post ${
-            scheduleType === "scheduled" ? "scheduled" : "published"
-          } successfully!`,
-          {
-            description:
-              scheduleType === "scheduled"
-                ? `Your post will be published at ${new Date(
-                    scheduledAt
-                  ).toLocaleString()}`
-                : "Your post has been published to the selected platforms.",
+          // If this item had a thumbnail, find its upload result
+          if (_thumbnailData) {
+            const thumbnailResult = thumbnailResults.find(
+              (result) =>
+                result && result.originalName === _thumbnailData.file.name
+            );
+
+            // If thumbnail was uploaded successfully, add its URL to the item
+            if (thumbnailResult) {
+              return {
+                ...cleanItem,
+                thumbnail: thumbnailResult.url,
+              };
+            }
           }
-        );
 
-        // --- Reset States --- //
-        // Reset core post configuration
-        resetPostConfig();
-        // Reset UI state (step, temporary text, etc.)
-        resetUIState();
+          // Return the item without thumbnail
+          return cleanItem;
+        });
 
-        // Clear media from server/cache if it was a media post
-        if (postType === "media" && hasSessionMedia) {
-          clearMedia.mutate();
-        }
+        const submissionData = {
+          contentType: postType,
+          text: postType === "text" ? textPostContent : "",
+          media:
+            postType === "media"
+              ? finalMediaItems.length > 0
+                ? finalMediaItems
+                : sessionMediaItems
+              : [],
+          accounts: selectedAccounts,
+          captions: {
+            mode: captionMode,
+            single: singleCaption,
+            multipleCaptions: multiCaptions,
+          },
+          schedule: {
+            type: scheduleType,
+            at: scheduledAt,
+          },
+        };
 
-        // Clear text from server/cache if it was a text post
-        if (postType === "text") {
-          updateTextContent.mutate("");
-        }
-        // ------------------- //
+        console.log("Submitting post with prepared media:", {
+          ...submissionData,
+          media: submissionData.media.map((item) => ({
+            type: item.type,
+            url: item.url ? `${item.url.substring(0, 30)}...` : "none",
+            hasFile: !!item.fileObject,
+            isVideo: item.isDirectUploadVideo,
+            thumbnail: item.thumbnail ? "Yes" : "No",
+            originalName: item.originalName,
+          })),
+        });
+
+        // Send the data to our API endpoint
+        fetch("/api/posts/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(submissionData),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`API error: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then((data) => {
+            // Show success toast/notification
+            toast.success(
+              `Post ${
+                scheduleType === "scheduled" ? "scheduled" : "published"
+              } successfully!`,
+              {
+                description:
+                  scheduleType === "scheduled"
+                    ? `Your post will be published at ${new Date(
+                        scheduledAt
+                      ).toLocaleString()}`
+                    : "Your post has been published to the selected platforms.",
+              }
+            );
+
+            // First navigate to scheduled-posts page
+            router.push("/scheduled-posts");
+
+            // Then reset states after a slight delay to ensure navigation has started
+            setTimeout(() => {
+              // --- Reset States --- //
+              // Reset core post configuration
+              resetPostConfig();
+              // Reset UI state (step, temporary text, etc.)
+              resetUIState();
+
+              // Clear media from server/cache if it was a media post
+              if (postType === "media" && hasSessionMedia) {
+                clearMedia.mutate();
+              }
+
+              // Clear text from server/cache if it was a text post
+              if (postType === "text") {
+                updateTextContent.mutate("");
+              }
+              // ------------------- //
+            }, 100);
+          })
+          .catch((error) => {
+            console.error("Error submitting post:", error);
+
+            // Show a more detailed error toast for debugging
+            toast.error("Failed to submit post", {
+              description: `Error: ${error.message || "Unknown error"}. ${
+                error.stack ? "Check console for details." : ""
+              }`,
+              duration: 5000,
+            });
+          })
+          .finally(() => {
+            // Hide loading state
+            useUIStateStore.getState().setIsSubmitting(false);
+          });
       })
       .catch((error) => {
         console.error("Error submitting post:", error);

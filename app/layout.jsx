@@ -5,6 +5,7 @@ import { AuthProvider } from "@/app/providers/AuthProvider";
 import { Toaster } from "@/app/components/ui/sonner";
 import { QueryProvider } from "@/app/providers/QueryProvider";
 import { FetchAllAccountsProvider } from "@/app/context/FetchAllAccountsContext";
+import { PostProvider } from "@/app/context/FetchPostContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -26,8 +27,10 @@ export default function RootLayout({ children }) {
               disableTransitionOnChange
             >
               <FetchAllAccountsProvider>
-                {children}
-                <Toaster />
+                <PostProvider>
+                  {children}
+                  <Toaster />
+                </PostProvider>
               </FetchAllAccountsProvider>
             </ThemeProvider>
           </AuthProvider>

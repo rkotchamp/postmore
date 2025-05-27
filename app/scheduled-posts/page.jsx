@@ -2,137 +2,15 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import { Post } from "@/app/components/posts/Posts";
 import { CalendarDays, ChevronRight, X } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
-
-// Dummy data with scheduled dates for grouping
-const scheduledPosts = [
-  {
-    id: "post1",
-    media: "/images/post1.jpg",
-    caption:
-      "Excited to announce our new product launch! Stay tuned for more updates coming soon. #newproduct #launch #exciting",
-    scheduledTime: "10:30 AM",
-    scheduledDate: "Aug 15, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "facebook",
-      },
-      {
-        id: "acc2",
-        name: "Marketing",
-        avatar: "/avatars/marketing.jpg",
-        platform: "instagram",
-      },
-    ],
-  },
-  {
-    id: "post2",
-    media: null,
-    caption:
-      "Join our webinar next week to learn all about digital marketing strategies in 2023!",
-    scheduledTime: "2:00 PM",
-    scheduledDate: "Aug 25, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "linkedin",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "twitter",
-      },
-    ],
-  },
-  {
-    id: "post3",
-    media: "/images/post3.jpg",
-    caption:
-      "Check out our latest case study on how we helped XYZ company increase their social media engagement by 200%!",
-    scheduledTime: "3:15 PM",
-    scheduledDate: "Sep 5, 2023",
-    socialAccounts: [
-      {
-        id: "acc2",
-        name: "Marketing",
-        avatar: "/avatars/marketing.jpg",
-        platform: "instagram",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "facebook",
-      },
-    ],
-  },
-  {
-    id: "post4",
-    media: "/images/post4.jpg",
-    caption:
-      "Our Black Friday sale is just around the corner! Get ready for amazing deals across our entire product line.",
-    scheduledTime: "9:00 AM",
-    scheduledDate: "Sep 12, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "facebook",
-      },
-      {
-        id: "acc2",
-        name: "Marketing",
-        avatar: "/avatars/marketing.jpg",
-        platform: "instagram",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "twitter",
-      },
-      {
-        id: "acc4",
-        name: "Sales",
-        avatar: "/avatars/sales.jpg",
-        platform: "linkedin",
-      },
-    ],
-  },
-  {
-    id: "post5",
-    media: "/images/post5.jpg",
-    caption:
-      "Happy holidays from our team to yours! We're taking a short break, but we'll be back in the new year with exciting updates.",
-    scheduledTime: "12:00 PM",
-    scheduledDate: "Oct 10, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "instagram",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "linkedin",
-      },
-    ],
-  },
-];
+import { usePostContext } from "@/app/context/FetchPostContext";
+import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
+import { Skeleton } from "@/app/components/ui/skeleton";
 
 // Group posts by month and year
 const groupPostsByDate = (posts) => {
@@ -169,7 +47,7 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="bg-background rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+      className="bg-background rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden w-full"
     >
       <div
         className="grid grid-cols-2 gap-0.5 bg-muted/30"
@@ -186,17 +64,17 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <CalendarDays className="h-6 w-6 text-muted-foreground/30" />
+                <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground/30" />
               </div>
             )}
           </div>
         ))}
       </div>
 
-      <div className="p-3">
+      <div className="p-2 sm:p-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm">{monthYear}</h3>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-xs sm:text-sm">{monthYear}</h3>
+          <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           {posts.length} {posts.length === 1 ? "post" : "posts"}
@@ -208,7 +86,56 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
 
 export default function ScheduledPosts() {
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const groupedPosts = groupPostsByDate(scheduledPosts);
+  const {
+    scheduledPosts,
+    isLoading: postsLoading,
+    error: postsError,
+    refetch: refreshPosts,
+  } = usePostContext();
+  const {
+    accounts,
+    isLoading: accountsLoading,
+    error: accountsError,
+  } = useFetchAllAccountsContext();
+
+  const isLoading = postsLoading || accountsLoading;
+  const error = postsError || accountsError;
+
+  // Enhance posts with complete account data
+  const enhancedPosts = scheduledPosts.map((post) => {
+    // Map account references to full account objects
+    const enhancedAccounts = post.socialAccounts.map((accountRef) => {
+      // Try to find the full account info from the accounts context
+      const fullAccount = accounts.find((acc) => acc._id === accountRef.id);
+
+      // If we found a match, enhance the account data
+      if (fullAccount) {
+        return {
+          ...accountRef,
+          // Override with more accurate data from the full account
+          avatar:
+            fullAccount.profileImage ||
+            fullAccount.metadata?.profileImage ||
+            accountRef.avatar,
+          name:
+            fullAccount.platformUsername ||
+            fullAccount.displayName ||
+            accountRef.name,
+          platform: fullAccount.platform || accountRef.platform,
+        };
+      }
+
+      // If no match found, return the original reference
+      return accountRef;
+    });
+
+    return {
+      ...post,
+      socialAccounts: enhancedAccounts,
+    };
+  });
+
+  const groupedPosts = groupPostsByDate(enhancedPosts);
 
   const handleSelectMonth = (monthYear) => {
     setSelectedMonth(monthYear);
@@ -218,27 +145,91 @@ export default function ScheduledPosts() {
     setSelectedMonth(null);
   };
 
+  // If loading, show skeleton UI
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="p-3 sm:p-4 md:p-6">
+          <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
+            Scheduled Posts
+          </h1>
+          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {/* Generate multiple skeleton cards */}
+            {Array(8)
+              .fill(0)
+              .map((_, index) => (
+                <div
+                  key={index}
+                  className="bg-background rounded-lg border shadow-sm overflow-hidden"
+                >
+                  {/* Skeleton image grid */}
+                  <div
+                    className="grid grid-cols-2 gap-0.5"
+                    style={{ aspectRatio: "4/3" }}
+                  >
+                    {Array(4)
+                      .fill(0)
+                      .map((_, i) => (
+                        <Skeleton key={i} className="w-full h-full" />
+                      ))}
+                  </div>
+
+                  {/* Skeleton text content */}
+                  <div className="p-2 sm:p-3">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 sm:h-5 w-20 sm:w-24" />
+                      <Skeleton className="h-3 sm:h-4 w-3 sm:w-4 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-14 sm:w-16 mt-2" />
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // If error, show error message
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="p-3 sm:p-4 md:p-6">
+          <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
+            Scheduled Posts
+          </h1>
+          <div className="flex flex-col items-center justify-center h-60">
+            <p className="text-red-500 mb-4 text-center px-4">
+              Failed to load your scheduled posts
+            </p>
+            <Button onClick={refreshPosts}>Try Again</Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   // If a month is selected, show the posts for that month
   if (selectedMonth) {
     const postsForMonth = groupedPosts[selectedMonth] || [];
 
     return (
       <DashboardLayout>
-        <div className="p-6">
-          <div className="flex items-center gap-4 mb-6">
+        <div className="p-3 sm:p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4 sm:mb-6">
             <Button
               variant="ghost"
               size="sm"
               onClick={handleBack}
-              className="flex items-center gap-1"
+              className="flex items-center gap-1 w-fit"
             >
               <X className="h-4 w-4" />
               <span>Back</span>
             </Button>
-            <h1 className="text-2xl font-bold">{selectedMonth}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">{selectedMonth}</h1>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {postsForMonth.map((post) => (
               <Post key={post.id} post={post} />
             ))}
@@ -251,10 +242,12 @@ export default function ScheduledPosts() {
   // Otherwise show the month groups
   return (
     <DashboardLayout>
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">Scheduled Posts</h1>
+      <div className="p-3 sm:p-4 md:p-6">
+        <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
+          Scheduled Posts
+        </h1>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
           {Object.entries(groupedPosts).map(([monthYear, posts]) => (
             <MonthPostGroup
               key={monthYear}
@@ -266,13 +259,13 @@ export default function ScheduledPosts() {
         </div>
 
         {Object.keys(groupedPosts).length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <p className="text-muted-foreground text-center mb-4">
+          <div className="flex flex-col items-center justify-center py-8 sm:py-12">
+            <p className="text-muted-foreground text-center mb-4 px-4">
               You don't have any scheduled posts yet.
             </p>
-            <p className="text-muted-foreground text-center">
-              Create a new post to get started!
-            </p>
+            <Link href="/dashboard">
+              <Button className="mt-2">Create a post</Button>
+            </Link>
           </div>
         )}
       </div>

@@ -18,8 +18,14 @@ import { usePostStore } from "@/app/lib/store/postStore";
  * @param {File|string} props.file - The File object or URL string
  * @param {string} props.id - Unique ID for the video
  * @param {boolean} props.controls - Whether to show player controls
+ * @param {string} props.externalThumbnail - Optional external thumbnail URL (e.g. from Firebase storage)
  */
-export function NextVideoPlayer({ file, id, controls = true }) {
+export function NextVideoPlayer({
+  file,
+  id,
+  controls = true,
+  externalThumbnail = null,
+}) {
   const [videoSource, setVideoSource] = useState(null);
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +74,13 @@ export function NextVideoPlayer({ file, id, controls = true }) {
   useEffect(() => {
     let url = null;
 
+    // First check if we have an external thumbnail URL
+    if (externalThumbnail) {
+      setThumbnailUrl(externalThumbnail);
+      return;
+    }
+
+    // Otherwise check for a thumbnail in postStore
     if (id) {
       const thumbnailFile = getVideoThumbnail(id);
 
@@ -94,7 +107,7 @@ export function NextVideoPlayer({ file, id, controls = true }) {
         URL.revokeObjectURL(url);
       }
     };
-  }, [id, getVideoThumbnail]);
+  }, [id, getVideoThumbnail, externalThumbnail, thumbnailUrl]);
 
   if (error) {
     return (

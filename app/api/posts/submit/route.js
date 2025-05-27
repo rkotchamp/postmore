@@ -197,6 +197,7 @@ export async function POST(request) {
             id: item.id || new mongoose.Types.ObjectId().toString(), // Ensure ID exists
             type: getSchemaMediaType(item.type), // Map to schema enum type
             url: item.url, // Ensure URL is present
+            thumbnail: item.thumbnail || null, // Add thumbnail URL for videos
           }))
         : [],
       accounts: accounts.map((account) => ({

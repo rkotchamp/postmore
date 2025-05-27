@@ -32,9 +32,18 @@ const ALLOWED_VIDEO_FORMATS = [
  */
 const archiveToFirebase = async (videoBytes, mediaItem, mediaType) => {
   try {
-    console.log(
-      `BlueSky: Archiving video to Firebase: ${mediaItem.originalName}`
-    );
+    // If the media item already has a Firebase URL from the dashboard upload, use it
+    if (mediaItem.url) {
+      return {
+        success: true,
+        url: mediaItem.url,
+        type: mediaItem.type || mediaType,
+        size: mediaItem.size || (videoBytes ? videoBytes.byteLength : 0),
+        originalName: mediaItem.originalName,
+      };
+    }
+
+    // Original upload code as fallback (should rarely get here)
 
     // Create a File object from the ArrayBuffer
     const videoFile = new File(
@@ -45,7 +54,7 @@ const archiveToFirebase = async (videoBytes, mediaItem, mediaType) => {
 
     // Upload to Firebase
     const result = await uploadFile(videoFile, "posts/videos");
-    console.log(`BlueSky: Successfully archived to Firebase:`, result.url);
+
     return result;
   } catch (error) {
     console.error(`BlueSky: Firebase archiving failed: ${error.message}`);
@@ -72,21 +81,12 @@ const archiveToFirebase = async (videoBytes, mediaItem, mediaType) => {
  * @returns {Promise<object>} Result of the upload operation
  */
 const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
-  console.log(
-    `BlueSky: Uploading video ${mediaItem.originalName}, type: ${
-      mediaItem.type || "unknown"
-    }`
-  );
-
   let thumbBlob = null;
 
   try {
     // First, if we have a thumbnail, upload it separately before doing anything else
     if (thumbnail instanceof File && thumbnail.type.startsWith("image/")) {
       try {
-        console.log(
-          `BlueSky: Uploading thumbnail for video ${mediaItem.originalName}`
-        );
         const thumbResponse = await fetch(URL.createObjectURL(thumbnail));
         const thumbBytes = await thumbResponse.arrayBuffer();
 
@@ -97,7 +97,6 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
         );
 
         if (thumbUploadResult.success) {
-          console.log(`BlueSky: Thumbnail upload successful`);
           // Save the thumbnail blob for later use
           thumbBlob = thumbUploadResult.data.blob;
           // Ensure proper blob structure and force image MIME type
@@ -117,13 +116,9 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
         // Continue with video upload even if thumbnail fails
       }
     } else if (thumbnail) {
-      console.log(`BlueSky: Thumbnail provided but not a valid image file`);
     }
 
     // 1. First check upload limits to see if the user can upload video
-    console.log(
-      `BlueSky: Checking video upload limits for ${mediaItem.originalName}`
-    );
 
     // Skip the getUploadLimits call which is causing XRPCNotSupported error
     // Try to proceed directly with the upload instead
@@ -132,17 +127,9 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
       // Only try this API call if it exists, otherwise skip it
       if (typeof agent.api.app.bsky.video.getUploadLimits === "function") {
         const limitsResponse = await agent.api.app.bsky.video.getUploadLimits();
-        console.log(`BlueSky: Upload limits response:`, {
-          canUpload: limitsResponse.data.canUpload,
-          remainingVideos: limitsResponse.data.remainingDailyVideos,
-          remainingBytes: limitsResponse.data.remainingDailyBytes,
-          message: limitsResponse.data.message || "N/A",
-        });
+
         canUpload = limitsResponse.data.canUpload;
       } else {
-        console.log(
-          `BlueSky: API does not support getUploadLimits, proceeding anyway`
-        );
       }
     } catch (limitsError) {
       console.warn(
@@ -161,13 +148,6 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
     }
 
     // 2. Fetch the video file from the URL
-    console.log(
-      `BlueSky: Fetching video file from URL: ${
-        videoUrl
-          ? videoUrl.substring(0, 60) + "..."
-          : "No URL, using file directly"
-      }`
-    );
 
     let videoBytes;
 
@@ -182,11 +162,7 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
 
           // If we couldn't get the video from URL, check if we have a direct file object
           if (mediaItem.file) {
-            console.log(`BlueSky: Using provided file object instead of URL`);
             videoBytes = await mediaItem.file.arrayBuffer();
-            console.log(
-              `BlueSky: Successfully read ${videoBytes.byteLength} bytes from file object`
-            );
           } else {
             throw new Error(
               `Fetch failed: ${response.status} - ${response.statusText}`
@@ -194,26 +170,17 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
           }
         } else {
           const contentType = response.headers.get("content-type");
-          console.log(
-            `BlueSky: Video content-type from server: ${contentType}`
-          );
 
           // Save content-type for later use
           mediaItem.serverContentType = contentType;
 
           videoBytes = await response.arrayBuffer();
-          console.log(
-            `BlueSky: Fetched ${videoBytes.byteLength} bytes for video ${mediaItem.originalName}`
-          );
         }
       }
       // If no URL but we have a file, use it directly
       else if (mediaItem.file) {
         console.log(`BlueSky: No URL provided, using file object directly`);
         videoBytes = await mediaItem.file.arrayBuffer();
-        console.log(
-          `BlueSky: Successfully read ${videoBytes.byteLength} bytes from file object`
-        );
       } else {
         throw new Error("No video URL or file object provided");
       }
@@ -223,13 +190,7 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
       // Try using direct file as fallback if we have it
       if (mediaItem.file) {
         try {
-          console.log(
-            `BlueSky: Attempting to use file object directly as fallback`
-          );
           videoBytes = await mediaItem.file.arrayBuffer();
-          console.log(
-            `BlueSky: Successfully read ${videoBytes.byteLength} bytes from file object`
-          );
         } catch (fileError) {
           console.error(
             `BlueSky: Failed to read file object: ${fileError.message}`
@@ -249,7 +210,6 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
       (mediaItem.file && mediaItem.file.type) ||
       mediaItem.serverContentType ||
       "video/mp4";
-    console.log(`BlueSky: Using final media type: ${finalMediaType}`);
 
     // 3. Validate video size
     if (videoBytes.byteLength > MAX_VIDEO_SIZE_BYTES) {
@@ -265,27 +225,17 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
     }
 
     // 4. Upload the video using the video upload endpoint
-    console.log(
-      `BlueSky: Starting video upload of ${videoBytes.byteLength} bytes directly to BlueSky`
-    );
 
     // Create a blob from the array buffer
     const blob = new Uint8Array(videoBytes);
 
     // Upload the video using the app.bsky.video.uploadVideo endpoint
-    console.log(
-      `BlueSky: Starting video upload API call with ${videoBytes.byteLength} bytes, type: ${finalMediaType}`
-    );
 
     try {
       // This is a direct upload to BlueSky - not going through Firebase first
-      console.log(`BlueSky: Directly uploading to BlueSky's video API`);
 
       // Instead of using agent.api.app.bsky.video.uploadVideo, which may not be supported,
       // we'll use the raw XRPC call which maps directly to the documented endpoint
-      console.log(
-        `BlueSky: Using direct XRPC call to upload ${videoBytes.byteLength} bytes, type: ${finalMediaType}`
-      );
 
       let uploadResponse;
       try {
@@ -298,26 +248,13 @@ const uploadVideo = async (agent, videoUrl, mediaItem, thumbnail = null) => {
           uploadMimeType === "video/quicktime" ||
           uploadMimeType.includes("mov")
         ) {
-          console.log(
-            `BlueSky: Converting MIME type from ${uploadMimeType} to video/mp4 for better compatibility`
-          );
           uploadMimeType = "video/mp4";
         }
 
         // Use the agent's XRPC client to call the endpoint directly
-        console.log(
-          `BlueSky: Uploading blob with MIME type: ${uploadMimeType}`
-        );
+
         uploadResponse = await agent.api.com.atproto.repo.uploadBlob(blob, {
           encoding: uploadMimeType,
-        });
-
-        console.log("BlueSky: Upload blob successful:", {
-          success: !!uploadResponse,
-          hasBlob: !!uploadResponse?.data?.blob,
-          blobRef: uploadResponse?.data?.blob?.ref || "missing",
-          blobSize: uploadResponse?.data?.blob?.size || 0,
-          blobType: uploadResponse?.data?.blob?.mimeType || "unknown",
         });
 
         // Archive to Firebase as well for database consistency
@@ -381,8 +318,6 @@ const pollVideoJobStatus = async (
   jobId,
   timeoutMs = VIDEO_PROCESSING_TIMEOUT_MS
 ) => {
-  console.log(`BlueSky: Polling for video job status: ${jobId}`);
-
   const startTime = Date.now();
 
   // Poll with increasing intervals
@@ -391,11 +326,6 @@ const pollVideoJobStatus = async (
 
   while (Date.now() - startTime < timeoutMs) {
     try {
-      console.log(
-        `BlueSky: Checking job status for job ${jobId}, poll #${
-          intervalIndex + 1
-        }`
-      );
       const response = await agent.api.app.bsky.video.getJobStatus({ jobId });
 
       if (!response || !response.data || !response.data.jobStatus) {
@@ -408,23 +338,12 @@ const pollVideoJobStatus = async (
 
       const jobStatus = response.data.jobStatus;
 
-      console.log(
-        `BlueSky: Video job status: ${jobStatus.state}, progress: ${
-          jobStatus.progress || 0
-        }%, hasBlob: ${!!jobStatus.blob}`
-      );
-
       // Check if processing is complete
       if (jobStatus.state === "JOB_STATE_COMPLETED" && jobStatus.blob) {
         console.log(
           `BlueSky: Video processing completed successfully for job ${jobId}`
         );
-        console.log(`BlueSky: Blob details:`, {
-          hasRef: !!jobStatus.blob.ref,
-          link: jobStatus.blob.ref?.$link || "none",
-          size: jobStatus.blob.size || "unknown",
-          mimeType: jobStatus.blob.mimeType || "unknown",
-        });
+
         return jobStatus.blob;
       }
 
@@ -468,12 +387,6 @@ const pollVideoJobStatus = async (
  */
 const retryFirebaseUpload = async (videoData, metadata) => {
   try {
-    console.log(
-      `BlueSky: Retrying Firebase upload for video: ${
-        metadata.originalName || "unknown"
-      }`
-    );
-
     // Create a File object if needed
     let videoFile = videoData;
     if (!(videoData instanceof File)) {
@@ -485,7 +398,7 @@ const retryFirebaseUpload = async (videoData, metadata) => {
     }
 
     const result = await uploadFile(videoFile, "posts/videos");
-    console.log(`BlueSky: Retry upload to Firebase successful:`, result);
+
     return result;
   } catch (error) {
     console.error(`BlueSky: Retry upload to Firebase failed:`, error);

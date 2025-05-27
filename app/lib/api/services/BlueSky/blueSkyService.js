@@ -54,10 +54,6 @@ const refreshTokenAndUpdate = async (agent, accountData) => {
   tokenRefreshLocks.set(accountId, refreshPromise);
 
   try {
-    console.log(
-      `BlueSky: Attempting to refresh token for ${accountData.platformUsername}`
-    );
-
     // Verify we have the required data for refresh
     if (!accountData.refreshToken || !accountData.platformUsername) {
       console.error("BlueSky: Missing refresh token or username", {
@@ -782,9 +778,6 @@ const post = async (accountData, postData) => {
         accountData &&
         accountData.platformAccountId
       ) {
-        console.log(
-          "BlueSky: Updating account status to error due to auth failure"
-        );
         await SocialAccount.findOneAndUpdate(
           {
             platformAccountId: accountData.platformAccountId,
@@ -843,10 +836,6 @@ const forceRefreshTokens = async (accountId) => {
         errorCode: "account_not_found",
       };
     }
-
-    console.log(
-      `BlueSky: Found account for refresh: ${account.platformUsername}`
-    );
 
     // Check if refresh token exists
     if (!account.refreshToken) {
