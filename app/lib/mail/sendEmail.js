@@ -193,5 +193,4 @@ The Postmore Team
   });
 };
 
-export { sendEmail };
 export default sendPasswordResetEmail;

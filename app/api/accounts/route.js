@@ -2,15 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import mongoose from "mongoose";
 
-// Add this to ensure we have the models available
-let Account;
-try {
-  Account = mongoose.model("Account");
-} catch (e) {
-  // Model not registered yet, so we need to import the schema
-  require("@/app/models/AccountSchema");
-  Account = mongoose.model("Account");
-}
+import SocialAccount from "@/app/models/SocialAccount";
 
 /**
  * GET endpoint for fetching user's accounts
@@ -43,7 +35,7 @@ export async function GET(request) {
     }
 
     // Fetch accounts matching the query
-    const accounts = await Account.find(query).sort({ createdAt: -1 });
+    const accounts = await SocialAccount.find(query).sort({ createdAt: -1 });
 
     // Return the accounts
     return NextResponse.json({

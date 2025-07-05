@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import blueSkyService from "@/app/lib/api/services/BlueSky/blueSkyService";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/lib/auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import SocialAccount from "@/app/models/SocialAccount";
 
 /**
