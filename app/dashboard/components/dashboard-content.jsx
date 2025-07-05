@@ -350,7 +350,7 @@ export function DashboardContent() {
           captions: {
             mode: captionMode,
             single: singleCaption,
-            multipleCaptions: multiCaptions,
+            multiple: multiCaptions,
           },
           schedule: {
             type: scheduleType,
@@ -358,17 +358,7 @@ export function DashboardContent() {
           },
         };
 
-        console.log("Submitting post with prepared media:", {
-          ...submissionData,
-          media: submissionData.media.map((item) => ({
-            type: item.type,
-            url: item.url ? `${item.url.substring(0, 30)}...` : "none",
-            hasFile: !!item.fileObject,
-            isVideo: item.isDirectUploadVideo,
-            thumbnail: item.thumbnail ? "Yes" : "No",
-            originalName: item.originalName,
-          })),
-        });
+        console.log("The multi Caption", submissionData.captions.multiple);
 
         // Send the data to our API endpoint
         fetch("/api/posts/submit", {

@@ -51,6 +51,7 @@
     "embla-carousel-react": "^8.6.0",
     "firebase": "^11.7.1",
     "google-auth-library": "^9.15.1",
+    "googleapis": "^149.0.0",
     "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.483.0",

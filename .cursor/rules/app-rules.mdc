@@ -44,4 +44,5 @@ Follow these rules when you write code:
 -Let fonts,texts,size and everything that has to do with a design has to be consistent across different components in the Entire Project.Always use design basic principles 
 -Never touch ui designs when you have not been asked to 
 -Dont just be creatinbg new files just for fun
+-Never ever import files in the middle of  functions or code blocks , always import files at the top level
 

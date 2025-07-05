@@ -66,7 +66,6 @@ const useFetchPosts = () => {
           if (firstMedia.type === "video" && !thumbnailUrl) {
             // If no thumbnail is provided but it's a video, we could provide a default
             // thumbnailUrl = '/images/default-video-thumbnail.jpg';
-            console.log(`Video without thumbnail: ${post._id}`);
           }
         }
       }

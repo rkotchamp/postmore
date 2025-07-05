@@ -22,10 +22,11 @@ import {
   AtSign,
   ChevronLeft,
   ChevronRight,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { SelectedAccountsDisplay } from "./SelectedAccountsDisplay";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { VideoPreview } from "./VideoPreview";
 import { ImagePreview } from "./ImagePreview";
 
@@ -130,6 +131,72 @@ const platformConfig = {
 export function Post({ post }) {
   // Add state for caption carousel
   const [currentCaptionIndex, setCurrentCaptionIndex] = useState(0);
+  const [captionAccountIds, setCaptionAccountIds] = useState([]);
+
+  // Make sure we handle both socialAccounts and accounts fields for compatibility
+  const accountsArray = post.socialAccounts || post.accounts || [];
+
+  // Extract caption data and account IDs on component mount
+  useEffect(() => {
+    if (
+      post.captions &&
+      post.captions.mode === "multiple" &&
+      post.captions.multiple
+    ) {
+      // Get the account IDs that have captions
+      const accountIds = Object.keys(post.captions.multiple);
+      setCaptionAccountIds(accountIds);
+    }
+  }, [post.captions]);
+
+  // Helper function to get the current caption based on mode and index
+  const getCurrentCaption = () => {
+    if (!post.captions) return "";
+
+    if (post.captions.mode === "single") {
+      return post.captions.single || post.caption || post.text || "";
+    }
+
+    if (
+      post.captions.mode === "multiple" &&
+      post.captions.multiple &&
+      captionAccountIds.length > 0
+    ) {
+      const currentAccountId = captionAccountIds[currentCaptionIndex];
+      return (
+        post.captions.multiple[currentAccountId] || post.captions.single || ""
+      );
+    }
+
+    // Fallback to any caption field available
+    return post.caption || post.text || "";
+  };
+
+  // Get the account object for the current caption index (for multiple mode)
+  const getCurrentCaptionAccount = () => {
+    if (post.captions?.mode !== "multiple" || !captionAccountIds.length) {
+      return null;
+    }
+
+    const currentAccountId = captionAccountIds[currentCaptionIndex];
+    return accountsArray.find((account) => account.id === currentAccountId);
+  };
+
+  // Helper function to navigate to next caption
+  const goToNextCaption = (e) => {
+    e.stopPropagation();
+    if (captionAccountIds.length <= 1) return;
+    setCurrentCaptionIndex((prev) => (prev + 1) % captionAccountIds.length);
+  };
+
+  // Helper function to navigate to previous caption
+  const goToPrevCaption = (e) => {
+    e.stopPropagation();
+    if (captionAccountIds.length <= 1) return;
+    setCurrentCaptionIndex(
+      (prev) => (prev - 1 + captionAccountIds.length) % captionAccountIds.length
+    );
+  };
 
   // Helper function to extract media URL based on data structure
   const getMediaUrl = () => {
@@ -387,61 +454,56 @@ export function Post({ post }) {
     );
   };
 
-  // Function to render the appropriate caption
+  // Helper function to render the appropriate caption
   const renderCaption = () => {
     if (post.contentType === "text") {
       return (
         <p className="text-sm line-clamp-3 text-muted-foreground font-medium">
-          Text post scheduled for {post.socialAccounts.length} account(s)
+          Text post scheduled for {accountsArray.length} account(s)
         </p>
       );
     }
 
-    // First check captions object
-    if (post.contentType === "media" && post.captions) {
-      // Check single caption mode
-      if (post.captions.mode === "single" && post.captions.single) {
-        return (
-          <p className="text-sm line-clamp-3 font-medium">
-            {post.captions.single}
-          </p>
-        );
-      }
+    // Get the current caption
+    const caption = getCurrentCaption();
+    const currentAccount = getCurrentCaptionAccount();
 
-      // Check for multiple captions
-      if (
-        post.captions.mode === "multiple" &&
-        post.captions.multiple &&
-        post.captions.multiple.length > 0
-      ) {
-        const captions = post.captions.multiple;
+    return (
+      <div className="relative">
+        {/* If in multiple mode and we have a current account, show account info */}
+        {post.captions?.mode === "multiple" && (
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center">
+              {currentAccount && (
+                <>
+                  <Avatar className="h-4 w-4 mr-1.5">
+                    <AvatarImage src={currentAccount.avatar} />
+                    <AvatarFallback className="text-[8px]">
+                      {currentAccount.name?.charAt(0) || "A"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {currentAccount.name || "Account"}
+                  </span>
+                </>
+              )}
+            </div>
 
-        return (
-          <div className="relative">
-            <p className="text-sm line-clamp-3 font-medium">
-              {captions[currentCaptionIndex].text}
-            </p>
-
-            {/* Only show carousel controls if we have more than one caption */}
-            {captions.length > 1 && (
-              <div className="flex items-center justify-between mt-1">
+            {/* Only show carousel controls if we're in multiple mode and have more than one caption */}
+            {captionAccountIds.length > 1 && (
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentCaptionIndex(
-                      (prev) => (prev - 1 + captions.length) % captions.length
-                    );
-                  }}
+                  onClick={goToPrevCaption}
                   className="p-0.5 rounded-full bg-muted/50 hover:bg-muted"
                 >
-                  <ChevronLeft className="h-3 w-3 text-muted-foreground" />
+                  <ChevronLeft className="h-2.5 w-2.5 text-muted-foreground" />
                 </button>
 
-                <div className="flex space-x-1 items-center">
-                  {captions.map((_, index) => (
+                <div className="flex space-x-0.5 items-center">
+                  {captionAccountIds.map((_, index) => (
                     <span
                       key={index}
-                      className={`block h-1.5 w-1.5 rounded-full ${
+                      className={`block h-1 w-1 rounded-full ${
                         index === currentCaptionIndex
                           ? "bg-primary"
                           : "bg-muted"
@@ -451,47 +513,25 @@ export function Post({ post }) {
                 </div>
 
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentCaptionIndex(
-                      (prev) => (prev + 1) % captions.length
-                    );
-                  }}
+                  onClick={goToNextCaption}
                   className="p-0.5 rounded-full bg-muted/50 hover:bg-muted"
                 >
-                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                  <ChevronRight className="h-2.5 w-2.5 text-muted-foreground" />
                 </button>
               </div>
             )}
           </div>
-        );
-      }
+        )}
 
-      // For any caption present (backwards compatibility)
-      if (post.captions.single) {
-        return (
-          <p className="text-sm line-clamp-3 font-medium">
-            {post.captions.single}
-          </p>
-        );
-      }
-    }
-
-    // Fallback to direct caption field (for backward compatibility)
-    if (post.caption) {
-      return <p className="text-sm line-clamp-3 font-medium">{post.caption}</p>;
-    }
-
-    // Check text field as a last resort
-    if (post.text) {
-      return <p className="text-sm line-clamp-3 font-medium">{post.text}</p>;
-    }
-
-    return <p className="text-sm text-muted-foreground italic">No caption</p>;
+        {/* The caption text */}
+        <p className="text-sm line-clamp-3 font-medium">
+          {caption || (
+            <span className="italic text-muted-foreground">No caption</span>
+          )}
+        </p>
+      </div>
+    );
   };
-
-  // Make sure we handle both socialAccounts and accounts fields for compatibility
-  const accountsArray = post.socialAccounts || post.accounts || [];
 
   return (
     <div className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden">

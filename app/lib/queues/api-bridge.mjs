@@ -233,7 +233,7 @@ async function postToBlueSky(account, postData) {
         postText = postData.captions.single || "";
       } else if (postData.captions?.mode === "multiple") {
         postText =
-          postData.captions?.multipleCaptions?.[account.id] ||
+          postData.captions?.multiple?.[account.id] ||
           postData.captions?.single ||
           "";
       }

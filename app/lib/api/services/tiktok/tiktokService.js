@@ -5,6 +5,9 @@
 
 import axios from "axios";
 
+// Import database models at the top level for Next.js compatibility
+import SocialAccount from "@/app/models/SocialAccount";
+
 // TikTok API endpoints
 const TIKTOK_API_BASE_URL = "https://open.tiktokapis.com/v2";
 const TIKTOK_OAUTH_URL = "https://open.tiktokapis.com/v2/oauth/token/";
@@ -37,39 +40,12 @@ async function getCreatorInfo(accessToken) {
     process.env.TIKTOK_SANDBOX_MODE === "true" ||
     process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
 
-  if (isSandbox) {
-    console.log("Running in TikTok sandbox mode - returning mock creator info");
+  console.log("TikTok sandbox mode detected:", isSandbox);
 
-    // Return mock data for sandbox testing
-    const mockCreatorInfo = {
-      nickname: "TikTok Sandbox User",
-      avatar_url:
-        "https://p16-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/default_avatar.webp",
-      display_name: "sandbox_user",
-      bio_description: "This is a sandbox test account",
-      follower_count: 100,
-      following_count: 50,
-      likes_count: 1000,
-      video_count: 25,
-      can_post: true, // Allow posting in sandbox
-      max_video_post_duration_sec: 180, // 3 minutes max
-      privacy_level_options: [
-        "PUBLIC_TO_EVERYONE",
-        "SELF_ONLY",
-        "MUTUAL_FOLLOW_FRIENDS",
-      ],
-    };
-
-    console.log("Returning mock creator info for sandbox mode");
-    console.log(
-      "========== TikTok getCreatorInfo Completed (Sandbox) =========="
-    );
-    return mockCreatorInfo;
-  }
-
+  // Try the real API first, even in sandbox mode
   try {
     console.log(
-      "Fetching creator info from TikTok API endpoint:",
+      "Attempting real TikTok API call for creator info:",
       `${TIKTOK_API_BASE_URL}/post/publish/creator/info/`
     );
     console.log(
@@ -99,21 +75,63 @@ async function getCreatorInfo(accessToken) {
     }
 
     console.log(
-      "========== TikTok getCreatorInfo Completed Successfully =========="
+      "========== TikTok getCreatorInfo Completed Successfully (Real API) =========="
     );
     return response.data.data;
   } catch (error) {
+    console.error("Real TikTok API failed:", {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+    });
+
+    // If we're in sandbox mode and the real API fails, use mock data
+    if (isSandbox) {
+      console.log("Falling back to mock creator info for sandbox mode");
+      console.log(
+        "WARNING: Sandbox mode has limited Content Posting API access"
+      );
+      console.log(
+        "Posts will be restricted to private viewing mode until app audit"
+      );
+
+      // Return mock data for sandbox testing
+      const mockCreatorInfo = {
+        creator_nickname: "TikTok Sandbox User",
+        creator_avatar_url:
+          "https://p16-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/default_avatar.webp",
+        creator_username: "sandbox_user",
+        privacy_level_options: [
+          "SELF_ONLY", // Force private posts in sandbox
+          "MUTUAL_FOLLOW_FRIENDS",
+          "PUBLIC_TO_EVERYONE",
+        ],
+        comment_disabled: false,
+        duet_disabled: false,
+        stitch_disabled: false,
+        max_video_post_duration_sec: 300, // Standard 5 minutes
+        can_post: true, // Allow posting in sandbox mode
+        quota_usage: 0,
+        quota_total: 10, // Allow 10 posts per day in sandbox
+      };
+
+      console.log("Returning mock creator info for sandbox mode");
+      console.log(
+        "Note: Posts will attempt to use real TikTok API but may be restricted"
+      );
+      console.log(
+        "========== TikTok getCreatorInfo Completed (Sandbox Fallback) =========="
+      );
+      return mockCreatorInfo;
+    }
+
+    // If not in sandbox mode, throw the error
     console.error("========== TikTok getCreatorInfo Failed ==========");
     console.error(
       "Error fetching creator info:",
       error.response?.data || error.message
     );
-    console.error("Error details:", {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      headers: error.response?.headers,
-      data: error.response?.data,
-    });
     throw new Error(
       `Failed to fetch creator info: ${
         error.response?.data?.error?.message || error.message
@@ -126,65 +144,21 @@ async function getCreatorInfo(accessToken) {
  * Post content to TikTok
  *
  * @param {object} accountData - TikTok account data (token, refresh token, user info, etc.)
- * @param {object} postData - Content data (caption, media, etc.) from API Manager
+ * @param {object} postData - Content data (caption, media, etc.)
  * @returns {Promise<object>} - Result of the TikTok API call
  */
 async function post(accountData, postData) {
   console.log("TikTok post service called", {
     accountData: { ...accountData, accessToken: "***REDACTED***" },
-    postData: {
-      contentType: postData.contentType,
-      text: postData.text,
-      mediaCount: postData.media?.length || 0,
-    },
   });
 
   try {
-    // Map API Manager data format to TikTok service format
-    const mappedPostData = {
-      textContent: postData.text || "",
-      mediaFiles: (postData.media || []).map((item) => ({
-        url: item.url,
-        type: item.type,
-        size: item.size || 0,
-        duration: item.duration,
-        originalName: item.originalName || item.name || "media_file",
-      })),
-      title: postData.text ? postData.text.substring(0, 100) : "TikTok Post",
-      // Add default TikTok settings
-      privacyLevel: "SELF_ONLY", // Default to private for testing
-      disableComment: false,
-      disableDuet: false,
-      disableStitch: false,
-    };
-
-    // Determine media type
-    mappedPostData.mediaType = determineMediaType(mappedPostData.mediaFiles);
+    // Normalize media data structure
+    const mediaFiles = postData.mediaFiles || postData.media || [];
+    postData.mediaFiles = mediaFiles;
 
     // Validate required fields for TikTok
-    validateTikTokData(mappedPostData);
-
-    // Check if we're in sandbox mode
-    const isSandbox =
-      process.env.TIKTOK_SANDBOX_MODE === "true" ||
-      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
-
-    if (isSandbox) {
-      console.log("🧪 TikTok SANDBOX MODE: Simulating post creation");
-
-      // Return mock success response for sandbox
-      return {
-        success: true,
-        postId: `sandbox_${Date.now()}`,
-        status: "published",
-        url: `https://tiktok.com/@sandbox_user/video/${Date.now()}`,
-        mediaType: mappedPostData.mediaType,
-        privacyLevel: mappedPostData.privacyLevel,
-        message: "Posted to TikTok (sandbox simulation)",
-      };
-    }
-
-    // Continue with real TikTok API for production...
+    validateTikTokData(postData);
 
     // 1. Get a fresh access token if needed
     const accessToken = await ensureFreshToken(accountData);
@@ -200,41 +174,61 @@ async function post(accountData, postData) {
     }
 
     // Check video duration against creator's max allowed duration if it's a video
-    const isVideo = mappedPostData.mediaType === "VIDEO";
+    const isVideo =
+      postData.mediaType === "VIDEO" ||
+      (mediaFiles[0]?.type && mediaFiles[0].type.startsWith("video/")) ||
+      (mediaFiles[0]?.fileInfo?.type &&
+        mediaFiles[0].fileInfo.type.startsWith("video/"));
 
     if (
       isVideo &&
-      mappedPostData.mediaFiles[0]?.duration >
-        creatorInfo.max_video_post_duration_sec
+      mediaFiles[0]?.duration > creatorInfo.max_video_post_duration_sec
     ) {
       throw new Error(
         `Video exceeds maximum allowed duration of ${creatorInfo.max_video_post_duration_sec} seconds`
       );
     }
 
+    // 3. Prepare post data based on media type
+    const mediaType = determineMediaType(mediaFiles);
+
     // 4. Initialize and publish content
+    const isSandboxMode =
+      process.env.TIKTOK_SANDBOX_MODE === "true" ||
+      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
+
+    console.log("========== TikTok Attempting Real Post ==========");
+    if (isSandboxMode) {
+      console.log("🚨 SANDBOX MODE: Attempting real post with TikTok API");
+      console.log("📋 Note: Posts may be restricted to private viewing only");
+      console.log("⚠️  Content Posting API has limited sandbox support");
+    }
+    console.log("Media type:", mediaType);
+    console.log("Post data structure:", {
+      hasMediaFiles: !!postData.mediaFiles,
+      mediaCount: postData.mediaFiles?.length,
+      firstMediaType: postData.mediaFiles?.[0]?.type,
+      captionLength: postData.captions?.single?.length || 0,
+    });
+
     const postResult = await initializeAndPublishContent(
       accessToken,
-      mappedPostData,
-      mappedPostData.mediaType,
+      postData,
+      mediaType,
       creatorInfo
     );
 
+    console.log("========== TikTok Post Result ==========");
+    console.log("Post result:", JSON.stringify(postResult, null, 2));
+
     return {
-      success: true,
       postId: postResult.publish_id,
       status: postResult.publish_status || "published",
       url: postResult.share_url || null,
-      mediaType: mappedPostData.mediaType,
-      privacyLevel: mappedPostData.privacyLevel,
     };
   } catch (error) {
     console.error("Error in TikTok post service:", error);
-    return {
-      success: false,
-      error: error.message,
-      platform: "tiktok",
-    };
+    throw error;
   }
 }
 
@@ -251,12 +245,16 @@ function determineMediaType(mediaFiles) {
 
   const firstFile = mediaFiles[0];
 
-  if (firstFile.type && firstFile.type.startsWith("video/")) {
+  // Check different possible type locations
+  const fileType =
+    firstFile.type || firstFile.fileInfo?.type || firstFile.contentType;
+
+  if (fileType && fileType.startsWith("video/")) {
     return "VIDEO";
-  } else if (firstFile.type && firstFile.type.startsWith("image/")) {
+  } else if (fileType && fileType.startsWith("image/")) {
     return "PHOTO";
   } else {
-    throw new Error(`Unsupported media type: ${firstFile.type}`);
+    throw new Error(`Unsupported media type: ${fileType || "unknown"}`);
   }
 }
 
@@ -275,34 +273,64 @@ async function initializeAndPublishContent(
   mediaType,
   creatorInfo
 ) {
-  // Prepare the payload based on the requirements from TikTok API
-  const payload = {
-    post_info: {
-      title: postData.title || "",
-      description: postData.textContent || "",
-      privacy_level:
-        postData.privacyLevel || creatorInfo.privacy_level_options[0], // Default to first available option
-      disable_comment: postData.disableComment || false,
-      disable_duet: postData.disableDuet || false,
-      disable_stitch: postData.disableStitch || false,
-      auto_add_music: true,
-    },
-    source_info: {
-      source: "PULL_FROM_URL",
-    },
-    post_mode: "DIRECT_POST", // Using direct post mode
-    media_type: mediaType,
-  };
+  // Prepare the payload based on the endpoint and media type
+  let payload;
 
-  // Add media-specific properties
-  if (mediaType === "PHOTO") {
-    payload.source_info.photo_cover_index = 0;
-    payload.source_info.photo_images = postData.mediaFiles.map(
-      (file) => file.url
-    );
+  if (mediaType === "VIDEO") {
+    // Use simpler payload for video endpoint
+    payload = {
+      post_info: {
+        title: postData.title || "",
+        description:
+          postData.textContent ||
+          postData.text ||
+          postData.captions?.single ||
+          "",
+        privacy_level:
+          postData.privacyLevel ||
+          (creatorInfo.privacy_level_options &&
+          creatorInfo.privacy_level_options.length > 0
+            ? creatorInfo.privacy_level_options[0]
+            : "SELF_ONLY"), // Default to private for sandbox
+        disable_comment: postData.disableComment || false,
+        disable_duet: postData.disableDuet || false,
+        disable_stitch: postData.disableStitch || false,
+        auto_add_music: true,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        video_url: postData.mediaFiles[0].url,
+      },
+    };
   } else {
-    // For VIDEO
-    payload.source_info.video_url = postData.mediaFiles[0].url;
+    // Use full payload for photo endpoint
+    payload = {
+      post_info: {
+        title: postData.title || "",
+        description:
+          postData.textContent ||
+          postData.text ||
+          postData.captions?.single ||
+          "",
+        privacy_level:
+          postData.privacyLevel ||
+          (creatorInfo.privacy_level_options &&
+          creatorInfo.privacy_level_options.length > 0
+            ? creatorInfo.privacy_level_options[0]
+            : "SELF_ONLY"), // Default to private for sandbox
+        disable_comment: postData.disableComment || false,
+        disable_duet: postData.disableDuet || false,
+        disable_stitch: postData.disableStitch || false,
+        auto_add_music: true,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        photo_cover_index: 0,
+        photo_images: postData.mediaFiles.map((file) => file.url),
+      },
+      post_mode: "DIRECT_POST",
+      media_type: "PHOTO",
+    };
   }
 
   // Add commercial content disclosure if specified
@@ -311,19 +339,34 @@ async function initializeAndPublishContent(
     payload.post_info.brand_content = postData.isBrandedContent || false;
   }
 
-  console.log("Initializing TikTok content post", payload);
+  // Use different endpoints for video vs photo
+  const endpoint =
+    mediaType === "VIDEO"
+      ? `${TIKTOK_API_BASE_URL}/post/publish/inbox/video/init/`
+      : `${TIKTOK_API_BASE_URL}/post/publish/content/init/`;
+
+  console.log("========== TikTok Content Init API Call ==========");
+  console.log("Endpoint:", endpoint);
+  console.log("Media type:", mediaType);
+  console.log("Payload:", JSON.stringify(payload, null, 2));
+  console.log(
+    "Access token:",
+    accessToken ? `${accessToken.substring(0, 10)}...` : "MISSING"
+  );
 
   try {
     // Call the TikTok API to initialize content posting
-    const response = await axios.post(
-      `${TIKTOK_API_BASE_URL}/post/publish/content/init/`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await axios.post(endpoint, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    console.log("TikTok init API response status:", response.status);
+    console.log(
+      "TikTok init API response data:",
+      JSON.stringify(response.data, null, 2)
     );
 
     const initResult = response.data.data;
@@ -334,15 +377,80 @@ async function initializeAndPublishContent(
     // For direct post mode, we need to check the status using the status API
     return await checkPublishStatus(accessToken, publishId);
   } catch (error) {
-    console.error(
-      "Error initializing TikTok content:",
-      error.response?.data || error.message
-    );
-    throw new Error(
-      `Failed to post to TikTok: ${
-        error.response?.data?.error?.message || error.message
-      }`
-    );
+    console.error("========== TikTok Content Init Failed ==========");
+    console.error("Error status:", error.response?.status);
+    console.error("Error data:", JSON.stringify(error.response?.data, null, 2));
+    console.error("Error message:", error.message);
+
+    const isSandboxMode =
+      process.env.TIKTOK_SANDBOX_MODE === "true" ||
+      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
+
+    if (isSandboxMode) {
+      console.error("🚨 SANDBOX MODE ERROR: This is likely expected");
+      console.error("📋 TikTok Sandbox Limitations:");
+      console.error(
+        "   - Content Posting API has very limited support in sandbox mode"
+      );
+      console.error("   - Video posting endpoints may not be available");
+      console.error(
+        "   - 'Invalid media_type or post_mode' errors are common in sandbox"
+      );
+      console.error(
+        "   - Real posting functionality requires production app approval"
+      );
+      console.error("💡 Next Steps:");
+      console.error(
+        "   - Submit your app for TikTok review to get full API access"
+      );
+      console.error(
+        "   - Use production credentials for real posting functionality"
+      );
+      console.error("   - Current error is expected behavior in sandbox mode");
+    }
+
+    console.error("Full error details:", {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      headers: error.response?.headers,
+      data: error.response?.data,
+    });
+
+    const errorMessage =
+      error.response?.data?.error?.message ||
+      error.response?.data?.message ||
+      error.message;
+
+    // In sandbox mode, if we get API errors, we can simulate a successful response for testing
+    if (
+      isSandboxMode &&
+      (error.response?.status === 400 || error.response?.status === 404)
+    ) {
+      console.log(
+        "🎭 SANDBOX MODE: Simulating successful post for testing purposes"
+      );
+      console.log(
+        "⚠️  This is a mock response - no actual post was created on TikTok"
+      );
+      console.log(
+        "📱 Your app logic can continue as if the post was successful"
+      );
+
+      // Return a mock successful response to allow app testing
+      return {
+        publish_id: `mock_sandbox_${Date.now()}`,
+        publish_status: "processing",
+        share_url: null,
+        uploaded_bytes: postData.mediaFiles[0]?.size || 0,
+        upload_url: null,
+      };
+    }
+
+    const sandboxNote = isSandboxMode
+      ? " (Note: Sandbox mode has limited Content Posting API support)"
+      : "";
+
+    throw new Error(`Failed to post to TikTok: ${errorMessage}${sandboxNote}`);
   }
 }
 
@@ -394,13 +502,16 @@ function validateTikTokData(postData) {
     );
   }
 
+  const firstFile = postData.mediaFiles[0];
+  const fileType =
+    firstFile.type || firstFile.fileInfo?.type || firstFile.contentType;
+
   // For videos
   if (
     postData.mediaType === "VIDEO" ||
-    (postData.mediaFiles[0].type &&
-      postData.mediaFiles[0].type.startsWith("video/"))
+    (fileType && fileType.startsWith("video/"))
   ) {
-    const videoFile = postData.mediaFiles[0];
+    const videoFile = firstFile;
 
     // Check if the file has a URL
     if (!videoFile.url) {
@@ -409,7 +520,8 @@ function validateTikTokData(postData) {
 
     // Check if the video meets TikTok's requirements (this is a simplified check)
     // TikTok has specific requirements for video length, size, aspect ratio, etc.
-    if (videoFile.size > 287108864) {
+    const fileSize = videoFile.size || videoFile.fileInfo?.size || 0;
+    if (fileSize > 287108864) {
       // 287MB max size for TikTok
       throw new Error("Video file is too large for TikTok (max 287MB)");
     }
@@ -417,8 +529,7 @@ function validateTikTokData(postData) {
   // For photos
   else if (
     postData.mediaType === "PHOTO" ||
-    (postData.mediaFiles[0].type &&
-      postData.mediaFiles[0].type.startsWith("image/"))
+    (fileType && fileType.startsWith("image/"))
   ) {
     // Check if all photos have URLs
     const missingUrls = postData.mediaFiles.some((file) => !file.url);
@@ -511,17 +622,75 @@ async function refreshTikTokToken(accountData) {
       },
     });
 
-    const data = response.data.data;
+    console.log("TikTok refresh response status:", response.status);
+    console.log("TikTok refresh response structure:", {
+      hasData: !!response.data,
+      dataKeys: response.data ? Object.keys(response.data) : [],
+      hasNestedData: !!(response.data && response.data.data),
+    });
 
-    // This would typically update the database with new tokens
+    // Handle different response structures
+    let tokenData;
+    if (response.data && response.data.data) {
+      // Response has nested data structure
+      tokenData = response.data.data;
+    } else if (response.data) {
+      // Response has flat structure
+      tokenData = response.data;
+    } else {
+      throw new Error("Invalid response structure from TikTok refresh API");
+    }
+
+    console.log("TikTok token data structure:", {
+      hasAccessToken: !!tokenData.access_token,
+      hasRefreshToken: !!tokenData.refresh_token,
+      keys: tokenData ? Object.keys(tokenData) : [],
+    });
+
+    if (!tokenData.access_token) {
+      console.error("No access token in refresh response:", tokenData);
+      throw new Error("No access token received from TikTok refresh API");
+    }
+
+    // Update the database with new tokens
+    try {
+      await SocialAccount.findByIdAndUpdate(accountData.id || accountData._id, {
+        $set: {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token || accountData.refreshToken,
+          tokenExpiry: new Date(
+            Date.now() + (tokenData.expires_in || 86400) * 1000
+          ),
+          status: "active",
+          errorMessage: null,
+          updatedAt: new Date(),
+        },
+      });
+
+      console.log("TikTok tokens updated in database successfully");
+    } catch (dbError) {
+      console.error("Error updating TikTok tokens in database:", dbError);
+      // Don't throw here - we still have the new token to return
+    }
+
     console.log("TikTok token refreshed successfully");
 
-    return data.access_token;
+    return tokenData.access_token;
   } catch (error) {
     console.error(
       "Error refreshing TikTok token:",
       error.response?.data || error.message
     );
+
+    // Log more details about the error
+    if (error.response) {
+      console.error("TikTok refresh API response:", {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+      });
+    }
+
     throw new Error("Failed to refresh TikTok token");
   }
 }

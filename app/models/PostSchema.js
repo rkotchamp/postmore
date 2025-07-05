@@ -57,7 +57,7 @@ const CaptionsSchema = new Schema({
     default: "single",
   },
   single: String,
-  platforms: {
+  multiple: {
     type: Map,
     of: String,
   },
@@ -81,6 +81,44 @@ const ResultSchema = new Schema({
   postId: String,
   url: String,
   error: String,
+  nativeScheduling: {
+    type: Boolean,
+    default: false,
+  },
+  scheduledTime: Date,
+  // YouTube-specific fields
+  youtubeData: {
+    videoId: String,
+    status: {
+      type: String,
+      enum: ["uploaded", "scheduled", "published", "failed", "processing"],
+    },
+    thumbnail: String,
+    aspectRatio: Number,
+    duration: Number,
+    publishAt: Date,
+    privacyStatus: {
+      type: String,
+      enum: ["public", "private", "unlisted"],
+      default: "public",
+    },
+  },
+  // TikTok-specific fields
+  tiktokData: {
+    publishId: String,
+    status: {
+      type: String,
+      enum: ["processing", "published", "failed", "scheduled"],
+    },
+    shareUrl: String,
+    videoId: String,
+    mediaType: {
+      type: String,
+      enum: ["VIDEO", "PHOTO"],
+    },
+    privacyLevel: String,
+    publishAt: Date,
+  },
   timestamp: {
     type: Date,
     default: Date.now,

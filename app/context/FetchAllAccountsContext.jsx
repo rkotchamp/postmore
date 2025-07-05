@@ -10,7 +10,7 @@ const FetchAllAccountsContext = createContext();
  * Custom hook to fetch and manage ALL social accounts
  * Uses React Query for efficient caching and preventing duplicate fetches
  */
-// Rename hook
+
 const useFetchAllAccounts = () => {
   // React Query hook for fetching ALL social accounts
   const {

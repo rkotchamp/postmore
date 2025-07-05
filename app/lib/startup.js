@@ -6,6 +6,8 @@
 import { initPostQueue } from "./queues/postQueue";
 import { initTokenRefreshQueue } from "./queues/tokenRefreshQueue";
 import { initializeScheduledJobs } from "./queues/setupScheduledJobs";
+import registerQueues from "./queues/registerQueues.mjs";
+import registerWorkers from "./queues/registerWorkers.mjs";
 
 // A flag to track if the app has been initialized
 let isInitialized = false;
@@ -24,9 +26,13 @@ export async function initializeApp() {
   try {
     console.log("Initializing application...");
 
-    // Initialize queue systems
+    // Initialize existing queue systems
     initPostQueue();
     initTokenRefreshQueue();
+
+    // Initialize new queue and worker system
+    await registerQueues();
+    registerWorkers();
 
     // Set up scheduled jobs
     await initializeScheduledJobs();

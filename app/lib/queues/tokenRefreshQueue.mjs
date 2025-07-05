@@ -56,6 +56,101 @@ const getSocialAccountModel = () => {
   }
 };
 
+// TikTok service implementation for token refresh
+const tiktokService = {
+  forceRefreshTokens: async (accountId) => {
+    try {
+      console.log(`TikTok: Force refreshing tokens for account ${accountId}`);
+
+      // Ensure we're connected to the database using api-bridge
+      await connectToDatabase();
+
+      const SocialAccount = getSocialAccountModel();
+
+      // Find the account in the database
+      const account = await SocialAccount.findOne({
+        _id: accountId,
+        platform: "tiktok",
+      });
+
+      if (!account) {
+        console.error(
+          `TikTok: Account ${accountId} not found for token refresh`
+        );
+        return {
+          success: false,
+          message: "Account not found",
+          errorCode: "account_not_found",
+        };
+      }
+
+      console.log(
+        `TikTok: Found account for refresh: ${
+          account.displayName || account.platformUsername
+        }`
+      );
+
+      // Check if refresh token exists
+      if (!account.refreshToken) {
+        console.error(`TikTok: Account ${accountId} has no refresh token`);
+        return {
+          success: false,
+          message:
+            "No refresh token available. Please reconnect your TikTok account.",
+          errorCode: "no_refresh_token",
+        };
+      }
+
+      // Import and use the TikTok service refresh function
+      const { default: tiktokServiceModule } = await import(
+        "../api/services/tiktok/tiktokService.js"
+      );
+
+      try {
+        const newAccessToken = await tiktokServiceModule.refreshTikTokToken(
+          account
+        );
+
+        return {
+          success: true,
+          message: "TikTok tokens refreshed successfully",
+          status: "active",
+        };
+      } catch (refreshError) {
+        console.error(
+          `TikTok: Token refresh failed for ${account.displayName}:`,
+          refreshError
+        );
+
+        // Update account status to indicate refresh failure
+        await SocialAccount.findByIdAndUpdate(accountId, {
+          $set: {
+            status: "error",
+            errorMessage: refreshError.message,
+            updatedAt: new Date(),
+          },
+        });
+
+        return {
+          success: false,
+          message: refreshError.message,
+          errorCode: "refresh_failed",
+        };
+      }
+    } catch (error) {
+      console.error(
+        `TikTok: Unexpected error refreshing tokens for account ${accountId}:`,
+        error
+      );
+      return {
+        success: false,
+        message: "Unexpected error during token refresh",
+        errorCode: "unexpected_error",
+      };
+    }
+  },
+};
+
 // Constants
 const BSKY_SERVICE_URL = "https://bsky.social";
 
@@ -308,7 +403,7 @@ export function getTokenRefreshQueue() {
 }
 
 /**
- * Schedule regular token refreshes for all Bluesky accounts
+ * Schedule regular token refreshes for all social media accounts (BlueSky and TikTok)
  * This schedules a job to run every week
  */
 export async function scheduleRegularTokenRefreshes() {
@@ -348,10 +443,10 @@ export async function scheduleRegularTokenRefreshes() {
 }
 
 /**
- * Add a job to refresh tokens for all Bluesky accounts
+ * Add a job to refresh tokens for all social media accounts (BlueSky and TikTok)
  * @returns {Promise<string>} - The ID of the created job
  */
-export async function refreshAllBlueskyTokens() {
+export async function refreshAllTokens() {
   const queue = getTokenRefreshQueue();
 
   try {
@@ -363,7 +458,9 @@ export async function refreshAllBlueskyTokens() {
       }
     );
 
-    console.log(`Added job to refresh all Bluesky tokens with ID ${job.id}`);
+    console.log(
+      `Added job to refresh all social media tokens with ID ${job.id}`
+    );
     return job.id;
   } catch (error) {
     console.error("Failed to add token refresh job:", error);
@@ -372,24 +469,27 @@ export async function refreshAllBlueskyTokens() {
 }
 
 /**
- * Add a job to refresh tokens for a specific Bluesky account
+ * Add a job to refresh tokens for a specific social media account (BlueSky or TikTok)
  * @param {string} accountId - The ID of the account to refresh
+ * @param {string} platform - The platform (bluesky or tiktok)
  * @returns {Promise<string>} - The ID of the created job
  */
-export async function refreshAccountTokens(accountId) {
+export async function refreshAccountTokens(accountId, platform = null) {
   const queue = getTokenRefreshQueue();
 
   try {
     const job = await queue.add(
       "refresh-account-tokens",
-      { accountId },
+      { accountId, platform },
       {
         jobId: `refresh-account-${accountId}-${Date.now()}`,
       }
     );
 
     console.log(
-      `Added job to refresh tokens for account ${accountId} with job ID ${job.id}`
+      `Added job to refresh tokens for ${
+        platform || "unknown"
+      } account ${accountId} with job ID ${job.id}`
     );
     return job.id;
   } catch (error) {
@@ -407,7 +507,7 @@ export async function refreshAccountTokens(accountId) {
  * @returns {Promise<object>} - The result of refreshing tokens
  */
 export async function processRefreshAllTokensJob(jobData) {
-  console.log("Processing job to refresh all Bluesky tokens");
+  console.log("Processing job to refresh all social media tokens");
 
   try {
     // Connect to database using api-bridge
@@ -415,71 +515,93 @@ export async function processRefreshAllTokensJob(jobData) {
 
     const SocialAccount = getSocialAccountModel();
 
-    // Get all active Bluesky accounts
+    // Get all active social media accounts (BlueSky and TikTok)
     const accounts = await SocialAccount.find({
-      platform: "bluesky",
+      platform: { $in: ["bluesky", "tiktok"] },
       status: { $ne: "disconnected" },
     });
 
-    console.log(`Found ${accounts.length} Bluesky accounts to refresh`);
+    console.log(`Found ${accounts.length} social media accounts to refresh`);
 
     const results = {
       total: accounts.length,
       success: 0,
       failed: 0,
       accounts: [],
+      byPlatform: {
+        bluesky: { total: 0, success: 0, failed: 0 },
+        tiktok: { total: 0, success: 0, failed: 0 },
+      },
     };
 
     // Process each account
     for (const account of accounts) {
       try {
         console.log(
-          `Refreshing tokens for account ${account._id} (${account.platformUsername})`
+          `Refreshing ${account.platform} tokens for account ${account._id} (${
+            account.platformUsername || account.displayName
+          })`
         );
+
+        // Update platform stats
+        results.byPlatform[account.platform].total++;
 
         // Skip accounts without refresh tokens
         if (!account.refreshToken) {
           console.log(`Account ${account._id} has no refresh token, skipping`);
           results.accounts.push({
             accountId: account._id,
-            username: account.platformUsername,
+            platform: account.platform,
+            username: account.platformUsername || account.displayName,
             success: false,
             error: "No refresh token available",
           });
           results.failed++;
+          results.byPlatform[account.platform].failed++;
           continue;
         }
 
-        // Refresh tokens
-        const refreshResult = await blueSkyService.forceRefreshTokens(
-          account._id
-        );
+        // Choose the appropriate service based on platform
+        let refreshResult;
+        if (account.platform === "bluesky") {
+          refreshResult = await blueSkyService.forceRefreshTokens(account._id);
+        } else if (account.platform === "tiktok") {
+          refreshResult = await tiktokService.forceRefreshTokens(account._id);
+        } else {
+          throw new Error(`Unsupported platform: ${account.platform}`);
+        }
 
         if (refreshResult.success) {
           results.success++;
+          results.byPlatform[account.platform].success++;
           results.accounts.push({
             accountId: account._id,
-            username: account.platformUsername,
+            platform: account.platform,
+            username: account.platformUsername || account.displayName,
             success: true,
           });
         } else {
           results.failed++;
+          results.byPlatform[account.platform].failed++;
           results.accounts.push({
             accountId: account._id,
-            username: account.platformUsername,
+            platform: account.platform,
+            username: account.platformUsername || account.displayName,
             success: false,
             error: refreshResult.message,
           });
         }
       } catch (error) {
         console.error(
-          `Error refreshing tokens for account ${account._id}:`,
+          `Error refreshing ${account.platform} tokens for account ${account._id}:`,
           error
         );
         results.failed++;
+        results.byPlatform[account.platform].failed++;
         results.accounts.push({
           accountId: account._id,
-          username: account.platformUsername,
+          platform: account.platform,
+          username: account.platformUsername || account.displayName,
           success: false,
           error: error.message,
         });
@@ -488,6 +610,12 @@ export async function processRefreshAllTokensJob(jobData) {
 
     console.log(
       `Completed token refresh for all accounts. Success: ${results.success}, Failed: ${results.failed}`
+    );
+    console.log(
+      `BlueSky: ${results.byPlatform.bluesky.success}/${results.byPlatform.bluesky.total} successful`
+    );
+    console.log(
+      `TikTok: ${results.byPlatform.tiktok.success}/${results.byPlatform.tiktok.total} successful`
     );
     return results;
   } catch (error) {
@@ -498,52 +626,98 @@ export async function processRefreshAllTokensJob(jobData) {
 
 /**
  * Process a refresh account tokens job
- * @param {object} jobData - The data for the job with accountId
+ * @param {object} jobData - The data for the job containing accountId and optional platform
  * @returns {Promise<object>} - The result of refreshing tokens
  */
 export async function processRefreshAccountTokensJob(jobData) {
-  const { accountId } = jobData;
-
-  if (!accountId) {
-    throw new Error("Missing account ID for token refresh");
-  }
-
-  console.log(`Processing job to refresh tokens for account ${accountId}`);
+  const { accountId, platform } = jobData;
+  console.log(
+    `Processing job to refresh tokens for account ${accountId} (${
+      platform || "auto-detect"
+    })`
+  );
 
   try {
     // Connect to database using api-bridge
     await connectToDatabase();
 
-    // Refresh tokens
-    const refreshResult = await blueSkyService.forceRefreshTokens(accountId);
+    const SocialAccount = getSocialAccountModel();
 
-    if (refreshResult.success) {
-      console.log(`Successfully refreshed tokens for account ${accountId}`);
-      return {
-        accountId,
-        success: true,
-      };
-    } else {
+    // Find the account in the database
+    const query = { _id: accountId };
+    if (platform) {
+      query.platform = platform;
+    }
+
+    const account = await SocialAccount.findOne(query);
+
+    if (!account) {
       console.error(
-        `Failed to refresh tokens for account ${accountId}: ${refreshResult.message}`
+        `Account ${accountId} not found for token refresh${
+          platform ? ` (platform: ${platform})` : ""
+        }`
       );
       return {
-        accountId,
         success: false,
-        error: refreshResult.message,
+        accountId,
+        platform: platform || "unknown",
+        message: "Account not found",
+        errorCode: "account_not_found",
       };
     }
+
+    console.log(
+      `Found ${account.platform} account for refresh: ${
+        account.platformUsername || account.displayName
+      }`
+    );
+
+    // Choose the appropriate service based on platform
+    let refreshResult;
+    if (account.platform === "bluesky") {
+      refreshResult = await blueSkyService.forceRefreshTokens(accountId);
+    } else if (account.platform === "tiktok") {
+      refreshResult = await tiktokService.forceRefreshTokens(accountId);
+    } else {
+      return {
+        success: false,
+        accountId,
+        platform: account.platform,
+        message: `Unsupported platform: ${account.platform}`,
+        errorCode: "unsupported_platform",
+      };
+    }
+
+    return {
+      ...refreshResult,
+      accountId,
+      platform: account.platform,
+      username: account.platformUsername || account.displayName,
+    };
   } catch (error) {
-    console.error(`Error processing account token refresh job:`, error);
-    throw error;
+    console.error(
+      `Error processing token refresh job for account ${accountId}:`,
+      error
+    );
+    return {
+      success: false,
+      accountId,
+      platform: platform || "unknown",
+      message: error.message,
+      errorCode: "processing_error",
+    };
   }
 }
+
+// Backward compatibility - keep the old function name as an alias
+export const refreshAllBlueskyTokens = refreshAllTokens;
 
 export default {
   initTokenRefreshQueue,
   getTokenRefreshQueue,
   scheduleRegularTokenRefreshes,
-  refreshAllBlueskyTokens,
+  refreshAllTokens,
+  refreshAllBlueskyTokens, // Backward compatibility alias
   refreshAccountTokens,
   processRefreshAllTokensJob,
   processRefreshAccountTokensJob,
@@ -567,7 +741,7 @@ if (
       console.log(`Scheduled regular token refreshes with job ID ${jobId}`);
 
       // Trigger an immediate refresh of all tokens
-      const immediateJobId = await refreshAllBlueskyTokens();
+      const immediateJobId = await refreshAllTokens();
       console.log(
         `Triggered immediate token refresh with job ID ${immediateJobId}`
       );

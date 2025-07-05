@@ -76,6 +76,7 @@ export default function Authenticate() {
             platformAccountId: account.platformAccountId,
           });
         }
+        console.log(acc);
         return acc;
       },
       { ...emptyAccounts }
@@ -143,8 +144,6 @@ export default function Authenticate() {
   };
 
   useEffect(() => {
-    console.log("Checking URL for auth status params");
-
     const params = new URLSearchParams(window.location.search);
     const success = params.get("success");
     const error = params.get("error");
@@ -165,7 +164,6 @@ export default function Authenticate() {
             platform: "tiktok",
             message: `TikTok debug response: ${response}`,
           });
-          console.log("Debug response:", response);
         } else {
           setAuthStatus({
             type: "success",
@@ -310,8 +308,6 @@ export default function Authenticate() {
       const searchParams = new URLSearchParams(params);
 
       const authUrl = `${baseUrl}?${searchParams.toString()}`;
-
-      console.log("Constructed TikTok Auth URL:", authUrl);
 
       window.location.href = authUrl;
     } catch (error) {

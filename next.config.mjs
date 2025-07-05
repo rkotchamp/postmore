@@ -2,14 +2,19 @@ import { withNextVideo } from "next-video/process";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ["firebasestorage.googleapis.com", "storage.googleapis.com"],
+    domains: [
+      "firebasestorage.googleapis.com",
+      "storage.googleapis.com",
+      "lh3.googleusercontent.com",
+      "p16-pu-sign-no.tiktokcdn-eu.com",
+    ],
   },
   async headers() {
     const cspHeader = `
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline';
       style-src 'self' 'unsafe-inline';
-      img-src 'self' blob: data: https://cdn.bsky.app https://*.twitter.com https://*.twimg.com https://*.instagram.com https://*.fbcdn.net https://*.facebook.com https://*.tiktokcdn.com https://*.cdninstagram.com https://*.firebasestorage.googleapis.com https://storage.googleapis.com;
+      img-src 'self' blob: data: https://cdn.bsky.app https://*.twitter.com https://*.twimg.com https://*.instagram.com https://*.fbcdn.net https://*.facebook.com https://*.tiktokcdn.com https://*.tiktokcdn-eu.com https://*.cdninstagram.com https://*.firebasestorage.googleapis.com https://storage.googleapis.com https://*.googleusercontent.com;
       font-src 'self';
       object-src 'none';
       base-uri 'self';

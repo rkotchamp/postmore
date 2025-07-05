@@ -24,7 +24,6 @@ try {
  * This API endpoint handles both immediate and scheduled posts
  */
 export async function POST(request) {
-  console.log("API Route: /api/posts/submit POST handler started");
   let session; // Declare session at a higher scope
 
   try {
@@ -32,23 +31,12 @@ export async function POST(request) {
     try {
       session = await getServerSession(authOptions);
 
-      console.log(
-        "API Route: Full session object after getServerSession:",
-        JSON.stringify(session, null, 2)
-      );
       if (!session || !session.user || !session.user.id) {
-        console.log(
-          "API Route: Authentication failed, no valid session or user ID"
-        );
         return NextResponse.json(
           { error: "Authentication required: Valid user session not found." },
           { status: 401 }
         );
       }
-      console.log(
-        "API Route: Authentication successful for user:",
-        session.user.id
-      );
     } catch (authError) {
       console.error("API Route: Authentication error:", authError);
       return NextResponse.json(
@@ -61,14 +49,6 @@ export async function POST(request) {
     let postData;
     try {
       postData = await request.json();
-      console.log("API Route: Request body parsed successfully");
-      console.log("API Route: Post data overview:", {
-        contentType: postData.contentType,
-        mediaCount: postData.media?.length || 0,
-        accountCount: postData.accounts?.length || 0,
-        captionMode: postData.captions?.mode,
-        scheduleType: postData.schedule?.type,
-      });
     } catch (parseError) {
       console.error("API Route: Error parsing request body:", parseError);
       return NextResponse.json(
@@ -82,29 +62,10 @@ export async function POST(request) {
       const blueskyAccounts = postData.accounts.filter(
         (account) => account.platform === "bluesky"
       );
-      if (blueskyAccounts.length > 0) {
-        console.log(
-          "API Route: Found Bluesky accounts:",
-          JSON.stringify(
-            blueskyAccounts.map((acc) => ({
-              id: acc.id,
-              name: acc.name,
-              email: acc.email,
-              platformAccountId:
-                acc.originalData?.platformAccountId || "missing",
-              accessToken: acc.accessToken ? "exists" : "missing",
-              refreshToken: acc.refreshToken ? "exists" : "missing",
-            })),
-            null,
-            2
-          )
-        );
-      }
     }
 
     // Validate required fields
     if (!postData) {
-      console.log("API Route: Missing post data");
       return NextResponse.json(
         { error: "Post data is required" },
         { status: 400 }
@@ -113,11 +74,9 @@ export async function POST(request) {
 
     // Extract and validate post content
     const { contentType, text, media, accounts, captions, schedule } = postData;
-    console.log("API Route: Extracted post content fields");
 
     // Validate content type and content
     if (!contentType) {
-      console.log("API Route: Missing content type");
       return NextResponse.json(
         { error: "Content type is required" },
         { status: 400 }
@@ -125,7 +84,6 @@ export async function POST(request) {
     }
 
     if (contentType === "text" && !text) {
-      console.log("API Route: Missing text content for text post");
       return NextResponse.json(
         { error: "Text content is required for text posts" },
         { status: 400 }
@@ -133,7 +91,6 @@ export async function POST(request) {
     }
 
     if (contentType === "media" && (!media || media.length === 0)) {
-      console.log("API Route: Missing media for media post");
       return NextResponse.json(
         { error: "Media files are required for media posts" },
         { status: 400 }
@@ -149,15 +106,9 @@ export async function POST(request) {
       );
     }
 
-    console.log(
-      "API Route: Processing accounts:",
-      JSON.stringify(accounts.map((a) => ({ id: a.id, type: a.type })))
-    );
-
     // Ensure database connection
     try {
       await ensureDbConnection();
-      console.log("API Route: Database connection established");
     } catch (dbConnError) {
       console.error("API Route: Database connection error:", dbConnError);
       return NextResponse.json(
@@ -174,9 +125,6 @@ export async function POST(request) {
         { status: 500 }
       );
     }
-
-    // Construct Post object for the database
-    console.log("API Route: Constructing post document");
 
     // Helper function to map MIME types to schema-defined media types
     const getSchemaMediaType = (mimeType) => {
@@ -204,17 +152,33 @@ export async function POST(request) {
         id: account.id,
         name: account.name,
         email: account.email,
-        type: account.platform, // Use account.platform from client and assign to schema's 'type' field
+        type: (account.platform || "").toLowerCase(), // Normalize to lowercase
         platformAccountId:
           account.originalData?.platformAccountId ||
           account.platformId ||
           account.id,
       })),
-      captions: captions || {
-        mode: "single",
-        single: text || "",
-        multipleCaptions: {},
-      },
+      captions: captions
+        ? {
+            mode: captions.mode || "single",
+            single: captions.single || "",
+            // Ensure multiple captions are properly formatted for MongoDB's Map type
+            multiple:
+              captions.mode === "multiple" && captions.multiple
+                ? // Convert the object to a proper Map format that MongoDB expects
+                  Object.fromEntries(
+                    Object.entries(captions.multiple).map(([key, value]) => [
+                      key,
+                      value,
+                    ])
+                  )
+                : {},
+          }
+        : {
+            mode: "single",
+            single: text || "",
+            multiple: {},
+          },
       // Adjust schedule type to match schema enum
       schedule: schedule
         ? {
@@ -232,15 +196,26 @@ export async function POST(request) {
       JSON.stringify(postDocument, null, 2)
     );
 
+    // Add specific logging for captions
+    if (
+      postDocument.captions.mode === "multiple" &&
+      postDocument.captions.multiple
+    ) {
+      console.log(
+        "API Route: Multiple captions data:",
+        JSON.stringify(postDocument.captions.multiple, null, 2)
+      );
+      console.log(
+        "API Route: Multiple captions keys:",
+        Object.keys(postDocument.captions.multiple)
+      );
+    }
+
     // Create a new post document in the database
-    console.log("API Route: Creating post document in database");
+
     let savedPost;
     try {
       savedPost = await Post.create(postDocument);
-      console.log(
-        "API Route: Post created in database with ID:",
-        savedPost._id.toString()
-      );
     } catch (dbError) {
       console.error("API Route: Database error creating post:", dbError);
       return NextResponse.json(
@@ -298,8 +273,27 @@ export async function POST(request) {
         );
         console.log("API Route: Post scheduled successfully");
 
+        // Check if any platform used native scheduling (like YouTube)
+        const hasNativeScheduling = results.some((r) => r.nativeScheduling);
+
         // Update post status
         savedPost.status = "scheduled";
+
+        // Store the scheduling results
+        savedPost.results = results.map((result) => ({
+          platform: result.platform,
+          accountId: result.accountId,
+          success: result.success,
+          postId: result.result?.videoId || result.jobId || null,
+          url: result.result?.url || null,
+          error: result.error || null,
+          nativeScheduling: !!result.nativeScheduling,
+          scheduledTime: result.scheduledTime
+            ? new Date(result.scheduledTime)
+            : null,
+          timestamp: new Date(),
+        }));
+
         await savedPost.save();
       } catch (scheduleError) {
         console.error("API Route: Error scheduling post:", scheduleError);
@@ -427,5 +421,5 @@ function getCaptionForPlatform(captions, platform, accountId) {
   }
 
   // Return account-specific caption or fall back to default
-  return captions.multipleCaptions?.[accountId] || captions.single || "";
+  return captions.multiple?.[accountId] || captions.single || "";
 }

@@ -86,6 +86,7 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
 
 export default function ScheduledPosts() {
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [isGrouped, setIsGrouped] = useState(true);
   const {
     scheduledPosts,
     isLoading: postsLoading,
@@ -239,24 +240,52 @@ export default function ScheduledPosts() {
     );
   }
 
-  // Otherwise show the month groups
+  // Otherwise show the month groups or all posts depending on isGrouped state
   return (
     <DashboardLayout>
       <div className="p-3 sm:p-4 md:p-6">
-        <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
-          Scheduled Posts
-        </h1>
-
-        <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-          {Object.entries(groupedPosts).map(([monthYear, posts]) => (
-            <MonthPostGroup
-              key={monthYear}
-              monthYear={monthYear}
-              posts={posts}
-              onClick={() => handleSelectMonth(monthYear)}
-            />
-          ))}
+        <div className="flex justify-between items-center mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold">Scheduled Posts</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsGrouped(!isGrouped)}
+            className="flex items-center gap-1.5"
+          >
+            {isGrouped ? (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>Show All</span>
+              </>
+            ) : (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>Group by Month</span>
+              </>
+            )}
+          </Button>
         </div>
+
+        {isGrouped ? (
+          // Grouped view - show month groups
+          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {Object.entries(groupedPosts).map(([monthYear, posts]) => (
+              <MonthPostGroup
+                key={monthYear}
+                monthYear={monthYear}
+                posts={posts}
+                onClick={() => handleSelectMonth(monthYear)}
+              />
+            ))}
+          </div>
+        ) : (
+          // Ungrouped view - show all posts in a grid
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {enhancedPosts.map((post) => (
+              <Post key={post.id} post={post} />
+            ))}
+          </div>
+        )}
 
         {Object.keys(groupedPosts).length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 sm:py-12">

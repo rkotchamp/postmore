@@ -296,7 +296,7 @@ const post = async (accountData, postData) => {
         postText = postData.captions.single || "";
       } else if (postData.captions?.mode === "multiple") {
         postText =
-          postData.captions?.multipleCaptions?.[accountData.id] ||
+          postData.captions?.multiple?.[accountData.id] ||
           postData.captions?.single ||
           "";
       }

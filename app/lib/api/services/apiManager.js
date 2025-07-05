@@ -5,6 +5,8 @@
 
 // Import platform services
 import blueSkyService from "./BlueSky/blueSkyService";
+import youtubeService from "./youtube/youtubeService";
+import tiktokService from "./tiktok/tiktokService";
 import { addPostToQueue } from "@/app/lib/queues/postQueue";
 
 // Platform service registry
@@ -35,6 +37,8 @@ const platformServices = {
     }),
   },
   bluesky: blueSkyService,
+  ytShorts: youtubeService, // YouTube Shorts service
+  tiktok: tiktokService, // TikTok service
 };
 
 /**
@@ -198,9 +202,78 @@ const postToPlatform = async (platform, account, data) => {
       }
     }
 
+    // If it's TikTok, ensure the account data has the expected structure
+    if (platform === "tiktok") {
+      mappedAccount = extractAccountData(account);
+
+      // Validate TikTok-specific account data
+      if (!mappedAccount.accessToken) {
+        throw new Error("Missing accessToken for TikTok account");
+      }
+
+      // Transform media array to mediaFiles for TikTok service
+      if (mappedData.media && Array.isArray(mappedData.media)) {
+        mappedData.mediaFiles = mappedData.media;
+        // Keep media for backwards compatibility but TikTok service uses mediaFiles
+      }
+
+      // Transform captions for TikTok
+      if (mappedData.captions) {
+        const caption = getCaptionForPlatform(
+          mappedData.captions,
+          platform,
+          account.id
+        );
+        mappedData.textContent = caption;
+      }
+    }
+
     // Call the platform-specific post method with the mapped account data
 
     const result = await service.post(mappedAccount, mappedData);
+
+    // If platform is YouTube and we're using native scheduling, handle it properly
+    if (
+      platform === "ytShorts" &&
+      result.isScheduled &&
+      result.nativeScheduling
+    ) {
+      // For YouTube with native scheduling, add specific YouTube data to the result
+      const youtubeData = {
+        videoId: result.videoId,
+        status: result.status || "scheduled",
+        publishAt: result.scheduledTime,
+        privacyStatus: "private", // Will be published by YouTube at scheduled time
+      };
+
+      return {
+        success: true,
+        postId: result.videoId,
+        url: result.url,
+        nativeScheduling: true,
+        scheduledTime: result.scheduledTime,
+        youtubeData, // Add platform-specific data
+      };
+    }
+
+    // If platform is TikTok and we have a successful result, handle it properly
+    if (platform === "tiktok" && result.success) {
+      // For TikTok, add specific TikTok data to the result
+      const tiktokData = {
+        publishId: result.postId,
+        status: result.status || "published",
+        shareUrl: result.url,
+        mediaType: result.mediaType,
+        privacyLevel: result.privacyLevel,
+      };
+
+      return {
+        success: true,
+        postId: result.postId,
+        url: result.url,
+        tiktokData, // Add platform-specific data
+      };
+    }
 
     return {
       success: true,
@@ -269,6 +342,41 @@ const postToMultiplePlatforms = async (targets, data) => {
  */
 const schedulePost = async (platform, account, data, scheduledTime) => {
   try {
+    // For YouTube, we can use the platform's native scheduling
+    if (platform === "ytShorts") {
+      try {
+        console.log(
+          `Using YouTube native scheduling for post at ${scheduledTime}`
+        );
+
+        // Add scheduledTime to the data object for the YouTube service
+        const youtubeData = {
+          ...data,
+          scheduledTime: scheduledTime,
+        };
+
+        // Call the YouTube service directly with scheduled time
+        const result = await platformServices.ytShorts.post(
+          account,
+          youtubeData
+        );
+
+        return {
+          success: true,
+          platform,
+          accountId: account.id,
+          scheduledTime: scheduledTime,
+          result,
+          message: `Post scheduled for ${platform} using YouTube's native scheduling for ${scheduledTime}`,
+          nativeScheduling: true,
+        };
+      } catch (youtubeError) {
+        console.error(`Error using YouTube native scheduling:`, youtubeError);
+        throw new Error(`YouTube scheduling failed: ${youtubeError.message}`);
+      }
+    }
+
+    // For other platforms, use our queue system
     // Construct the postData object expected by addPostToQueue
     // Assuming 'data' contains userId, content (which includes text, media, captions)
     // and 'account' is the full account object.
@@ -375,6 +483,20 @@ const schedulePost = async (platform, account, data, scheduledTime) => {
 };
 
 /**
+ * Extract account data from different formats
+ */
+function extractAccountData(account) {
+  if (account.originalData) {
+    return {
+      ...account.originalData,
+      id: account.id,
+      platformId: account.platformId || account.originalData.platformAccountId,
+    };
+  }
+  return account;
+}
+
+/**
  * Get caption for a specific platform
  */
 function getCaptionForPlatform(captions, platform, accountId) {
@@ -385,7 +507,7 @@ function getCaptionForPlatform(captions, platform, accountId) {
   }
 
   // Return account-specific caption or fall back to default
-  return captions.multipleCaptions?.[accountId] || captions.single || "";
+  return captions.multiple?.[accountId] || captions.single || "";
 }
 
 // Export the API Manager functions
