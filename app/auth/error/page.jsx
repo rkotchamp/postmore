@@ -89,3 +89,4 @@ export default function AuthError() {
     </div>
   );
 }
+// Suspense boundary fix applied
