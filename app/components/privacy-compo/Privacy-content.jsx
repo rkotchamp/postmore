@@ -282,13 +282,13 @@ export function PrivacyContent() {
                 <div className="bg-muted/30 p-4 rounded-lg space-y-2">
                   <div className="flex items-center text-muted-foreground">
                     <Mail className="h-4 w-4 mr-2 text-primary" />
-                    <span>Email: privacy@postmore.app</span>
+                    <span>Email: privacy@postmoo.re</span>
                   </div>
                   <div className="flex items-start text-muted-foreground">
                     <MapPin className="h-4 w-4 mr-2 text-primary mt-0.5" />
                     <span>
-                      Address: PostMore Headquarters, 123 Scheduler Street, San
-                      Francisco, CA 94103, USA
+                      Address: PostMore Headquarters,Bucureşti Sectorul 1,
+                      Bulevardul BUCUREŞTII NOI, Nr. 136, Parter, Ap. 5
                     </span>
                   </div>
                 </div>
