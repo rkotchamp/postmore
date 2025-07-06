@@ -39,10 +39,10 @@ export function Header() {
               Reviews
             </Link>
             <Link
-              href="#"
+              href="/privacy"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              Support
+              Privacy & Support
             </Link>
           </nav>
 
