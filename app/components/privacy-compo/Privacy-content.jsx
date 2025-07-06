@@ -11,7 +11,7 @@ export function PrivacyContent() {
           <div className="flex items-center justify-center mb-4">
             <Shield className="h-12 w-12 text-primary mr-3" />
             <h1 className="text-4xl font-bold text-foreground">
-              Privacy Policy
+              Privacy Policy & Terms of Service
             </h1>
           </div>
           <Badge variant="secondary" className="bg-muted text-foreground">
@@ -19,7 +19,8 @@ export function PrivacyContent() {
           </Badge>
           <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
             We respect your privacy and are committed to protecting your
-            personal data. This policy explains how we handle your information.
+            personal data. This document explains how we handle your information
+            and the terms governing your use of PostMoore.
           </p>
         </div>
 
@@ -307,6 +308,259 @@ export function PrivacyContent() {
                   information in accordance with this Privacy Policy.
                 </p>
               </section>
+
+              {/* Terms of Service Separator */}
+              <div className="border-t border-muted my-12"></div>
+
+              {/* Terms of Service Header */}
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-foreground mb-4">
+                  Terms of Service
+                </h1>
+                <p className="text-muted-foreground">
+                  These terms govern your use of PostMoore's social media
+                  scheduling service.
+                </p>
+              </div>
+
+              {/* Terms Sections */}
+              {/* Acceptance of Terms */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    1
+                  </span>
+                  Acceptance of Terms
+                </h2>
+                <p className="text-muted-foreground">
+                  By accessing or using PostMoore, you agree to be bound by
+                  these Terms of Service and our Privacy Policy. If you do not
+                  agree to these terms, please do not use our service.
+                </p>
+              </section>
+
+              {/* Description of Service */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    2
+                  </span>
+                  Description of Service
+                </h2>
+                <p className="text-muted-foreground">
+                  PostMoore is a social media scheduling and management platform
+                  that allows users to schedule, publish, and manage content
+                  across multiple social media platforms including Instagram,
+                  TikTok, YouTube, and Bluesky.
+                </p>
+              </section>
+
+              {/* User Accounts and Responsibilities */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    3
+                  </span>
+                  User Accounts and Responsibilities
+                </h2>
+                <div className="space-y-4">
+                  <p className="text-muted-foreground">
+                    You are responsible for:
+                  </p>
+                  <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                    <li>
+                      Maintaining the security of your account credentials
+                    </li>
+                    <li>All activities that occur under your account</li>
+                    <li>
+                      Ensuring your content complies with platform policies
+                    </li>
+                    <li>Providing accurate registration information</li>
+                    <li>Promptly notifying us of any security breaches</li>
+                  </ul>
+                </div>
+              </section>
+
+              {/* Prohibited Uses */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    4
+                  </span>
+                  Prohibited Uses
+                </h2>
+                <p className="text-muted-foreground mb-3">
+                  You may not use PostMoore to:
+                </p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                  <li>Violate any applicable laws or regulations</li>
+                  <li>Post harmful, offensive, or inappropriate content</li>
+                  <li>Spam or engage in abusive behavior</li>
+                  <li>Infringe on intellectual property rights</li>
+                  <li>Attempt to gain unauthorized access to our systems</li>
+                  <li>Distribute malware or malicious code</li>
+                  <li>Engage in any activity that could harm our service</li>
+                </ul>
+              </section>
+
+              {/* Content and Intellectual Property */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    5
+                  </span>
+                  Content and Intellectual Property
+                </h2>
+                <div className="space-y-4">
+                  <p className="text-muted-foreground">
+                    <strong>Your Content:</strong> You retain ownership of all
+                    content you upload to PostMoore. By using our service, you
+                    grant us a limited license to process, store, and distribute
+                    your content as necessary to provide our services.
+                  </p>
+                  <p className="text-muted-foreground">
+                    <strong>Our Platform:</strong> PostMoore and its original
+                    content, features, and functionality are owned by us and are
+                    protected by copyright, trademark, and other intellectual
+                    property laws.
+                  </p>
+                </div>
+              </section>
+
+              {/* Payment Terms */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    6
+                  </span>
+                  Payment Terms
+                </h2>
+                <div className="space-y-4">
+                  <p className="text-muted-foreground">
+                    If you choose a paid subscription plan:
+                  </p>
+                  <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                    <li>
+                      Payments are processed through secure third-party
+                      providers
+                    </li>
+                    <li>Subscriptions automatically renew unless cancelled</li>
+                    <li>Refunds are subject to our refund policy</li>
+                    <li>Price changes will be communicated in advance</li>
+                    <li>You can cancel your subscription at any time</li>
+                  </ul>
+                </div>
+              </section>
+
+              {/* Termination */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    7
+                  </span>
+                  Termination
+                </h2>
+                <p className="text-muted-foreground">
+                  We may terminate or suspend your account and access to
+                  PostMoore immediately, without prior notice, if you breach
+                  these Terms of Service. You may also terminate your account at
+                  any time by contacting us or using the account deletion
+                  feature.
+                </p>
+              </section>
+
+              {/* Disclaimers */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    8
+                  </span>
+                  Disclaimers
+                </h2>
+                <p className="text-muted-foreground">
+                  PostMoore is provided "as is" without warranties of any kind.
+                  We do not guarantee that our service will be uninterrupted,
+                  error-free, or completely secure. We are not responsible for
+                  issues arising from third-party social media platforms.
+                </p>
+              </section>
+
+              {/* Limitation of Liability */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    9
+                  </span>
+                  Limitation of Liability
+                </h2>
+                <p className="text-muted-foreground">
+                  To the fullest extent permitted by law, PostMoore shall not be
+                  liable for any indirect, incidental, special, consequential,
+                  or punitive damages resulting from your use of our service,
+                  including but not limited to loss of profits, data, or
+                  business opportunities.
+                </p>
+              </section>
+
+              {/* Governing Law */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    10
+                  </span>
+                  Governing Law
+                </h2>
+                <p className="text-muted-foreground">
+                  These Terms of Service are governed by and construed in
+                  accordance with the laws of Romania. Any disputes arising from
+                  these terms will be resolved in the courts of Bucureşti,
+                  Romania.
+                </p>
+              </section>
+
+              {/* Changes to Terms */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    11
+                  </span>
+                  Changes to Terms
+                </h2>
+                <p className="text-muted-foreground">
+                  We reserve the right to modify these Terms of Service at any
+                  time. We will notify users of any material changes by posting
+                  the updated terms on our website and updating the "Last
+                  Updated" date. Your continued use of PostMoore after changes
+                  constitutes acceptance of the new terms.
+                </p>
+              </section>
+
+              {/* Contact Information */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    12
+                  </span>
+                  Contact Information
+                </h2>
+                <p className="text-muted-foreground mb-4">
+                  If you have any questions about these Terms of Service, please
+                  contact us at:
+                </p>
+                <div className="bg-muted/30 p-4 rounded-lg space-y-2">
+                  <div className="flex items-center text-muted-foreground">
+                    <Mail className="h-4 w-4 mr-2 text-primary" />
+                    <span>Email: legal@postmoo.re</span>
+                  </div>
+                  <div className="flex items-start text-muted-foreground">
+                    <MapPin className="h-4 w-4 mr-2 text-primary mt-0.5" />
+                    <span>
+                      Address: PostMoore Headquarters, Bucureşti Sectorul 1,
+                      Bulevardul BUCUREŞTII NOI, Nr. 136, Parter, Ap. 5
+                    </span>
+                  </div>
+                </div>
+              </section>
             </div>
           </CardContent>
         </Card>
@@ -314,15 +568,24 @@ export function PrivacyContent() {
         {/* Bottom CTA */}
         <div className="text-center mt-12">
           <p className="text-muted-foreground mb-4">
-            Have questions about our privacy practices?
+            Have questions about our privacy practices or terms of service?
           </p>
-          <a
-            href="mailto:privacy@postmoo.re"
-            className="inline-flex items-center text-primary hover:text-primary/80 font-semibold"
-          >
-            <Mail className="h-4 w-4 mr-2" />
-            Contact our privacy team
-          </a>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="mailto:privacy@postmoo.re"
+              className="inline-flex items-center text-primary hover:text-primary/80 font-semibold"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Privacy Team
+            </a>
+            <a
+              href="mailto:legal@postmoo.re"
+              className="inline-flex items-center text-primary hover:text-primary/80 font-semibold"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Legal Team
+            </a>
+          </div>
         </div>
       </div>
     </div>

@@ -42,7 +42,7 @@ export function Header() {
               href="/privacy"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              Privacy & Support
+              Privacy & Terms
             </Link>
           </nav>
 
