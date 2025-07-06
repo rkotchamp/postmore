@@ -36,7 +36,7 @@ export function PrivacyContent() {
                   Introduction
                 </h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Welcome to PostMore ("we," "our," or "us"). We respect your
+                  Welcome to PostMoore ("we," "our," or "us"). We respect your
                   privacy and are committed to protecting your personal data.
                   This Privacy Policy explains how we collect, use, disclose,
                   and safeguard your information when you use our social media
@@ -94,7 +94,7 @@ export function PrivacyContent() {
                     <p className="text-muted-foreground">
                       We use cookies and similar tracking technologies to
                       enhance your experience and collect information about how
-                      you use PostMore.
+                      you use PostMoore.
                     </p>
                   </div>
                 </div>
@@ -287,7 +287,7 @@ export function PrivacyContent() {
                   <div className="flex items-start text-muted-foreground">
                     <MapPin className="h-4 w-4 mr-2 text-primary mt-0.5" />
                     <span>
-                      Address: PostMore Headquarters,Bucureşti Sectorul 1,
+                      Address: PostMoore Headquarters,Bucureşti Sectorul 1,
                       Bulevardul BUCUREŞTII NOI, Nr. 136, Parter, Ap. 5
                     </span>
                   </div>
@@ -303,7 +303,7 @@ export function PrivacyContent() {
                   Consent
                 </h2>
                 <p className="text-muted-foreground">
-                  By using PostMore, you consent to the collection and use of
+                  By using PostMoore, you consent to the collection and use of
                   information in accordance with this Privacy Policy.
                 </p>
               </section>
@@ -317,7 +317,7 @@ export function PrivacyContent() {
             Have questions about our privacy practices?
           </p>
           <a
-            href="mailto:privacy@postmore.app"
+            href="mailto:privacy@postmoo.re"
             className="inline-flex items-center text-primary hover:text-primary/80 font-semibold"
           >
             <Mail className="h-4 w-4 mr-2" />
