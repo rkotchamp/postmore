@@ -24,8 +24,9 @@ import {
   EyeOff,
 } from "lucide-react";
 import { newPasswordSchema } from "@/app/models/ZodFormSchemas";
+import { Suspense } from "react";
 
-export function NewPasswordForm() {
+function NewPasswordFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resetCode = searchParams.get("code");
@@ -259,5 +260,36 @@ export function NewPasswordForm() {
         </form>
       </Form>
     </div>
+  );
+}
+
+function NewPasswordFormFallback() {
+  return (
+    <div className="grid gap-6">
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">
+          Loading password reset form...
+        </p>
+      </div>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="space-y-2">
+          <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+      </div>
+    </div>
+  );
+}
+
+export function NewPasswordForm() {
+  return (
+    <Suspense fallback={<NewPasswordFormFallback />}>
+      <NewPasswordFormContent />
+    </Suspense>
   );
 }
