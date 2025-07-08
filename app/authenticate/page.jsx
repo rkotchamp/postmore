@@ -76,7 +76,7 @@ export default function Authenticate() {
             platformAccountId: account.platformAccountId,
           });
         }
-        console.log(acc);
+
         return acc;
       },
       { ...emptyAccounts }
@@ -156,8 +156,6 @@ export default function Authenticate() {
 
     if (platform === "tiktok") {
       if (success === "true") {
-        console.log("TikTok authentication successful");
-
         if (debug === "true" && response) {
           setAuthStatus({
             type: "success",
@@ -171,10 +169,6 @@ export default function Authenticate() {
             message: "Connected to TikTok successfully!",
           });
         }
-
-        console.log(
-          "Authentication successful - React Query context manages fetching"
-        );
       } else if (error) {
         console.error("TikTok authentication error:", error, message);
         setAuthStatus({
@@ -183,7 +177,6 @@ export default function Authenticate() {
           message: message || `Failed to connect to TikTok: ${error}`,
         });
       } else if (code) {
-        console.log("Received authorization code from TikTok:", code);
         setAuthStatus({
           type: "success",
           platform: "tiktok",
@@ -198,7 +191,6 @@ export default function Authenticate() {
   }, []);
 
   const handleInstagramConnection = async () => {
-    console.log("Connecting to Instagram...");
     setIsLoadingAuthAction(true);
     setAuthStatus(null);
 
@@ -229,22 +221,18 @@ export default function Authenticate() {
   };
 
   const handleTwitterConnection = () => {
-    console.log("Connecting to Twitter...");
     // Integration code would go here
   };
 
   const handleFacebookConnection = () => {
-    console.log("Connecting to Facebook...");
     // Integration code would go here
   };
 
   const handleThreadsConnection = () => {
-    console.log("Connecting to Threads...");
     // Integration code would go here
   };
 
   const handleYtShortsConnection = async () => {
-    console.log("Connecting to YouTube Shorts...");
     setIsLoadingAuthAction(true);
     setAuthStatus(null);
 
@@ -275,14 +263,12 @@ export default function Authenticate() {
   };
 
   const handleTikTokAuth = async () => {
-    console.log("Initiating TikTok authentication");
     setIsLoadingAuthAction(true);
     setAuthStatus(null);
 
     try {
       const stateToken = Math.random().toString(36).substring(2, 15);
       localStorage.setItem("tiktok_auth_state", stateToken);
-      console.log("Generated state token:", stateToken);
 
       if (
         !process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID ||
@@ -323,14 +309,12 @@ export default function Authenticate() {
   };
 
   const handleBlueskyAuth = () => {
-    console.log("Opening Bluesky login modal...");
     setAuthStatus(null);
     setBlueskyLoginError(null);
     setIsBlueskyModalOpen(true);
   };
 
   const handleBlueskyLoginSubmit = async (credentials) => {
-    console.log("Submitting Bluesky credentials:", credentials.identifier);
     setIsLoadingAuthAction(true);
     setBlueskyLoginError(null);
     setAuthStatus(null);
@@ -353,7 +337,6 @@ export default function Authenticate() {
         throw new Error(data.message || "Bluesky login failed");
       }
 
-      console.log("Bluesky login successful:", data);
       setAuthStatus({
         type: "success",
         platform: "bluesky",
