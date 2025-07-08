@@ -391,7 +391,7 @@ async function refreshYouTubeToken(accountData) {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      process.env.YOUTUBE_REDIRECT_URI
     );
 
     // Set credentials using refresh token
@@ -465,7 +465,7 @@ async function uploadVideoToYouTube(
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
+        process.env.YOUTUBE_REDIRECT_URI
       );
 
       oauth2Client.setCredentials({
