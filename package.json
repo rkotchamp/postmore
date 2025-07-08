@@ -17,7 +17,11 @@
     "pm2-reload": "pm2 reload ecosystem.config.js",
     "pm2-delete": "pm2 delete ecosystem.config.js",
     "pm2-status": "pm2 status",
-    "pm2-logs": "pm2 logs"
+    "pm2-logs": "pm2 logs",
+    "migrate:status": "npx migrate-mongo status",
+    "migrate:up": "npx migrate-mongo up",
+    "migrate:down": "npx migrate-mongo down",
+    "migrate:create": "npx migrate-mongo create"
   },
   "dependencies": {
     "@atproto/api": "^0.15.7",

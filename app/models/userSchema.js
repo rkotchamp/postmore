@@ -68,6 +68,11 @@ const userSchema = new mongoose.Schema({
       ref: "SocialAccount",
     },
   ],
+  platformConsentAcknowledged: {
+    type: Map,
+    of: Boolean,
+    default: {},
+  },
   createdAt: {
     type: Date,
     default: Date.now,

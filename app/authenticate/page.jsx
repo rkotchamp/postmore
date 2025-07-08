@@ -31,6 +31,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/app/components/ui/alert";
 import { DisconnectDialog } from "./components/DisconnectDialog";
 import Spinner from "@/app/components/ui/Spinner";
 import { BlueskyLoginModal } from "./components/BlueskyLoginModal";
+import { PlatformConsentMessages } from "./components/PlatformConsentMessages";
 
 export default function Authenticate() {
   const {
@@ -53,6 +54,8 @@ export default function Authenticate() {
 
   const [isBlueskyModalOpen, setIsBlueskyModalOpen] = useState(false);
   const [blueskyLoginError, setBlueskyLoginError] = useState(null);
+  const [platformConsentAcknowledged, setPlatformConsentAcknowledged] =
+    useState({});
 
   const emptyAccounts = {
     instagram: [],
@@ -143,7 +146,45 @@ export default function Authenticate() {
     setDisconnectDialog((prev) => ({ ...prev, isOpen: false }));
   };
 
+  // Fetch platform consent acknowledgments
+  const fetchPlatformConsent = async () => {
+    try {
+      const response = await fetch("/api/auth/platform-consent");
+      if (response.ok) {
+        const data = await response.json();
+        setPlatformConsentAcknowledged(data.platformConsentAcknowledged || {});
+      }
+    } catch (error) {
+      console.error("Error fetching platform consent:", error);
+    }
+  };
+
+  // Update platform consent when user starts connection
+  const updatePlatformConsent = async (platform) => {
+    try {
+      const response = await fetch("/api/auth/platform-consent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ platform }),
+      });
+
+      if (response.ok) {
+        setPlatformConsentAcknowledged((prev) => ({
+          ...prev,
+          [platform]: true,
+        }));
+      }
+    } catch (error) {
+      console.error("Error updating platform consent:", error);
+    }
+  };
+
   useEffect(() => {
+    // Fetch platform consent acknowledgments on component mount
+    fetchPlatformConsent();
+
     const params = new URLSearchParams(window.location.search);
     const success = params.get("success");
     const error = params.get("error");
@@ -194,6 +235,9 @@ export default function Authenticate() {
     setIsLoadingAuthAction(true);
     setAuthStatus(null);
 
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("instagram");
+
     try {
       const response = await fetch("/api/auth/instagram/connect");
       const data = await response.json();
@@ -220,21 +264,30 @@ export default function Authenticate() {
     }
   };
 
-  const handleTwitterConnection = () => {
+  const handleTwitterConnection = async () => {
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("twitter");
     // Integration code would go here
   };
 
-  const handleFacebookConnection = () => {
+  const handleFacebookConnection = async () => {
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("facebook");
     // Integration code would go here
   };
 
-  const handleThreadsConnection = () => {
+  const handleThreadsConnection = async () => {
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("threads");
     // Integration code would go here
   };
 
   const handleYtShortsConnection = async () => {
     setIsLoadingAuthAction(true);
     setAuthStatus(null);
+
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("ytShorts");
 
     try {
       const response = await fetch("/api/auth/youtube/connect");
@@ -265,6 +318,9 @@ export default function Authenticate() {
   const handleTikTokAuth = async () => {
     setIsLoadingAuthAction(true);
     setAuthStatus(null);
+
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("tiktok");
 
     try {
       const stateToken = Math.random().toString(36).substring(2, 15);
@@ -308,9 +364,13 @@ export default function Authenticate() {
     }
   };
 
-  const handleBlueskyAuth = () => {
+  const handleBlueskyAuth = async () => {
     setAuthStatus(null);
     setBlueskyLoginError(null);
+
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("bluesky");
+
     setIsBlueskyModalOpen(true);
   };
 
@@ -581,29 +641,11 @@ export default function Authenticate() {
                       (isLoadingAuthAction && platform === "ytShorts") ||
                       (isLoadingAuthAction && platform === "instagram")
                         ? "Connecting..."
-                        : `Connect to ${platformNames[platform]}`}
+                        : `Connect a ${platformNames[platform]} account`}
                     </Button>
 
-                    {platform === "tiktok" && (
-                      <div className="mt-3 p-3 bg-muted/30 rounded-md text-xs text-muted-foreground">
-                        <p className="font-semibold mb-1">
-                          By connecting your TikTok account:
-                        </p>
-                        <ul className="list-disc pl-4 space-y-1">
-                          <li>
-                            You grant PostMore permission to post content on
-                            your behalf
-                          </li>
-                          <li>
-                            You can manage content posting settings from your
-                            TikTok account at any time
-                          </li>
-                          <li>
-                            All content will comply with TikTok's Content
-                            Sharing Guidelines
-                          </li>
-                        </ul>
-                      </div>
+                    {!platformConsentAcknowledged[platform] && (
+                      <PlatformConsentMessages platform={platform} />
                     )}
                   </div>
                 </div>
