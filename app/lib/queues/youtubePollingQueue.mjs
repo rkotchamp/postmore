@@ -59,11 +59,11 @@ export async function scheduleYouTubePolling() {
   const queue = getYouTubePollingQueue();
 
   try {
-    // Remove existing scheduled jobs
-    const jobs = await queue.getJobs();
-    for (const job of jobs) {
-      if (job.name === "check-youtube-status" && job.opts.repeat) {
-        await job.remove();
+    // Remove existing repeatable jobs using the proper method
+    const repeatableJobs = await queue.getRepeatableJobs();
+    for (const job of repeatableJobs) {
+      if (job.name === "check-youtube-status") {
+        await queue.removeRepeatableByKey(job.key);
       }
     }
 
@@ -72,7 +72,6 @@ export async function scheduleYouTubePolling() {
       "check-youtube-status",
       { scheduled: true },
       {
-        jobId: `check-youtube-status-${Date.now()}`,
         repeat: {
           pattern: "*/15 * * * *", // Every 15 minutes
         },

@@ -30,14 +30,29 @@ export async function checkYouTubeScheduledPosts() {
 
     await connectToDatabase();
 
+    // Debug logging removed - system is working correctly
+
     // Find scheduled YouTube posts within checking window
     const scheduledPosts = await Post.find({
       status: "scheduled",
       "results.platform": "ytShorts",
-      scheduledTime: {
-        $lte: new Date(Date.now() + 30 * 60 * 1000), // Within 30 minutes
-        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Within last 24 hours
-      },
+      $or: [
+        // Posts with scheduledTime within checking window
+        {
+          scheduledTime: {
+            $lte: new Date(Date.now() + 30 * 60 * 1000), // Within 30 minutes
+            $gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Within last 24 hours
+          },
+        },
+        // Posts without scheduledTime (fallback for immediate posts)
+        {
+          scheduledTime: { $exists: false },
+        },
+        // Posts with null scheduledTime
+        {
+          scheduledTime: null,
+        },
+      ],
     });
 
     console.log(
