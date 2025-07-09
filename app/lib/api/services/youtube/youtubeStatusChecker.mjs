@@ -4,12 +4,22 @@
  */
 
 import { google } from "googleapis";
-import mongodb from "../../../db/mongodb.js";
-const { connectToDatabase } = mongodb;
+import { connectToDatabase } from "../../../queues/api-bridge.mjs";
+import mongoose from "mongoose";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const Post = require("../../../../models/PostSchema.js");
+
+// Get SocialAccount model after connection is established
+const getSocialAccountModel = () => {
+  try {
+    return mongoose.model("SocialAccount");
+  } catch (error) {
+    console.error("Error getting SocialAccount model:", error);
+    throw new Error("Failed to get SocialAccount model");
+  }
+};
 
 /**
  * Check all scheduled YouTube videos and update their status
@@ -133,8 +143,10 @@ async function checkSinglePost(post) {
  */
 async function getYouTubeAccount(userId) {
   try {
-    const db = await connectToDatabase();
-    const account = await db.collection("socialaccounts").findOne({
+    await connectToDatabase();
+
+    const SocialAccount = getSocialAccountModel();
+    const account = await SocialAccount.findOne({
       userId: userId,
       platform: "ytShorts",
       status: "active",

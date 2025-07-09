@@ -15,6 +15,7 @@ import {
   processRefreshAccountTokensJob,
 } from "./tokenRefreshQueue.mjs";
 import { processYouTubePollingJob } from "./youtubePollingQueue.mjs";
+import registerQueues from "./registerQueues.mjs";
 
 // Load environment variables directly
 import fs from "fs";
@@ -77,6 +78,18 @@ function startWorkers() {
   console.log("Queue workers started successfully");
 
   return { postWorker, tokenRefreshWorker, youtubePollingWorker };
+}
+
+// Initialize queues and schedule jobs
+async function initializeQueues() {
+  console.log("Initializing queues and scheduling jobs...");
+
+  try {
+    await registerQueues();
+    console.log("Queues initialized and jobs scheduled successfully");
+  } catch (error) {
+    console.error("Failed to initialize queues:", error);
+  }
 }
 
 function createPostWorker() {
@@ -196,5 +209,15 @@ function setupWorkerEventHandlers(worker, workerType) {
   });
 }
 
-// When this file is run directly, start the workers
-startWorkers();
+// When this file is run directly, start the workers and initialize queues
+async function main() {
+  // Start workers first
+  const workers = startWorkers();
+
+  // Then initialize queues and schedule jobs
+  await initializeQueues();
+
+  console.log("Standalone worker fully initialized and ready");
+}
+
+main().catch(console.error);
