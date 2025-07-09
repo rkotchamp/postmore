@@ -4,7 +4,8 @@
  */
 
 import { google } from "googleapis";
-import { connectToDatabase } from "../../../db/mongodb.mjs";
+import pkg from "../../../db/mongodb.js";
+const { connectToDatabase } = pkg;
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
