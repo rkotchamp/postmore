@@ -12,6 +12,8 @@ import {
   processRefreshAllTokensJob,
   processRefreshAccountTokensJob,
 } from "./tokenRefreshQueue.mjs";
+import { connectToMongoose } from "../db/mongoose.js";
+import Post from "../../models/PostSchema.js";
 
 // Redis connection configuration
 const redisConnection = {
@@ -19,6 +21,58 @@ const redisConnection = {
   port: parseInt(process.env.REDIS_PORT || "6379"),
   password: process.env.REDIS_PASSWORD,
 };
+
+/**
+ * Update post status in database based on job result
+ */
+async function updatePostStatus(jobId, result, jobData) {
+  try {
+    await connectToMongoose();
+
+    if (result.success) {
+      // Update post to published status and add result
+      await Post.findOneAndUpdate(
+        { userId: jobData.userId, status: "scheduled" },
+        {
+          status: "published",
+          updatedAt: new Date(),
+          $push: {
+            results: {
+              platform: result.platform,
+              accountId: jobData.accountData.id || jobData.accountData._id,
+              success: true,
+              postId: result.postId,
+              url: result.postUrl,
+              timestamp: new Date(),
+            },
+          },
+        }
+      );
+      console.log(`Post ${jobId} marked as published on ${result.platform}`);
+    } else {
+      // Update post to failed status and add error result
+      await Post.findOneAndUpdate(
+        { userId: jobData.userId, status: "scheduled" },
+        {
+          status: "failed",
+          updatedAt: new Date(),
+          $push: {
+            results: {
+              platform: result.platform,
+              accountId: jobData.accountData.id || jobData.accountData._id,
+              success: false,
+              error: result.message || result.error?.message || "Unknown error",
+              timestamp: new Date(),
+            },
+          },
+        }
+      );
+      console.log(`Post ${jobId} marked as failed: ${result.message}`);
+    }
+  } catch (error) {
+    console.error(`Error updating post status for job ${jobId}:`, error);
+  }
+}
 
 // Create workers for the posts and token refresh queues
 function startWorkers() {
@@ -107,14 +161,31 @@ function createTokenRefreshWorker() {
 }
 
 function setupWorkerEventHandlers(worker, workerType) {
-  worker.on("completed", (job) => {
+  worker.on("completed", async (job) => {
     console.log(`${workerType} job ${job.id} has completed`);
+
+    // Update database for post jobs
+    if (workerType === "Post" && job.returnvalue) {
+      await updatePostStatus(job.id, job.returnvalue, job.data);
+    }
   });
 
-  worker.on("failed", (job, error) => {
+  worker.on("failed", async (job, error) => {
     console.error(`${workerType} job ${job.id} has failed with error:`, error);
-    // You could implement additional error handling here
-    // For example, sending notifications or logging to a monitoring system
+
+    // Update database for post jobs
+    if (workerType === "Post") {
+      await updatePostStatus(
+        job.id,
+        {
+          success: false,
+          message: error.message || "Job failed",
+          platform: job.data?.platform || "unknown",
+          error: error,
+        },
+        job.data
+      );
+    }
   });
 
   worker.on("error", (error) => {

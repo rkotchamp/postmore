@@ -641,7 +641,7 @@ export default function Authenticate() {
                       (isLoadingAuthAction && platform === "ytShorts") ||
                       (isLoadingAuthAction && platform === "instagram")
                         ? "Connecting..."
-                        : `Connect a ${platformNames[platform]} account`}
+                        : `Connect a ${platformNames[platform]} Account`}
                     </Button>
 
                     {!platformConsentAcknowledged[platform] && (
