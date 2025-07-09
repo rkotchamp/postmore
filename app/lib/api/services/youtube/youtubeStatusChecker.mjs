@@ -4,11 +4,11 @@
  */
 
 import { google } from "googleapis";
-import { connectToDatabase } from "../../../db/mongodb.js";
+import { connectToDatabase } from "../../../db/mongodb.mjs";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const Post = require("../../../models/PostSchema.js");
+const Post = require("../../../../models/PostSchema.js");
 
 /**
  * Check all scheduled YouTube videos and update their status

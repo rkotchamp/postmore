@@ -4,7 +4,7 @@
  */
 
 import { Queue } from "bullmq";
-import { checkYouTubeScheduledPosts } from "../api/services/youtube/youtubeStatusChecker.js";
+import { checkYouTubeScheduledPosts } from "../api/services/youtube/youtubeStatusChecker.mjs";
 
 // Redis connection configuration
 const redisConnection = {
