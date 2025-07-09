@@ -13,7 +13,9 @@ import {
   processRefreshAccountTokensJob,
 } from "./tokenRefreshQueue.mjs";
 import { connectToMongoose } from "../db/mongoose.js";
-import Post from "../../models/PostSchema.js";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const Post = require("../../models/PostSchema.js");
 
 // Redis connection configuration
 const redisConnection = {
@@ -27,50 +29,101 @@ const redisConnection = {
  */
 async function updatePostStatus(jobId, result, jobData) {
   try {
+    console.log(`🔄 Updating post status for job ${jobId}`, {
+      userId: jobData?.userId,
+      platform: result?.platform,
+      success: result?.success,
+      accountId: jobData?.accountData?.id || jobData?.accountData?._id,
+    });
+
     await connectToMongoose();
+    console.log("✅ Connected to MongoDB");
+
+    // First, let's find if there are any posts for this user
+    const userPosts = await Post.find({ userId: jobData.userId }).limit(5);
+    console.log(
+      `📋 Found ${userPosts.length} posts for user ${jobData.userId}`
+    );
+
+    // Show the statuses of recent posts
+    userPosts.forEach((post) => {
+      console.log(
+        `📄 Post ${post._id}: status="${post.status}", platform="${post.accounts?.[0]?.type}"`
+      );
+    });
+
+    const updateData = {
+      updatedAt: new Date(),
+      $push: {
+        results: {
+          platform: result.platform,
+          accountId: jobData.accountData?.id || jobData.accountData?._id,
+          success: result.success,
+          timestamp: new Date(),
+          ...(result.success
+            ? {
+                postId: result.postId,
+                url: result.postUrl,
+              }
+            : {
+                error:
+                  result.message || result.error?.message || "Unknown error",
+              }),
+        },
+      },
+    };
 
     if (result.success) {
-      // Update post to published status and add result
-      await Post.findOneAndUpdate(
-        { userId: jobData.userId, status: "scheduled" },
-        {
-          status: "published",
-          updatedAt: new Date(),
-          $push: {
-            results: {
-              platform: result.platform,
-              accountId: jobData.accountData.id || jobData.accountData._id,
-              success: true,
-              postId: result.postId,
-              url: result.postUrl,
-              timestamp: new Date(),
-            },
-          },
-        }
-      );
-      console.log(`Post ${jobId} marked as published on ${result.platform}`);
+      updateData.status = "published";
     } else {
-      // Update post to failed status and add error result
-      await Post.findOneAndUpdate(
-        { userId: jobData.userId, status: "scheduled" },
-        {
-          status: "failed",
-          updatedAt: new Date(),
-          $push: {
-            results: {
-              platform: result.platform,
-              accountId: jobData.accountData.id || jobData.accountData._id,
-              success: false,
-              error: result.message || result.error?.message || "Unknown error",
-              timestamp: new Date(),
-            },
-          },
-        }
+      updateData.status = "failed";
+    }
+
+    // Try multiple query approaches
+    let updatedPost = null;
+
+    // Approach 1: Find by userId and scheduled status
+    updatedPost = await Post.findOneAndUpdate(
+      { userId: jobData.userId, status: "scheduled" },
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedPost) {
+      console.log("⚠️ No scheduled post found, trying pending status...");
+      // Approach 2: Try pending status
+      updatedPost = await Post.findOneAndUpdate(
+        { userId: jobData.userId, status: "pending" },
+        updateData,
+        { new: true }
       );
-      console.log(`Post ${jobId} marked as failed: ${result.message}`);
+    }
+
+    if (!updatedPost) {
+      console.log("⚠️ No pending post found, trying most recent post...");
+      // Approach 3: Try the most recent post for this user
+      const recentPost = await Post.findOne({ userId: jobData.userId }).sort({
+        createdAt: -1,
+      });
+      if (recentPost) {
+        updatedPost = await Post.findByIdAndUpdate(recentPost._id, updateData, {
+          new: true,
+        });
+      }
+    }
+
+    if (updatedPost) {
+      console.log(`✅ Post ${jobId} updated successfully:`, {
+        postId: updatedPost._id,
+        status: updatedPost.status,
+        platform: result.platform,
+        resultsCount: updatedPost.results?.length || 0,
+      });
+    } else {
+      console.error(`❌ Failed to find and update post for job ${jobId}`);
     }
   } catch (error) {
-    console.error(`Error updating post status for job ${jobId}:`, error);
+    console.error(`💥 Error updating post status for job ${jobId}:`, error);
   }
 }
 
@@ -162,19 +215,31 @@ function createTokenRefreshWorker() {
 
 function setupWorkerEventHandlers(worker, workerType) {
   worker.on("completed", async (job) => {
-    console.log(`${workerType} job ${job.id} has completed`);
+    console.log(`🎉 ${workerType} job ${job.id} has completed`);
+    console.log(`📊 Job return value:`, job.returnvalue);
+    console.log(`📋 Job data:`, job.data);
 
     // Update database for post jobs
-    if (workerType === "Post" && job.returnvalue) {
-      await updatePostStatus(job.id, job.returnvalue, job.data);
+    if (workerType === "Post") {
+      if (job.returnvalue) {
+        console.log(`🔄 Starting database update for completed job ${job.id}`);
+        await updatePostStatus(job.id, job.returnvalue, job.data);
+      } else {
+        console.log(`⚠️ No return value found for job ${job.id}`);
+      }
     }
   });
 
   worker.on("failed", async (job, error) => {
-    console.error(`${workerType} job ${job.id} has failed with error:`, error);
+    console.error(
+      `💥 ${workerType} job ${job.id} has failed with error:`,
+      error.message
+    );
+    console.log(`📋 Failed job data:`, job.data);
 
     // Update database for post jobs
     if (workerType === "Post") {
+      console.log(`🔄 Starting database update for failed job ${job.id}`);
       await updatePostStatus(
         job.id,
         {
@@ -189,7 +254,15 @@ function setupWorkerEventHandlers(worker, workerType) {
   });
 
   worker.on("error", (error) => {
-    console.error(`${workerType} worker error:`, error);
+    console.error(`🚨 ${workerType} worker error:`, error);
+  });
+
+  worker.on("stalled", (jobId) => {
+    console.warn(`⏳ ${workerType} job ${jobId} has stalled`);
+  });
+
+  worker.on("progress", (job, progress) => {
+    console.log(`⏳ ${workerType} job ${job.id} progress: ${progress}%`);
   });
 }
 
