@@ -11,6 +11,10 @@ import {
   initYoutubeTokenRefreshQueue,
   scheduleRegularYoutubeTokenRefreshes,
 } from "./youtubeQueues/youtubeTokenRefreshQueue.mjs";
+import {
+  initYouTubePollingQueue,
+  scheduleYouTubePolling,
+} from "./youtubePollingQueue.mjs";
 
 // Redis connection configuration
 const redisConnection = {
@@ -39,6 +43,21 @@ export default async function registerQueues() {
       console.error(
         "Failed to initialize YouTube token refresh queue:",
         youtubeError
+      );
+    }
+
+    // Initialize YouTube polling queue
+    try {
+      const youtubePollingQueue = initYouTubePollingQueue();
+      console.log("YouTube polling queue initialized");
+
+      // Schedule regular YouTube status polling
+      await scheduleYouTubePolling();
+      console.log("YouTube status polling scheduled");
+    } catch (youtubePollingError) {
+      console.error(
+        "Failed to initialize YouTube polling queue:",
+        youtubePollingError
       );
     }
 

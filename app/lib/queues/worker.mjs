@@ -12,6 +12,7 @@ import {
   processRefreshAllTokensJob,
   processRefreshAccountTokensJob,
 } from "./tokenRefreshQueue.mjs";
+import { processYouTubePollingJob } from "./youtubePollingQueue.mjs";
 import { connectToMongoose } from "../db/mongoose.js";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
@@ -137,9 +138,12 @@ function startWorkers() {
   // Start the token refresh worker
   const tokenRefreshWorker = createTokenRefreshWorker();
 
+  // Start the YouTube polling worker
+  const youtubePollingWorker = createYouTubePollingWorker();
+
   console.log("Queue workers started successfully");
 
-  return { postWorker, tokenRefreshWorker };
+  return { postWorker, tokenRefreshWorker, youtubePollingWorker };
 }
 
 function createPostWorker() {
@@ -210,6 +214,36 @@ function createTokenRefreshWorker() {
   setupWorkerEventHandlers(worker, "Token refresh");
 
   console.log("Token refresh queue worker started successfully");
+  return worker;
+}
+
+function createYouTubePollingWorker() {
+  console.log("Starting YouTube polling queue worker...");
+
+  const worker = new Worker(
+    "youtube-polling",
+    async (job) => {
+      console.log(`YouTube polling worker processing job ${job.id}`, job.data);
+
+      try {
+        const result = await processYouTubePollingJob(job.data);
+        console.log(`Job ${job.id} completed successfully`, result);
+        return result;
+      } catch (error) {
+        console.error(`Job ${job.id} failed:`, error);
+        throw error;
+      }
+    },
+    {
+      connection: redisConnection,
+      concurrency: 1, // Only process one polling job at a time
+    }
+  );
+
+  // Set up event handlers
+  setupWorkerEventHandlers(worker, "YouTube polling");
+
+  console.log("YouTube polling queue worker started successfully");
   return worker;
 }
 
