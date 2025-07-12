@@ -6,6 +6,7 @@ import { Toaster } from "@/app/components/ui/sonner";
 import { QueryProvider } from "@/app/providers/QueryProvider";
 import { FetchAllAccountsProvider } from "@/app/context/FetchAllAccountsContext";
 import { PostProvider } from "@/app/context/FetchPostContext";
+import { UserProvider } from "@/app/context/UserContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,19 +21,21 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <QueryProvider>
           <AuthProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="light"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <FetchAllAccountsProvider>
-                <PostProvider>
-                  {children}
-                  <Toaster />
-                </PostProvider>
-              </FetchAllAccountsProvider>
-            </ThemeProvider>
+            <UserProvider>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="light"
+                enableSystem
+                disableTransitionOnChange
+              >
+                <FetchAllAccountsProvider>
+                  <PostProvider>
+                    {children}
+                    <Toaster />
+                  </PostProvider>
+                </FetchAllAccountsProvider>
+              </ThemeProvider>
+            </UserProvider>
           </AuthProvider>
         </QueryProvider>
       </body>
