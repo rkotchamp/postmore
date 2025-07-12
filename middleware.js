@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { withAuth } from "next-auth/middleware";
 
 // Routes that require authentication
-const protectedRoutes = ["/dashboard", "/authenticate", "/scheduled-posts"];
+const protectedRoutes = [
+  "/dashboard",
+  "/authenticate",
+  "/scheduled-posts",
+  "/profile",
+  "/all-posts",
+];
 
 // Routes that should redirect to dashboard if user is already authenticated
 const authRoutes = ["/auth/login", "/auth/register"];
@@ -61,6 +67,8 @@ export const config = {
     "/dashboard/:path*",
     "/authenticate/:path*",
     "/scheduled-posts/:path*",
+    "/profile/:path*",
+    "/all-posts/:path*",
     // Match authentication routes
     "/auth/login",
     "/auth/register",

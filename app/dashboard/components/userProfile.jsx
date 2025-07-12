@@ -19,6 +19,7 @@ import { User, Settings, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useUser } from "@/app/context/UserContext";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import Link from "next/link";
 
 export function UserNav() {
   const { user, isLoading, isAuthenticated } = useUser();
@@ -61,9 +62,11 @@ export function UserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <User className="mr-2 h-4 w-4" />
-            <span>Profile</span>
+          <DropdownMenuItem asChild>
+            <Link href="/profile" className="flex items-center w-full">
+              <User className="mr-2 h-4 w-4" />
+              <span>Profile</span>
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuItem>
             <Settings className="mr-2 h-4 w-4" />
