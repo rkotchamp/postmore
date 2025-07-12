@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useUserContext } from "@/app/context/UserContext";
+import { useUser } from "@/app/context/UserContext";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import {
   Avatar,
@@ -30,11 +30,7 @@ import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import Spinner from "@/app/components/ui/Spinner";
 
 export default function Profile() {
-  const {
-    user,
-    isLoading: isLoadingUser,
-    refetch: refetchUser,
-  } = useUserContext();
+  const { user, isLoading: isLoadingUser, refetch: refetchUser } = useUser();
   const { uploadProfilePicture, isUploading } = useFirebaseStorage();
   const fileInputRef = useRef(null);
 
