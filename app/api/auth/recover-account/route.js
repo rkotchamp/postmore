@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/app/lib/db/mongodb";
 import { connectToMongoose } from "@/app/lib/db/mongoose";
 import User from "@/app/models/userSchema";
 import {
@@ -41,9 +40,8 @@ export async function POST(request) {
 
     const { email } = body;
 
-    // Connect to MongoDB using our centralized functions
+    // Connect to MongoDB using mongoose
     await connectToMongoose();
-    await connectToDatabase();
 
     // Find user with the provided email
     const user = await User.findOne({ email });

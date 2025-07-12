@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useUser } from "@/app/context/UserContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
@@ -143,9 +143,11 @@ export default function Profile() {
   const [isEditingName, setIsEditingName] = useState(false);
 
   // Set initial name when user data loads
-  if (user?.name && !name) {
-    setName(user.name);
-  }
+  useEffect(() => {
+    if (user?.name && !name) {
+      setName(user.name);
+    }
+  }, [user?.name, name]);
 
   const handleImageUpload = async (event) => {
     const file = event.target.files[0];

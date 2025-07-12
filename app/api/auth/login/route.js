@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/app/lib/db/mongodb";
-import { connectToMongoose } from "@/app/lib/db/mongoose"; // New centralized mongoose connection
+import { connectToMongoose } from "@/app/lib/db/mongoose";
 import User from "@/app/models/userSchema";
 import { validateForm, loginSchema } from "@/app/models/ZodFormSchemas";
 import { generateAuthTokens } from "@/app/lib/jwt";
@@ -27,9 +26,8 @@ export async function POST(request) {
     // Destructure validated data
     const { email, password, rememberMe } = validation.data;
 
-    // Connect to MongoDB using our centralized functions
-    await connectToMongoose(); // Use the new centralized mongoose connection
-    await connectToDatabase();
+    // Connect to MongoDB using mongoose
+    await connectToMongoose();
 
     // Find user by email and explicitly select the password field
     const user = await User.findOne({ email }).select("+password");

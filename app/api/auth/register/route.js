@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/app/lib/db/mongodb";
-import { connectToMongoose } from "@/app/lib/db/mongoose"; // New centralized mongoose connection
+import { connectToMongoose } from "@/app/lib/db/mongoose";
 import User from "@/app/models/userSchema";
 import PasswordReset from "@/app/models/passwordResetSchema";
 import { validateForm, registerSchema } from "@/app/models/ZodFormSchemas";
@@ -29,9 +28,8 @@ export async function POST(request) {
     // Destructure validated data
     const { fullName, email, password } = validation.data;
 
-    // Connect to MongoDB using our centralized functions
-    await connectToMongoose(); // Use the new centralized mongoose connection
-    await connectToDatabase(); // Also connect using the raw MongoDB client
+    // Connect to MongoDB using mongoose
+    await connectToMongoose();
 
     // Check if user with this email already exists
     const existingUser = await User.findOne({ email });

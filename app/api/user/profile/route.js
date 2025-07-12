@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import User from "@/app/models/userSchema";
-import { connectToDatabase } from "@/app/lib/db/mongodb";
+import { connectToMongoose } from "@/app/lib/db/mongoose";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
@@ -15,7 +15,7 @@ export async function GET() {
     }
 
     // Connect to database
-    await connectToDatabase();
+    await connectToMongoose();
 
     // Find user by email (works for both OAuth and manual users)
     const user = await User.findOne({ email: session.user.email }).select(
@@ -57,7 +57,7 @@ export async function PUT(request) {
     }
 
     // Connect to database
-    await connectToDatabase();
+    await connectToMongoose();
 
     // Find user by email (include password for verification if needed)
     const user = await User.findOne({ email: session.user.email }).select(
