@@ -59,8 +59,10 @@ export async function PUT(request) {
     // Connect to database
     await connectToDatabase();
 
-    // Find user by email
-    const user = await User.findOne({ email: session.user.email });
+    // Find user by email (include password for verification if needed)
+    const user = await User.findOne({ email: session.user.email }).select(
+      "+password"
+    );
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -79,6 +81,7 @@ export async function PUT(request) {
 
     // Handle image update
     if (image && image !== user.image) {
+      console.log("Updating image from:", user.image, "to:", image);
       updateData.image = image;
     }
 
@@ -112,9 +115,13 @@ export async function PUT(request) {
 
     // Update user if there are changes
     if (Object.keys(updateData).length > 0) {
-      await User.findOneAndUpdate({ email: session.user.email }, updateData, {
-        new: true,
-      });
+      console.log("Updating user with data:", updateData);
+      const updatedResult = await User.findOneAndUpdate(
+        { email: session.user.email },
+        updateData,
+        { new: true }
+      );
+      console.log("Database update result:", updatedResult);
     }
 
     // Return updated user data

@@ -152,8 +152,49 @@ export const uploadProfilePicture = async (file, userId) => {
       throw new Error("File must be an image");
     }
 
-    const folder = `profileImage`;
-    return await uploadFile(file, folder, `profile_${userId}`);
+    // Generate UUID for the file
+    const uuid = uuidv4();
+    const fileExtension = file.name.split(".").pop();
+    const fileName = `profile_${userId}_${uuid}.${fileExtension}`;
+
+    // Create storage path directly without auto-adding file type subfolder
+    const storagePath = `profileImage/${fileName}`;
+
+    // Create a storage reference
+    const storageRef = ref(storage, storagePath);
+
+    // Upload the file
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    // Return a promise that resolves with the download URL when upload completes
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Optional: Track upload progress
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload is ${progress}% done`);
+        },
+        (error) => {
+          // Handle upload errors
+          reject(error);
+        },
+        async () => {
+          // Upload completed successfully, get download URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve({
+            url: downloadURL,
+            path: storagePath,
+            size: file.size,
+            type: file.type,
+            name: fileName,
+            originalName: file.name,
+            uuid: uuid,
+          });
+        }
+      );
+    });
   } catch (error) {
     console.error("Error uploading profile picture:", error);
     throw error;

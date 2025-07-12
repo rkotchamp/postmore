@@ -51,10 +51,6 @@ const ProfileSkeleton = () => {
               <Skeleton className="h-10 w-10 rounded-full" />
             </div>
           </div>
-          <div className="text-center space-y-2">
-            <Skeleton className="h-4 w-64 mx-auto" />
-            <Skeleton className="h-4 w-32 mx-auto" />
-          </div>
         </CardContent>
       </Card>
 
@@ -169,10 +165,14 @@ export default function Profile() {
       setMessage({ type: "", text: "" });
 
       // Upload to Firebase
+      console.log("Uploading to Firebase with user ID:", user.id);
       const result = await uploadProfilePicture(file, user.id);
+      console.log("Firebase upload result:", result);
 
       // Update user profile with new image URL
-      await updateProfile({ image: result.url });
+      console.log("Updating profile with image URL:", result.url);
+      const updateResult = await updateProfile({ image: result.url });
+      console.log("Profile update result:", updateResult);
 
       setMessage({
         type: "success",
@@ -257,7 +257,13 @@ export default function Profile() {
       }
 
       // Refresh user data
+      console.log("Refreshing user data...");
       await refetchUser();
+
+      // Small delay to ensure the UI updates
+      setTimeout(() => {
+        console.log("User data should be refreshed now");
+      }, 500);
 
       return result;
     } catch (error) {
