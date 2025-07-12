@@ -142,15 +142,30 @@ export const authOptions = {
       return token;
     },
     async redirect({ url, baseUrl }) {
-      // After sign-in with either provider, redirect to dashboard
+      // Handle return URL functionality
       if (url.includes("/api/auth/callback/")) {
+        // Check if there's a callbackUrl parameter
+        const urlObj = new URL(url);
+        const callbackUrl = urlObj.searchParams.get("callbackUrl");
+
+        if (callbackUrl) {
+          // Decode the callback URL and make sure it's safe
+          const decodedCallbackUrl = decodeURIComponent(callbackUrl);
+          if (decodedCallbackUrl.startsWith(baseUrl)) {
+            return decodedCallbackUrl;
+          }
+        }
+
+        // Default to dashboard if no valid callback URL
         return `${baseUrl}/dashboard`;
       }
 
+      // If URL starts with baseUrl, allow it
       if (url.startsWith(baseUrl)) {
         return url;
       }
 
+      // Default fallback
       return baseUrl;
     },
   },

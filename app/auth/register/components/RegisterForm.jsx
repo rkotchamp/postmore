@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -22,11 +22,15 @@ import { signIn } from "next-auth/react";
 
 export function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Get the return URL from search params
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const form = useForm({
     resolver: zodResolver(registerSchema),
@@ -89,7 +93,7 @@ export function RegisterForm() {
       console.log("Initiating Google sign-in from Register page");
 
       await signIn("google", {
-        callbackUrl: `${window.location.origin}/dashboard`,
+        callbackUrl: `${window.location.origin}${callbackUrl}`,
         prompt: "select_account",
       });
     } catch (error) {
@@ -108,7 +112,7 @@ export function RegisterForm() {
       console.log("Initiating GitHub sign-in from Register page");
 
       await signIn("github", {
-        callbackUrl: `${window.location.origin}/dashboard`,
+        callbackUrl: `${window.location.origin}${callbackUrl}`,
       });
     } catch (error) {
       console.error("GitHub sign-in error:", error);

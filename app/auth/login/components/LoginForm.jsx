@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -23,10 +23,14 @@ import { signIn } from "next-auth/react";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Get the return URL from search params
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -44,6 +48,7 @@ export function LoginForm() {
       const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
+        callbackUrl: callbackUrl,
         redirect: false,
       });
 
@@ -56,8 +61,8 @@ export function LoginForm() {
         description: "Welcome back to Postmore.",
       });
 
-      // Redirect to dashboard after successful login
-      router.push("/dashboard");
+      // Redirect to intended destination
+      router.push(callbackUrl);
     } catch (error) {
       console.error("Login error:", error);
       toast.error("Invalid email or password", {
@@ -73,7 +78,7 @@ export function LoginForm() {
       setIsGoogleLoading(true);
 
       await signIn("google", {
-        callbackUrl: `${window.location.origin}/dashboard`,
+        callbackUrl: `${window.location.origin}${callbackUrl}`,
         prompt: "select_account",
       });
     } catch (error) {
@@ -91,7 +96,7 @@ export function LoginForm() {
       setIsGithubLoading(true);
 
       await signIn("github", {
-        callbackUrl: `${window.location.origin}/dashboard`,
+        callbackUrl: `${window.location.origin}${callbackUrl}`,
       });
     } catch (error) {
       console.error("GitHub sign-in error:", error);
