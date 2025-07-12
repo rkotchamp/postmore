@@ -28,6 +28,102 @@ import {
 } from "lucide-react";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import Spinner from "@/app/components/ui/Spinner";
+import { Skeleton } from "@/app/components/ui/skeleton";
+
+// Profile page skeleton component
+const ProfileSkeleton = () => {
+  return (
+    <>
+      {/* Title */}
+      <Skeleton className="h-9 w-48" />
+
+      {/* Profile Picture Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Skeleton className="h-6 w-32" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center space-y-4">
+          <div className="relative">
+            <Skeleton className="h-32 w-32 rounded-full" />
+            <div className="absolute bottom-0 right-0">
+              <Skeleton className="h-10 w-10 rounded-full" />
+            </div>
+          </div>
+          <div className="text-center space-y-2">
+            <Skeleton className="h-4 w-64 mx-auto" />
+            <Skeleton className="h-4 w-32 mx-auto" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Name Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Skeleton className="h-6 w-24" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-12" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+            <div className="flex space-x-2">
+              <Skeleton className="h-10 w-10" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Password Section Skeleton */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Skeleton className="h-6 w-36" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <Skeleton className="h-12 w-full" />
+        </CardContent>
+      </Card>
+
+      {/* Account Information Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <Skeleton className="h-6 w-40" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+};
 
 export default function Profile() {
   const { user, isLoading: isLoadingUser, refetch: refetchUser } = useUser();
@@ -76,7 +172,7 @@ export default function Profile() {
       const result = await uploadProfilePicture(file, user.id);
 
       // Update user profile with new image URL
-      await updateProfile({ image: result.downloadURL });
+      await updateProfile({ image: result.url });
 
       setMessage({
         type: "success",
@@ -184,8 +280,8 @@ export default function Profile() {
   if (isLoadingUser) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <Spinner />
+        <div className="max-w-2xl mx-auto p-6 space-y-6">
+          <ProfileSkeleton />
         </div>
       </DashboardLayout>
     );
@@ -242,11 +338,6 @@ export default function Profile() {
               onChange={handleImageUpload}
               className="hidden"
             />
-            <p className="text-sm text-muted-foreground text-center">
-              Click the camera icon to change your profile picture
-              <br />
-              Maximum file size: 5MB
-            </p>
           </CardContent>
         </Card>
 

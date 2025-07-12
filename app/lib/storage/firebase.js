@@ -152,8 +152,8 @@ export const uploadProfilePicture = async (file, userId) => {
       throw new Error("File must be an image");
     }
 
-    const folder = `profiles/${userId}`;
-    return await uploadFile(file, folder, "profile_picture");
+    const folder = `profileImage`;
+    return await uploadFile(file, folder, `profile_${userId}`);
   } catch (error) {
     console.error("Error uploading profile picture:", error);
     throw error;
