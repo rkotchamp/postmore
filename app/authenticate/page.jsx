@@ -564,23 +564,15 @@ export default function Authenticate() {
           </Alert>
         )}
 
-        <Accordion
-          type="single"
-          collapsible
-          className="max-w-4xl mx-auto space-y-4"
-        >
-          {Object.entries(connectedAccounts).map(([platform, accounts]) => (
-            <AccordionItem
-              key={platform}
-              value={platform}
-              className="border rounded-lg overflow-hidden"
-            >
-              <AccordionTrigger className="flex items-center gap-3 py-4 px-4 hover:no-underline bg-primary/10 text-foreground">
-                <div className="flex items-center gap-2">
-                  <PlatformIcon platform={platform} />
-                  <span className="font-medium">{platformNames[platform]}</span>
-                </div>
-                {isLoadingAccounts ? (
+        {isLoadingAccounts ? (
+          <div className="max-w-4xl mx-auto space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="border rounded-lg overflow-hidden">
+                <div className="flex items-center justify-between py-4 px-4 bg-primary/10">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-5 rounded" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
                   <div className="flex items-center ml-auto">
                     <div className="flex -space-x-2">
                       <Skeleton className="h-6 w-6 rounded-full border-2 border-background" />
@@ -588,97 +580,101 @@ export default function Authenticate() {
                       <Skeleton className="h-6 w-6 rounded-full border-2 border-background" />
                     </div>
                   </div>
-                ) : (
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Accordion
+            type="single"
+            collapsible
+            className="max-w-4xl mx-auto space-y-4"
+          >
+            {Object.entries(connectedAccounts).map(([platform, accounts]) => (
+              <AccordionItem
+                key={platform}
+                value={platform}
+                className="border rounded-lg overflow-hidden"
+              >
+                <AccordionTrigger className="flex items-center gap-3 py-4 px-4 hover:no-underline bg-primary/10 text-foreground">
+                  <div className="flex items-center gap-2">
+                    <PlatformIcon platform={platform} />
+                    <span className="font-medium">
+                      {platformNames[platform]}
+                    </span>
+                  </div>
                   <AvatarGroup accounts={accounts} />
-                )}
-              </AccordionTrigger>
-              <AccordionContent className="bg-background">
-                <div className="py-4 px-4">
-                  {isLoadingAccounts ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {[1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between bg-muted/20 p-4 rounded-lg relative min-h-[80px] w-full"
-                        >
-                          <div className="flex items-center space-x-3 max-w-[85%]">
-                            <Skeleton className="h-10 w-10 rounded-full" />
-                            <div className="space-y-2">
-                              <Skeleton className="h-4 w-24" />
-                              <Skeleton className="h-3 w-32" />
-                            </div>
-                          </div>
-                          <Skeleton className="h-8 w-8 rounded-full" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : accounts.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {accounts.map((account) => (
-                        <div
-                          key={account.id}
-                          className="flex items-center justify-between bg-muted/20 p-4 rounded-lg relative min-h-[80px] w-full"
-                        >
-                          <Username
-                            name={account.name}
-                            email={account.email}
-                            imageUrl={account.imageUrl}
-                            className="pr-12 max-w-[85%] overflow-hidden"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-0 right-0"
-                            onClick={() =>
-                              handleDisconnectClick(
-                                platform,
-                                account.id,
-                                account.name,
-                                account.platformAccountId
-                              )
-                            }
-                            disabled={isDisconnecting}
+                </AccordionTrigger>
+                <AccordionContent className="bg-background">
+                  <div className="py-4 px-4">
+                    {accounts.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {accounts.map((account) => (
+                          <div
+                            key={account.id}
+                            className="flex items-center justify-between bg-muted/20 p-4 rounded-lg relative min-h-[80px] w-full"
                           >
-                            <X className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">
-                      No accounts connected
-                    </p>
-                  )}
+                            <Username
+                              name={account.name}
+                              email={account.email}
+                              imageUrl={account.imageUrl}
+                              className="pr-12 max-w-[85%] overflow-hidden"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-0 right-0"
+                              onClick={() =>
+                                handleDisconnectClick(
+                                  platform,
+                                  account.id,
+                                  account.name,
+                                  account.platformAccountId
+                                )
+                              }
+                              disabled={isDisconnecting}
+                            >
+                              <X className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-2">
+                        No accounts connected
+                      </p>
+                    )}
 
-                  <div className="mt-6">
-                    <Button
-                      className="w-full py-6 text-base flex items-center gap-2"
-                      onClick={connectionHandlers[platform]}
-                      disabled={
-                        (isLoadingAuthAction && platform === "tiktok") ||
+                    <div className="mt-6">
+                      <Button
+                        className="w-full py-6 text-base flex items-center gap-2"
+                        onClick={connectionHandlers[platform]}
+                        disabled={
+                          (isLoadingAuthAction && platform === "tiktok") ||
+                          (isLoadingAuthAction && platform === "bluesky") ||
+                          (isLoadingAuthAction && platform === "ytShorts") ||
+                          (isLoadingAuthAction && platform === "instagram")
+                        }
+                      >
+                        <PlatformIcon platform={platform} />
+                        {(isLoadingAuthAction && platform === "tiktok") ||
                         (isLoadingAuthAction && platform === "bluesky") ||
                         (isLoadingAuthAction && platform === "ytShorts") ||
                         (isLoadingAuthAction && platform === "instagram")
-                      }
-                    >
-                      <PlatformIcon platform={platform} />
-                      {(isLoadingAuthAction && platform === "tiktok") ||
-                      (isLoadingAuthAction && platform === "bluesky") ||
-                      (isLoadingAuthAction && platform === "ytShorts") ||
-                      (isLoadingAuthAction && platform === "instagram")
-                        ? "Connecting..."
-                        : `Connect a ${platformNames[platform]} Account`}
-                    </Button>
+                          ? "Connecting..."
+                          : `Connect a ${platformNames[platform]} Account`}
+                      </Button>
 
-                    {!platformConsentAcknowledged[platform] && (
-                      <PlatformConsentMessages platform={platform} />
-                    )}
+                      {!platformConsentAcknowledged[platform] && (
+                        <PlatformConsentMessages platform={platform} />
+                      )}
+                    </div>
                   </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        )}
 
         <DisconnectDialog
           isOpen={disconnectDialog.isOpen}
