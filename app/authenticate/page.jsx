@@ -32,6 +32,7 @@ import { DisconnectDialog } from "./components/DisconnectDialog";
 import Spinner from "@/app/components/ui/Spinner";
 import { BlueskyLoginModal } from "./components/BlueskyLoginModal";
 import { PlatformConsentMessages } from "./components/PlatformConsentMessages";
+import { Skeleton } from "@/app/components/ui/skeleton";
 
 export default function Authenticate() {
   const {
@@ -518,25 +519,7 @@ export default function Authenticate() {
     );
   };
 
-  if (isLoadingAccounts) {
-    return (
-      <DashboardLayout>
-        <div className="p-6 flex items-center justify-center h-full">
-          <Spinner />
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (accountsError) {
-    return (
-      <DashboardLayout>
-        <div className="p-6 text-center text-red-500">
-          Error loading accounts: {accountsError.message}
-        </div>
-      </DashboardLayout>
-    );
-  }
+  // Remove the dependency on loading state - let the page load regardless
 
   return (
     <DashboardLayout>
@@ -566,6 +549,21 @@ export default function Authenticate() {
           </Alert>
         )}
 
+        {accountsError && (
+          <Alert className="max-w-4xl mx-auto mb-4" variant="default">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              <AlertTitle className="text-sm font-medium">
+                Loading Accounts
+              </AlertTitle>
+            </div>
+            <AlertDescription className="mt-1 text-sm">
+              Having trouble loading your connected accounts. You can still
+              connect new accounts below.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Accordion
           type="single"
           collapsible
@@ -582,11 +580,39 @@ export default function Authenticate() {
                   <PlatformIcon platform={platform} />
                   <span className="font-medium">{platformNames[platform]}</span>
                 </div>
-                <AvatarGroup accounts={accounts} />
+                {isLoadingAccounts ? (
+                  <div className="flex items-center ml-auto">
+                    <div className="flex -space-x-2">
+                      <Skeleton className="h-6 w-6 rounded-full border-2 border-background" />
+                      <Skeleton className="h-6 w-6 rounded-full border-2 border-background" />
+                      <Skeleton className="h-6 w-6 rounded-full border-2 border-background" />
+                    </div>
+                  </div>
+                ) : (
+                  <AvatarGroup accounts={accounts} />
+                )}
               </AccordionTrigger>
               <AccordionContent className="bg-background">
                 <div className="py-4 px-4">
-                  {accounts.length > 0 ? (
+                  {isLoadingAccounts ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between bg-muted/20 p-4 rounded-lg relative min-h-[80px] w-full"
+                        >
+                          <div className="flex items-center space-x-3 max-w-[85%]">
+                            <Skeleton className="h-10 w-10 rounded-full" />
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-24" />
+                              <Skeleton className="h-3 w-32" />
+                            </div>
+                          </div>
+                          <Skeleton className="h-8 w-8 rounded-full" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : accounts.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                       {accounts.map((account) => (
                         <div
