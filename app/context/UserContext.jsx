@@ -33,7 +33,7 @@ export const UserProvider = ({ children }) => {
       return response.json();
     },
     enabled: !!session?.user, // Only fetch if user is authenticated
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 seconds
     retry: 2,
   });
 

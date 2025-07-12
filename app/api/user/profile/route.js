@@ -81,7 +81,6 @@ export async function PUT(request) {
 
     // Handle image update
     if (image && image !== user.image) {
-      console.log("Updating image from:", user.image, "to:", image);
       updateData.image = image;
     }
 
@@ -115,13 +114,9 @@ export async function PUT(request) {
 
     // Update user if there are changes
     if (Object.keys(updateData).length > 0) {
-      console.log("Updating user with data:", updateData);
-      const updatedResult = await User.findOneAndUpdate(
-        { email: session.user.email },
-        updateData,
-        { new: true }
-      );
-      console.log("Database update result:", updatedResult);
+      await User.findOneAndUpdate({ email: session.user.email }, updateData, {
+        new: true,
+      });
     }
 
     // Return updated user data

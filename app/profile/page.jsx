@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useUser } from "@/app/context/UserContext";
+import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import {
   Avatar,
@@ -124,6 +125,7 @@ const ProfileSkeleton = () => {
 export default function Profile() {
   const { user, isLoading: isLoadingUser, refetch: refetchUser } = useUser();
   const { uploadProfilePicture, isUploading } = useFirebaseStorage();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
 
   // Form states
@@ -165,14 +167,10 @@ export default function Profile() {
       setMessage({ type: "", text: "" });
 
       // Upload to Firebase
-      console.log("Uploading to Firebase with user ID:", user.id);
       const result = await uploadProfilePicture(file, user.id);
-      console.log("Firebase upload result:", result);
 
       // Update user profile with new image URL
-      console.log("Updating profile with image URL:", result.url);
-      const updateResult = await updateProfile({ image: result.url });
-      console.log("Profile update result:", updateResult);
+      await updateProfile({ image: result.url });
 
       setMessage({
         type: "success",
@@ -256,14 +254,11 @@ export default function Profile() {
         throw new Error(result.error || "Failed to update profile");
       }
 
-      // Refresh user data
-      console.log("Refreshing user data...");
-      await refetchUser();
+      // Invalidate and refetch user data
+      await queryClient.invalidateQueries({ queryKey: ["userProfile"] });
 
-      // Small delay to ensure the UI updates
-      setTimeout(() => {
-        console.log("User data should be refreshed now");
-      }, 500);
+      // Also trigger a direct refetch to ensure immediate update
+      await refetchUser();
 
       return result;
     } catch (error) {
