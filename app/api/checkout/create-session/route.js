@@ -32,17 +32,21 @@ export async function POST(request) {
       basic: {
         name: "Basic",
         price: 5,
-        priceId: process.env.STRIPE_BASIC_PRICE_ID,
+        priceId:
+          process.env.STRIPE_BASIC_PRICE_ID || "price_1RkThRGR3RTuDO766eMwFnUG",
       },
       pro: {
         name: "Pro",
         price: 11,
-        priceId: process.env.STRIPE_PRO_PRICE_ID,
+        priceId:
+          process.env.STRIPE_PRO_PRICE_ID || "price_1RkThRGR3RTuDO76jjjAXDzp",
       },
       premium: {
         name: "Premium",
         price: 19,
-        priceId: process.env.STRIPE_PREMIUM_PRICE_ID,
+        priceId:
+          process.env.STRIPE_PREMIUM_PRICE_ID ||
+          "price_1RkThRGR3RTuDO7663YF2ROU",
       },
     };
 
@@ -59,7 +63,13 @@ export async function POST(request) {
       );
     }
 
-    // Create Stripe checkout session
+    console.log("Creating checkout with:", {
+      planId,
+      priceId: selectedPlan.priceId,
+      userEmail: session.user.email,
+    });
+
+    // Create simple Stripe checkout session
     const checkoutSession = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -71,42 +81,16 @@ export async function POST(request) {
       mode: "subscription",
       success_url:
         successUrl ||
-        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        `${
+          process.env.NEXT_PUBLIC_APP_URL || "https://www.postmoo.re"
+        }/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:
         cancelUrl ||
-        `${process.env.NEXT_PUBLIC_APP_URL}/prices?checkout=cancelled`,
+        `${
+          process.env.NEXT_PUBLIC_APP_URL || "https://www.postmoo.re"
+        }/prices?checkout=cancelled`,
       customer_email: session.user.email,
       client_reference_id: session.user.id,
-      metadata: {
-        userId: session.user.id,
-        planId: planId,
-        userEmail: session.user.email,
-        ...metadata,
-      },
-      subscription_data: {
-        trial_period_days: 14, // 14-day free trial
-        metadata: {
-          userId: session.user.id,
-          planId: planId,
-        },
-      },
-      // Collect billing address for tax calculation
-      billing_address_collection: "required",
-      // Enable customer updates
-      customer_update: {
-        address: "auto",
-      },
-      // Tax calculation
-      automatic_tax: {
-        enabled: true,
-      },
-    });
-
-    console.log("Stripe checkout session created:", {
-      sessionId: checkoutSession.id,
-      planId,
-      customerEmail: session.user.email,
-      priceId: selectedPlan.priceId,
     });
 
     return NextResponse.json({
