@@ -41,13 +41,6 @@ export default function PricingPage() {
 
   const handleSelectPlan = async (plan) => {
     try {
-      // For demo purposes, we'll show a warning that this is a mock checkout
-      toast.info("Demo Mode", {
-        description:
-          "This is a demo. In production, you would be redirected to Stripe checkout.",
-        duration: 4000,
-      });
-
       // Initiate checkout with success/cancel URLs
       await initiateCheckout(plan.id, {
         successUrl: `${window.location.origin}/dashboard?checkout=success&plan=${plan.id}`,
