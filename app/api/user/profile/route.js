@@ -19,7 +19,7 @@ export async function GET() {
 
     // Find user by email (works for both OAuth and manual users)
     const user = await User.findOne({ email: session.user.email }).select(
-      "name email image authProvider createdAt"
+      "name email image authProvider createdAt settings"
     );
 
     if (!user) {
@@ -36,6 +36,7 @@ export async function GET() {
         image: user.image,
         authProvider: user.authProvider,
         createdAt: user.createdAt,
+        settings: user.settings || { theme: "system" }, // Provide default if not set
       },
     });
   } catch (error) {
@@ -69,7 +70,8 @@ export async function PUT(request) {
     }
 
     // Parse request body
-    const { name, image, currentPassword, newPassword } = await request.json();
+    const { name, image, currentPassword, newPassword, settings } =
+      await request.json();
 
     // Prepare update object
     const updateData = {};
@@ -82,6 +84,20 @@ export async function PUT(request) {
     // Handle image update
     if (image && image !== user.image) {
       updateData.image = image;
+    }
+
+    // Handle settings update
+    if (settings) {
+      // Validate theme setting
+      if (
+        settings.theme &&
+        ["light", "dark", "system"].includes(settings.theme)
+      ) {
+        updateData.settings = {
+          ...user.settings,
+          theme: settings.theme,
+        };
+      }
     }
 
     // Handle password update
@@ -122,7 +138,7 @@ export async function PUT(request) {
     // Return updated user data
     const updatedUser = await User.findOne({
       email: session.user.email,
-    }).select("name email image authProvider createdAt");
+    }).select("name email image authProvider createdAt settings");
 
     return NextResponse.json({
       success: true,
@@ -134,6 +150,7 @@ export async function PUT(request) {
         image: updatedUser.image,
         authProvider: updatedUser.authProvider,
         createdAt: updatedUser.createdAt,
+        settings: updatedUser.settings || { theme: "system" }, // Provide default if not set
       },
     });
   } catch (error) {

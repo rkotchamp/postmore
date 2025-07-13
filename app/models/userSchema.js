@@ -73,6 +73,19 @@ const userSchema = new mongoose.Schema({
     of: Boolean,
     default: {},
   },
+  settings: {
+    theme: {
+      type: String,
+      enum: ["light", "dark", "system"],
+      default: "system",
+    },
+    // Future settings can be added here
+    // plan: {
+    //   type: String,
+    //   enum: ["free", "pro", "enterprise"],
+    //   default: "free",
+    // },
+  },
   createdAt: {
     type: Date,
     default: Date.now,
