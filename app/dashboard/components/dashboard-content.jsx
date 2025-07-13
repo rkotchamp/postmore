@@ -129,7 +129,6 @@ export function DashboardContent() {
     if (postType === "text") {
       updateTextContent.mutate(textPostContent ?? "", {
         onSuccess: () => {
-          console.log("Text persisted just before submission. Proceeding...");
           handlePostSubmission();
         },
         onError: (error) => {
@@ -357,8 +356,6 @@ export function DashboardContent() {
             at: scheduledAt,
           },
         };
-
-        console.log("The multi Caption", submissionData.captions.multiple);
 
         // Send the data to our API endpoint
         fetch("/api/posts/submit", {

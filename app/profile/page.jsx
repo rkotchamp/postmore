@@ -18,18 +18,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/app/components/ui/card";
-import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import {
-  Edit,
-  Camera,
-  Eye,
-  EyeOff,
-  CheckCircle,
-  AlertCircle,
-} from "lucide-react";
+import { Edit, Camera, Eye, EyeOff, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import Spinner from "@/app/components/ui/Spinner";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { toast } from "sonner";
 
 // Profile page skeleton component
 const ProfileSkeleton = () => {
@@ -114,7 +108,13 @@ const ProfileSkeleton = () => {
           </div>
           <div className="space-y-2">
             <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-10 w-full" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-5 w-12 rounded-full" />
+              </div>
+              <Skeleton className="h-8 w-20" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -139,7 +139,6 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
   const [isEditingName, setIsEditingName] = useState(false);
   const [imageUpdateKey, setImageUpdateKey] = useState(0);
 
@@ -156,22 +155,19 @@ export default function Profile() {
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      setMessage({ type: "error", text: "Please select an image file" });
+      toast.error("Please select an image file");
       return;
     }
 
     // Validate file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
-      setMessage({ type: "error", text: "Image size must be less than 5MB" });
+      toast.error("Image size must be less than 5MB");
       return;
     }
 
     try {
-      setMessage({ type: "", text: "" });
-
       // Upload to Firebase
       const result = await uploadProfilePicture(file, user.id);
-      console.log("Firebase upload result:", result);
 
       // Update user profile with new image URL
       await updateProfile({ image: result.url });
@@ -179,19 +175,22 @@ export default function Profile() {
       // Force re-render of the avatar
       setImageUpdateKey((prev) => prev + 1);
 
-      setMessage({
-        type: "success",
-        text: "Profile picture updated successfully!",
+      toast.success("Profile picture updated successfully!", {
+        description: "Your new profile picture has been saved.",
+        duration: 3000,
       });
     } catch (error) {
       console.error("Error uploading profile picture:", error);
-      setMessage({ type: "error", text: "Failed to upload profile picture" });
+      toast.error("Failed to upload profile picture", {
+        description: "Please try again.",
+        duration: 5000,
+      });
     }
   };
 
   const handleNameUpdate = async () => {
     if (!name.trim()) {
-      setMessage({ type: "error", text: "Name cannot be empty" });
+      toast.error("Name cannot be empty");
       return;
     }
 
@@ -203,28 +202,31 @@ export default function Profile() {
     try {
       await updateProfile({ name: name.trim() });
       setIsEditingName(false);
-      setMessage({ type: "success", text: "Name updated successfully!" });
+      toast.success("Name updated successfully!", {
+        description: "Your profile has been updated.",
+        duration: 3000,
+      });
     } catch (error) {
-      setMessage({ type: "error", text: "Failed to update name" });
+      toast.error("Failed to update name", {
+        description: "Please try again.",
+        duration: 5000,
+      });
     }
   };
 
   const handlePasswordChange = async () => {
     if (!currentPassword || !newPassword) {
-      setMessage({ type: "error", text: "Please fill in all password fields" });
+      toast.error("Please fill in all password fields");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: "New passwords do not match" });
+      toast.error("New passwords do not match");
       return;
     }
 
     if (newPassword.length < 8) {
-      setMessage({
-        type: "error",
-        text: "New password must be at least 8 characters long",
-      });
+      toast.error("New password must be at least 8 characters long");
       return;
     }
 
@@ -233,18 +235,20 @@ export default function Profile() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setMessage({ type: "success", text: "Password updated successfully!" });
+      toast.success("Password updated successfully!", {
+        description: "Your password has been changed.",
+        duration: 3000,
+      });
     } catch (error) {
-      setMessage({
-        type: "error",
-        text: error.message || "Failed to update password",
+      toast.error("Failed to update password", {
+        description: error.message || "Please try again.",
+        duration: 5000,
       });
     }
   };
 
   const updateProfile = async (data) => {
     setIsUpdating(true);
-    setMessage({ type: "", text: "" });
 
     try {
       const response = await fetch("/api/user/profile", {
@@ -256,7 +260,6 @@ export default function Profile() {
       });
 
       const result = await response.json();
-      console.log("Profile update result:", result);
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to update profile");
@@ -306,18 +309,6 @@ export default function Profile() {
       <div className="max-w-2xl mx-auto p-6 space-y-6">
         <h1 className="text-3xl font-bold">Profile Settings</h1>
 
-        {/* Status Messages */}
-        {message.text && (
-          <Alert variant={message.type === "error" ? "destructive" : "default"}>
-            {message.type === "error" ? (
-              <AlertCircle className="h-4 w-4" />
-            ) : (
-              <CheckCircle className="h-4 w-4" />
-            )}
-            <AlertDescription>{message.text}</AlertDescription>
-          </Alert>
-        )}
-
         {/* Profile Picture Section */}
         <Card>
           <CardHeader>
@@ -325,30 +316,34 @@ export default function Profile() {
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-4">
             <div className="relative">
-              <Avatar className="h-32 w-32">
-                <AvatarImage
-                  src={user?.image || ""}
-                  alt={user?.name || "User"}
-                  key={`${user?.image}-${imageUpdateKey}`} // Force re-render when image changes
-                  className="object-cover"
-                />
-                <AvatarFallback className="text-2xl">
-                  {getInitials(user?.name)}
-                </AvatarFallback>
-              </Avatar>
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute bottom-0 right-0 rounded-full"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <Spinner className="h-4 w-4" />
-                ) : (
-                  <Camera className="h-4 w-4" />
-                )}
-              </Button>
+              {isUploading ? (
+                <div className="flex flex-col items-center space-y-2">
+                  <Skeleton className="h-32 w-32 rounded-full" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              ) : (
+                <>
+                  <Avatar className="h-32 w-32">
+                    <AvatarImage
+                      src={user?.image || ""}
+                      alt={user?.name || "User"}
+                      key={`${user?.image}-${imageUpdateKey}`} // Force re-render when image changes
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="text-2xl">
+                      {getInitials(user?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="absolute bottom-0 right-0 rounded-full"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
             <input
               ref={fileInputRef}
@@ -357,10 +352,6 @@ export default function Profile() {
               onChange={handleImageUpload}
               className="hidden"
             />
-            {/* Debug info - remove in production */}
-            <div className="text-xs text-muted-foreground">
-              Current image: {user?.image ? "✓" : "✗"} | Source: {user?.source}
-            </div>
           </CardContent>
         </Card>
 
@@ -405,7 +396,14 @@ export default function Profile() {
                       Cancel
                     </Button>
                     <Button onClick={handleNameUpdate} disabled={isUpdating}>
-                      {isUpdating ? <Spinner className="h-4 w-4" /> : "Save"}
+                      {isUpdating ? (
+                        <>
+                          <Spinner className="h-4 w-4 mr-2" />
+                          Saving...
+                        </>
+                      ) : (
+                        "Save"
+                      )}
                     </Button>
                   </>
                 )}
@@ -512,8 +510,14 @@ export default function Profile() {
                 }
                 className="w-full"
               >
-                {isUpdating ? <Spinner className="h-4 w-4 mr-2" /> : null}
-                Update Password
+                {isUpdating ? (
+                  <>
+                    <Spinner className="h-4 w-4 mr-2" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Password"
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -537,16 +541,27 @@ export default function Profile() {
               </p>
             </div>
             <div>
-              <Label>Account Type</Label>
-              <Input
-                value={
-                  user?.authProvider === "credentials"
-                    ? "Email & Password"
-                    : `${user?.authProvider} OAuth`
-                }
-                disabled
-                className="cursor-not-allowed opacity-60"
-              />
+              <Label>Current Plan</Label>
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg font-semibold text-primary">
+                    Pro Plan
+                  </span>
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                    Active
+                  </span>
+                </div>
+                <Link href="/price">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Upgrade
+                  </Button>
+                </Link>
+              </div>
             </div>
           </CardContent>
         </Card>

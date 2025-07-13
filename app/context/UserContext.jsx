@@ -30,9 +30,7 @@ export const UserProvider = ({ children }) => {
       if (!response.ok) {
         throw new Error("Failed to fetch user profile");
       }
-      const data = await response.json();
-      console.log("UserContext: Fetched profile data:", data);
-      return data;
+      return response.json();
     },
     enabled: !!session?.user, // Only fetch if user is authenticated
     staleTime: 0, // Always fetch fresh data
@@ -54,38 +52,32 @@ export const UserProvider = ({ children }) => {
   const getUserData = () => {
     // If we have profile data from database, use it
     if (profileData?.success && profileData?.user) {
-      const userData = {
+      return {
         ...profileData.user,
         initials: getUserInitials(profileData.user.name),
         source: "database",
       };
-      console.log("UserContext: Using database data:", userData);
-      return userData;
     }
 
     // Fallback to NextAuth session data
     if (session?.user) {
-      const userData = {
+      return {
         name: session.user.name || "User",
         email: session.user.email,
         image: session.user.image || null,
         initials: getUserInitials(session.user.name),
         source: "session",
       };
-      console.log("UserContext: Using session data:", userData);
-      return userData;
     }
 
     // Final fallback
-    const userData = {
+    return {
       name: "User",
       email: "",
       image: null,
       initials: "U",
       source: "fallback",
     };
-    console.log("UserContext: Using fallback data:", userData);
-    return userData;
   };
 
   // Determine loading state
