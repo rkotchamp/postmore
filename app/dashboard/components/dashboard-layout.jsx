@@ -47,7 +47,7 @@ export function DashboardLayout({ children }) {
                 <img
                   src="/PostmooreSvg.svg"
                   alt="Postmoore"
-                  className="h-8 w-auto"
+                  className="h-6 w-auto"
                 />
               </div>
             </Link>
