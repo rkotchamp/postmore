@@ -29,19 +29,19 @@ export async function POST(request) {
 
     // Plan configuration mapping to your Stripe Price IDs
     const planConfig = {
-      starter: {
-        name: "Starter",
-        price: 19,
+      basic: {
+        name: "Basic",
+        price: 5,
         priceId: process.env.STRIPE_BASIC_PRICE_ID,
       },
-      professional: {
-        name: "Professional",
-        price: 49,
+      pro: {
+        name: "Pro",
+        price: 11,
         priceId: process.env.STRIPE_PRO_PRICE_ID,
       },
-      enterprise: {
-        name: "Enterprise",
-        price: 149,
+      premium: {
+        name: "Premium",
+        price: 19,
         priceId: process.env.STRIPE_PREMIUM_PRICE_ID,
       },
     };
@@ -52,6 +52,7 @@ export async function POST(request) {
     }
 
     if (!selectedPlan.priceId) {
+      console.error("Price ID not configured for plan:", planId, selectedPlan);
       return NextResponse.json(
         { error: "Price ID not configured for this plan" },
         { status: 500 }
@@ -115,15 +116,26 @@ export async function POST(request) {
     });
   } catch (error) {
     console.error("Error creating checkout session:", error);
+    console.error("Error details:", {
+      type: error.type,
+      message: error.message,
+      param: error.param,
+      code: error.code,
+    });
 
     // Provide more specific error messages based on Stripe error types
     let errorMessage = "Failed to create checkout session";
+    let details = error.message;
+
     if (error.type === "StripeCardError") {
       errorMessage = "Your card was declined";
     } else if (error.type === "StripeRateLimitError") {
       errorMessage = "Too many requests made to the API too quickly";
     } else if (error.type === "StripeInvalidRequestError") {
       errorMessage = "Invalid parameters were supplied to Stripe's API";
+      details = `${error.message}${
+        error.param ? ` (parameter: ${error.param})` : ""
+      }`;
     } else if (error.type === "StripeAPIError") {
       errorMessage = "An error occurred internally with Stripe's API";
     } else if (error.type === "StripeConnectionError") {
@@ -136,8 +148,9 @@ export async function POST(request) {
     return NextResponse.json(
       {
         error: errorMessage,
-        details:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
+        details: details,
+        type: error.type,
+        param: error.param,
       },
       { status: 500 }
     );

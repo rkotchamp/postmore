@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 /**
- * @typedef {'starter' | 'professional' | 'enterprise'} PlanType
+ * @typedef {'basic' | 'pro' | 'premium'} PlanType
  */
 
 /**
@@ -46,9 +46,9 @@ import { persist, createJSONStorage } from "zustand/middleware";
 // Default plans configuration
 const defaultPlans = [
   {
-    id: "starter",
-    name: "Starter",
-    price: 19,
+    id: "basic",
+    name: "Basic",
+    price: 5,
     description: "Perfect for individual creators and small businesses",
     features: [
       "3 social media accounts",
@@ -66,9 +66,9 @@ const defaultPlans = [
     },
   },
   {
-    id: "professional",
-    name: "Professional",
-    price: 49,
+    id: "pro",
+    name: "Pro",
+    price: 11,
     description: "Ideal for growing businesses and marketing teams",
     features: [
       "10 social media accounts",
@@ -88,9 +88,9 @@ const defaultPlans = [
     },
   },
   {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 149,
+    id: "premium",
+    name: "Premium",
+    price: 19,
     description: "For large organizations with advanced needs",
     features: [
       "Unlimited social media accounts",

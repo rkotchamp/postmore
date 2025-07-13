@@ -127,10 +127,10 @@ export async function POST(request) {
 function getPlanIdFromPriceId(priceId) {
   // Map Stripe price IDs back to plan IDs
   const priceMap = {
-    [process.env.STRIPE_BASIC_PRICE_ID]: "starter",
-    [process.env.STRIPE_PRO_PRICE_ID]: "professional",
-    [process.env.STRIPE_PREMIUM_PRICE_ID]: "enterprise",
+    [process.env.STRIPE_BASIC_PRICE_ID]: "basic",
+    [process.env.STRIPE_PRO_PRICE_ID]: "pro",
+    [process.env.STRIPE_PREMIUM_PRICE_ID]: "premium",
   };
 
-  return priceMap[priceId] || "starter";
+  return priceMap[priceId] || "basic";
 }

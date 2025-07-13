@@ -12,8 +12,8 @@ import { Check } from "lucide-react";
 export function Pricing() {
   const plans = [
     {
-      name: "Starter",
-      price: "$19",
+      name: "Basic",
+      price: "$5",
       description: "Perfect for individual creators and small businesses",
       features: [
         "3 social media accounts",
@@ -25,8 +25,8 @@ export function Pricing() {
       popular: false,
     },
     {
-      name: "Professional",
-      price: "$49",
+      name: "Pro",
+      price: "$11",
       description: "Ideal for growing businesses and marketing teams",
       features: [
         "10 social media accounts",
@@ -40,8 +40,8 @@ export function Pricing() {
       popular: true,
     },
     {
-      name: "Enterprise",
-      price: "$149",
+      name: "Premium",
+      price: "$19",
       description: "For large organizations with advanced needs",
       features: [
         "Unlimited social media accounts",
