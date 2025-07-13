@@ -73,18 +73,42 @@ const userSchema = new mongoose.Schema({
     of: Boolean,
     default: {},
   },
+  // Stripe subscription data
+  subscription: {
+    id: String, // Stripe subscription ID
+    planId: {
+      type: String,
+      enum: ["basic", "pro", "premium"],
+    },
+    status: {
+      type: String,
+      enum: ["active", "trialing", "past_due", "cancelled", "incomplete"],
+    },
+    currentPeriodEnd: Date,
+    trialEnd: Date,
+    cancelAtPeriodEnd: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  stripeCustomerId: String, // Stripe customer ID
   settings: {
     theme: {
       type: String,
       enum: ["light", "dark", "system"],
       default: "system",
     },
-    // Future settings can be added here
-    // plan: {
-    //   type: String,
-    //   enum: ["free", "pro", "enterprise"],
-    //   default: "free",
-    // },
+    plan: {
+      type: String,
+      enum: ["starter", "professional", "enterprise"],
+      default: "starter",
+    },
+    subscriptionStatus: {
+      type: String,
+      enum: ["active", "trialing", "past_due", "cancelled", "incomplete"],
+      default: "trialing", // Default to trial for new users
+    },
+    lastPaymentDate: Date,
   },
   createdAt: {
     type: Date,
