@@ -141,6 +141,7 @@ export default function Profile() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [isEditingName, setIsEditingName] = useState(false);
+  const [imageUpdateKey, setImageUpdateKey] = useState(0);
 
   // Set initial name when user data loads
   useEffect(() => {
@@ -170,9 +171,13 @@ export default function Profile() {
 
       // Upload to Firebase
       const result = await uploadProfilePicture(file, user.id);
+      console.log("Firebase upload result:", result);
 
       // Update user profile with new image URL
       await updateProfile({ image: result.url });
+
+      // Force re-render of the avatar
+      setImageUpdateKey((prev) => prev + 1);
 
       setMessage({
         type: "success",
@@ -251,19 +256,25 @@ export default function Profile() {
       });
 
       const result = await response.json();
+      console.log("Profile update result:", result);
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to update profile");
       }
 
-      // Invalidate and refetch user data
+      // Clear all queries related to user profile
       await queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+      await queryClient.refetchQueries({ queryKey: ["userProfile"] });
 
       // Also trigger a direct refetch to ensure immediate update
       await refetchUser();
 
+      // Force a state update to trigger re-render
+      setName(result.user?.name || name);
+
       return result;
     } catch (error) {
+      console.error("Error in updateProfile:", error);
       throw error;
     } finally {
       setIsUpdating(false);
@@ -315,7 +326,12 @@ export default function Profile() {
           <CardContent className="flex flex-col items-center space-y-4">
             <div className="relative">
               <Avatar className="h-32 w-32">
-                <AvatarImage src={user?.image} alt={user?.name} />
+                <AvatarImage
+                  src={user?.image || ""}
+                  alt={user?.name || "User"}
+                  key={`${user?.image}-${imageUpdateKey}`} // Force re-render when image changes
+                  className="object-cover"
+                />
                 <AvatarFallback className="text-2xl">
                   {getInitials(user?.name)}
                 </AvatarFallback>
@@ -341,6 +357,10 @@ export default function Profile() {
               onChange={handleImageUpload}
               className="hidden"
             />
+            {/* Debug info - remove in production */}
+            <div className="text-xs text-muted-foreground">
+              Current image: {user?.image ? "✓" : "✗"} | Source: {user?.source}
+            </div>
           </CardContent>
         </Card>
 
