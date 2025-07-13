@@ -43,8 +43,12 @@ export function DashboardLayout({ children }) {
           <header className="sticky top-0 z-10 flex h-20 items-center justify-between  bg-background px-4 md:px-8 py-4 shadow-sm">
             {/* App Logo */}
             <Link href="/">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">
-                <span className="text-xs">dappr</span>
+              <div className="flex h-10 items-center justify-center">
+                <img
+                  src="/PostmooreSvg.svg"
+                  alt="Postmoore"
+                  className="h-8 w-auto"
+                />
               </div>
             </Link>
 
