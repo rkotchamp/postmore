@@ -109,6 +109,11 @@ const userSchema = new mongoose.Schema({
       default: "trialing", // Default to trial for new users
     },
     lastPaymentDate: Date,
+    scheduledPostsView: {
+      type: String,
+      enum: ["grid", "grouped"],
+      default: "grid", // Default to grid view (individual posts)
+    },
   },
   createdAt: {
     type: Date,

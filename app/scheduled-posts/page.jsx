@@ -5,11 +5,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
 import { Post } from "@/app/components/posts/Posts";
-import { CalendarDays, ChevronRight, X } from "lucide-react";
+import { CalendarDays, ChevronRight, X, Grid3X3 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { useScheduledPosts } from "@/app/context/FetchPostContext";
 import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
+import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { Skeleton } from "@/app/components/ui/skeleton";
 
 // Group posts by month and year
@@ -86,7 +87,6 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
 
 export default function ScheduledPosts() {
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [isGrouped, setIsGrouped] = useState(true);
   const {
     scheduledPosts,
     isLoading: postsLoading,
@@ -98,9 +98,15 @@ export default function ScheduledPosts() {
     isLoading: accountsLoading,
     error: accountsError,
   } = useFetchAllAccountsContext();
+  const {
+    settings,
+    toggleScheduledPostsView,
+    isLoading: settingsLoading,
+  } = useUserSettings();
 
-  const isLoading = postsLoading || accountsLoading;
+  const isLoading = postsLoading || accountsLoading || settingsLoading;
   const error = postsError || accountsError;
+  const isGrouped = settings.scheduledPostsView === "grouped";
 
   // Enhance posts with complete account data
   const enhancedPosts = scheduledPosts.map((post) => {
@@ -249,13 +255,13 @@ export default function ScheduledPosts() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setIsGrouped(!isGrouped)}
+            onClick={toggleScheduledPostsView}
             className="flex items-center gap-1.5"
           >
             {isGrouped ? (
               <>
-                <CalendarDays className="h-3.5 w-3.5" />
-                <span>Show All</span>
+                <Grid3X3 className="h-3.5 w-3.5" />
+                <span>Grid View</span>
               </>
             ) : (
               <>

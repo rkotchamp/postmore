@@ -36,7 +36,10 @@ export async function GET() {
         image: user.image,
         authProvider: user.authProvider,
         createdAt: user.createdAt,
-        settings: user.settings || { theme: "system" }, // Provide default if not set
+        settings: user.settings || {
+          theme: "system",
+          scheduledPostsView: "grid",
+        }, // Provide defaults if not set
       },
     });
   } catch (error) {
@@ -88,16 +91,25 @@ export async function PUT(request) {
 
     // Handle settings update
     if (settings) {
+      const updatedSettings = { ...user.settings };
+
       // Validate theme setting
       if (
         settings.theme &&
         ["light", "dark", "system"].includes(settings.theme)
       ) {
-        updateData.settings = {
-          ...user.settings,
-          theme: settings.theme,
-        };
+        updatedSettings.theme = settings.theme;
       }
+
+      // Validate scheduledPostsView setting
+      if (
+        settings.scheduledPostsView &&
+        ["grid", "grouped"].includes(settings.scheduledPostsView)
+      ) {
+        updatedSettings.scheduledPostsView = settings.scheduledPostsView;
+      }
+
+      updateData.settings = updatedSettings;
     }
 
     // Handle password update
@@ -150,7 +162,10 @@ export async function PUT(request) {
         image: updatedUser.image,
         authProvider: updatedUser.authProvider,
         createdAt: updatedUser.createdAt,
-        settings: updatedUser.settings || { theme: "system" }, // Provide default if not set
+        settings: updatedUser.settings || {
+          theme: "system",
+          scheduledPostsView: "grid",
+        }, // Provide defaults if not set
       },
     });
   } catch (error) {
