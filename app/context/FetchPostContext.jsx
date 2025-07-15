@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Create context
 const PostContext = createContext();
@@ -125,6 +125,101 @@ export function PostProvider({ children }) {
   return (
     <PostContext.Provider value={postsData}>{children}</PostContext.Provider>
   );
+}
+
+/**
+ * Custom hook for fetching only scheduled posts with optimized caching
+ * @returns {Object} Scheduled posts data and methods
+ */
+export function useScheduledPosts() {
+  const {
+    data: rawScheduledPosts = [],
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ["scheduledPosts"],
+    queryFn: async () => {
+      const response = await fetch("/api/posts/Get-posts?status=scheduled");
+      if (!response.ok) {
+        throw new Error("Failed to fetch scheduled posts");
+      }
+      const data = await response.json();
+      return data || [];
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes - scheduled posts don't change frequently
+    cacheTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
+  });
+
+  // Transform scheduled posts for UI (similar to existing logic)
+  const scheduledPosts = rawScheduledPosts.map((post) => {
+    const scheduledAt = post.schedule?.at
+      ? new Date(post.schedule.at)
+      : new Date();
+
+    // Extract media URL
+    const mediaUrl =
+      post.media && post.media.length > 0 ? post.media[0].url : null;
+
+    // Extract thumbnail URL
+    const thumbnailUrl =
+      post.thumbnail && post.thumbnail.length > 0
+        ? post.thumbnail[0].url
+        : null;
+
+    // Format social accounts
+    const formattedAccounts =
+      post.socialAccounts?.map((account) => ({
+        id: account._id || account.id,
+        name: account.platformUsername || account.name,
+        platform: account.platform,
+        avatar: account.profileImage || account.avatar,
+      })) || [];
+
+    return {
+      id: post._id,
+      contentType:
+        post.contentType ||
+        (post.media && post.media.length > 0 ? "media" : "text"),
+      text: post.text || "",
+      media: mediaUrl,
+      thumbnail: thumbnailUrl,
+      captions: post.captions || {},
+      scheduledTime: scheduledAt.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      scheduledDate: scheduledAt.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      socialAccounts: formattedAccounts,
+      createdAt: post.createdAt ? new Date(post.createdAt) : null,
+      updatedAt: post.updatedAt ? new Date(post.updatedAt) : null,
+      originalPost: post,
+    };
+  });
+
+  return {
+    scheduledPosts,
+    isLoading,
+    error,
+    refetch,
+  };
+}
+
+/**
+ * Custom hook for invalidating scheduled posts cache
+ * Call this when posts are created, updated, or deleted
+ */
+export function useInvalidateScheduledPosts() {
+  const queryClient = useQueryClient();
+
+  return () => {
+    queryClient.invalidateQueries(["scheduledPosts"]);
+  };
 }
 
 /**

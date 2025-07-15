@@ -19,10 +19,22 @@ export async function GET(request) {
     // Connect to the database - the function returns the db directly
     const db = await connectToDatabase();
 
+    // Check for status filter in query parameters
+    const { searchParams } = new URL(request.url);
+    const statusFilter = searchParams.get("status");
+
+    // Build query based on filters
+    let query = { userId: session.user.id };
+
+    if (statusFilter === "scheduled") {
+      query.status = "scheduled";
+      query["schedule.type"] = "scheduled";
+    }
+
     // Fetch posts for the logged-in user
     const posts = await db
       .collection("posts")
-      .find({ userId: session.user.id })
+      .find(query)
       .sort({ createdAt: -1 })
       .toArray();
 
@@ -36,4 +48,3 @@ export async function GET(request) {
     );
   }
 }
- 

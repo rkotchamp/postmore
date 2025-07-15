@@ -8,7 +8,7 @@ import { Post } from "@/app/components/posts/Posts";
 import { CalendarDays, ChevronRight, X } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
-import { usePostContext } from "@/app/context/FetchPostContext";
+import { useScheduledPosts } from "@/app/context/FetchPostContext";
 import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 import { Skeleton } from "@/app/components/ui/skeleton";
 
@@ -92,7 +92,7 @@ export default function ScheduledPosts() {
     isLoading: postsLoading,
     error: postsError,
     refetch: refreshPosts,
-  } = usePostContext();
+  } = useScheduledPosts();
   const {
     accounts,
     isLoading: accountsLoading,
