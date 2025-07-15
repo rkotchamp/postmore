@@ -45,30 +45,24 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
+      // Use NextAuth's built-in redirect handling
       const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
         callbackUrl: callbackUrl,
-        redirect: false,
+        redirect: true, // Let NextAuth handle the redirect
       });
 
-      if (result.error) {
+      // Note: This code won't execute if redirect: true is successful
+      // It only executes if there's an error
+      if (result?.error) {
         throw new Error(result.error);
       }
-
-      // Successfully logged in
-      toast.success("Login successful!", {
-        description: "Welcome back to Postmore.",
-      });
-
-      // Redirect to intended destination
-      router.push(callbackUrl);
     } catch (error) {
       console.error("Login error:", error);
       toast.error("Invalid email or password", {
         description: error.message || "Login failed. Please try again.",
       });
-    } finally {
       setIsLoading(false);
     }
   };
