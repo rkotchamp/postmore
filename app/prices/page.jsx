@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,
@@ -76,7 +76,13 @@ export default function PricingPage() {
         )}
 
         {/* Pricing Cards */}
-        <PricingCards mode="pricing" />
+        <Suspense
+          fallback={
+            <div className="text-center py-12">Loading pricing options...</div>
+          }
+        >
+          <PricingCards mode="pricing" />
+        </Suspense>
 
         {/* FAQ Section */}
         <div className="mt-20 text-center">
