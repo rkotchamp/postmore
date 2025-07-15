@@ -1,261 +1,109 @@
 "use client";
 
-import { Card, CardContent } from "@/app/components/ui/card";
-import { Skeleton } from "@/app/components/ui/skeleton";
-import { Button } from "@/app/components/ui/button";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { Upload } from "lucide-react";
 
 export function DashboardSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-50/50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-4 w-96" />
-        </div>
+          <h1 className="text-2xl font-semibold mb-6">Create New Post</h1>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left side: Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Step Navigation */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                {/* Step circles and connectors */}
-                <div className="flex items-center space-x-4">
-                  {[1, 2, 3].map((step, index) => (
-                    <div key={step} className="flex items-center">
-                      <div className="flex items-center">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <Skeleton className="h-4 w-16 ml-2" />
-                      </div>
-                      {index < 2 && <Skeleton className="h-0.5 w-20 ml-4" />}
-                    </div>
-                  ))}
-                </div>
+          {/* Step Navigation */}
+          <div className="flex items-center justify-center space-x-16 mb-8">
+            {/* Step 1 - Content (Active) */}
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white font-medium">
+                1
               </div>
+              <span className="text-white font-medium">Content</span>
             </div>
 
-            {/* Step Content */}
-            <Card className="border-none shadow-sm">
-              <CardContent className="p-6">
-                <ContentSkeleton />
-              </CardContent>
-            </Card>
+            {/* Connector line */}
+            <div className="flex-1 h-0.5 bg-gray-600 max-w-[200px]"></div>
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-between items-center pt-4 border-t bg-white rounded-lg p-4 shadow-sm">
-              <Button
-                variant="outline"
-                disabled
-                className="flex items-center gap-1"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
-              </Button>
-              <Button disabled className="flex items-center gap-1">
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Right side: Preview Panel */}
-          <div className="space-y-6">
-            <PreviewSkeleton />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Content section skeleton
-function ContentSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Upload area */}
-      <div className="border-2 border-dashed border-gray-200 rounded-lg p-8">
-        <div className="text-center">
-          <Skeleton className="h-16 w-16 mx-auto mb-4 rounded-full" />
-          <Skeleton className="h-6 w-48 mx-auto mb-2" />
-          <Skeleton className="h-4 w-32 mx-auto" />
-        </div>
-      </div>
-
-      {/* Media grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {[1, 2, 3, 4, 5, 6].map((item) => (
-          <Card key={item} className="aspect-square">
-            <CardContent className="p-2">
-              <Skeleton className="h-full w-full rounded-md" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        <Skeleton className="h-10 w-24" />
-        <Skeleton className="h-10 w-32" />
-      </div>
-    </div>
-  );
-}
-
-// Accounts section skeleton
-function AccountsSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Title */}
-      <div>
-        <Skeleton className="h-6 w-40 mb-2" />
-        <Skeleton className="h-4 w-64" />
-      </div>
-
-      {/* Connected accounts */}
-      <div className="space-y-4">
-        {[1, 2, 3, 4].map((account) => (
-          <Card key={account} className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Skeleton className="h-12 w-12 rounded-full" />
-                <div>
-                  <Skeleton className="h-4 w-24 mb-1" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
+            {/* Step 2 - Accounts (Inactive) */}
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-gray-400 font-medium">
+                2
               </div>
-              <Skeleton className="h-6 w-6 rounded" />
+              <span className="text-gray-400 font-medium">Accounts</span>
             </div>
-          </Card>
-        ))}
-      </div>
 
-      {/* Add account button */}
-      <Skeleton className="h-10 w-full" />
-    </div>
-  );
-}
+            {/* Connector line */}
+            <div className="flex-1 h-0.5 bg-gray-600 max-w-[200px]"></div>
 
-// Caption section skeleton
-function CaptionSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Title */}
-      <div>
-        <Skeleton className="h-6 w-32 mb-2" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-
-      {/* Caption input */}
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-32 w-full" />
-        <div className="flex justify-between">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 w-16" />
-        </div>
-      </div>
-
-      {/* Schedule toggle */}
-      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-        <div>
-          <Skeleton className="h-5 w-32 mb-1" />
-          <Skeleton className="h-4 w-48" />
-        </div>
-        <Skeleton className="h-6 w-12 rounded-full" />
-      </div>
-
-      {/* Schedule settings */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Skeleton className="h-4 w-12 mb-2" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <div>
-            <Skeleton className="h-4 w-12 mb-2" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        </div>
-        <div>
-          <Skeleton className="h-4 w-16 mb-2" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Preview section skeleton
-function PreviewSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Preview header */}
-      <div className="bg-white rounded-lg p-4 shadow-sm">
-        <Skeleton className="h-6 w-24 mb-4" />
-
-        {/* Phone mockup */}
-        <div className="mx-auto max-w-sm">
-          <div className="bg-gray-100 rounded-3xl p-6 shadow-lg">
-            {/* Phone header */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div>
-                  <Skeleton className="h-4 w-20 mb-1" />
-                  <Skeleton className="h-3 w-16" />
-                </div>
+            {/* Step 3 - Caption (Inactive) */}
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-gray-400 font-medium">
+                3
               </div>
-              <Skeleton className="h-6 w-6" />
-            </div>
-
-            {/* Content area */}
-            <div className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-48 w-full rounded-lg" />
-            </div>
-
-            {/* Interaction buttons */}
-            <div className="flex justify-between items-center mt-4">
-              <div className="flex space-x-4">
-                <Skeleton className="h-6 w-6" />
-                <Skeleton className="h-6 w-6" />
-                <Skeleton className="h-6 w-6" />
-              </div>
-              <Skeleton className="h-6 w-6" />
+              <span className="text-gray-400 font-medium">Caption</span>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Selected accounts */}
-      <div className="bg-white rounded-lg p-4 shadow-sm">
-        <Skeleton className="h-5 w-32 mb-4" />
-        <div className="space-y-2">
-          {[1, 2, 3].map((account) => (
-            <div key={account} className="flex items-center space-x-2">
-              <Skeleton className="h-6 w-6 rounded-full" />
-              <Skeleton className="h-4 w-24" />
+        {/* Content Tabs */}
+        <div className="mb-8">
+          <div className="flex space-x-4 mb-6">
+            {/* Media Tab (Active) */}
+            <button className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2">
+              <Upload className="w-5 h-5" />
+              <span>Media</span>
+            </button>
+
+            {/* Text Tab (Inactive) */}
+            <button className="flex-1 bg-gray-700 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2">
+              <span>📝</span>
+              <span>Text</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Media Post Section */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-6">Media Post</h2>
+
+          {/* Upload Area */}
+          <div className="border-2 border-dashed border-gray-600 rounded-lg p-16 text-center">
+            <div className="flex flex-col items-center space-y-4">
+              <Upload className="w-12 h-12 text-gray-400" />
+              <div className="text-lg text-gray-300">
+                Drag and drop video or up to 10 images
+              </div>
+              <div className="text-gray-400">or click to browse</div>
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* Navigation Buttons */}
+        <div className="flex justify-between items-center pt-6">
+          <button className="flex items-center space-x-2 px-4 py-2 bg-gray-700 text-gray-400 rounded-lg opacity-50 cursor-not-allowed">
+            <span>←</span>
+            <span>Previous</span>
+          </button>
+
+          <button className="flex items-center space-x-2 px-6 py-2 bg-purple-600 text-white rounded-lg">
+            <span>Next</span>
+            <span>→</span>
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// Dynamic skeleton based on current step
+// Simple content skeleton for step-specific loading
 export function DynamicContentSkeleton({ step = 0 }) {
-  switch (step) {
-    case 0:
-      return <ContentSkeleton />;
-    case 1:
-      return <AccountsSkeleton />;
-    case 2:
-      return <CaptionSkeleton />;
-    default:
-      return <ContentSkeleton />;
-  }
+  return (
+    <div className="space-y-6">
+      <div className="border-2 border-dashed border-gray-600 rounded-lg p-16 text-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Upload className="w-12 h-12 text-gray-400" />
+          <div className="text-lg text-gray-300">Loading...</div>
+        </div>
+      </div>
+    </div>
+  );
 }
