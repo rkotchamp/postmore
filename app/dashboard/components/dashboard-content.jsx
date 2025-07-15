@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, memo } from "react";
+import { useEffect, memo, useState } from "react";
 import { Card, CardContent } from "@/app/components/ui/card";
 import {
   CheckCircle2,
@@ -14,6 +14,7 @@ import { SelectAccount } from "@/app/dashboard/selectAccount/SelectAccount";
 import { Caption } from "@/app/dashboard/caption/Caption";
 import { Preview } from "@/app/dashboard/preview/Preview";
 import { TextPreview } from "@/app/dashboard/preview/TextPreview";
+import { DynamicContentSkeleton } from "@/app/dashboard/components/dashboard-skeleton";
 import { useMediaMutations } from "@/app/hooks/useMediaMutations";
 import { useMediaItems } from "@/app/hooks/useMediaQueries";
 import { useUIStateStore } from "@/app/lib/store/uiStateStore";
@@ -45,6 +46,9 @@ export function DashboardContent() {
   // Test toast function
   const router = useRouter();
 
+  // Component loading state
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
   // --- UI Zustand State ---
   const currentStep = useUIStateStore((state) => state.currentStep);
   const setCurrentStep = useUIStateStore((state) => state.setCurrentStep);
@@ -72,6 +76,18 @@ export function DashboardContent() {
     useMediaItems();
   const { updateTextContent, clearMedia } = useMediaMutations();
   // --------------------------
+
+  // Handle initial loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoading(false);
+    }, 800); // Show skeleton for 800ms minimum
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show skeleton if initially loading or media is loading
+  const shouldShowSkeleton = isInitialLoading || isLoadingMedia;
 
   // --- Calculate derived state directly --- (Inputs now from Zustand stores)
   const hasSessionMedia = sessionMediaItems.length > 0;
@@ -447,6 +463,35 @@ export function DashboardContent() {
   const renderPreview = () => {
     if (!showPreviews) return null;
 
+    if (shouldShowSkeleton) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg p-4 shadow-sm">
+            <div className="h-6 bg-gray-200 rounded mb-4 w-24 animate-pulse"></div>
+            <div className="mx-auto max-w-sm">
+              <div className="bg-gray-100 rounded-3xl p-6 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="h-8 w-8 bg-gray-300 rounded-full animate-pulse"></div>
+                    <div>
+                      <div className="h-4 bg-gray-300 rounded mb-1 w-20 animate-pulse"></div>
+                      <div className="h-3 bg-gray-300 rounded w-16 animate-pulse"></div>
+                    </div>
+                  </div>
+                  <div className="h-6 w-6 bg-gray-300 rounded animate-pulse"></div>
+                </div>
+                <div className="space-y-4">
+                  <div className="h-4 bg-gray-300 rounded w-full animate-pulse"></div>
+                  <div className="h-4 bg-gray-300 rounded w-3/4 animate-pulse"></div>
+                  <div className="h-48 bg-gray-300 rounded-lg animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (postType === "text") {
       return <MemoizedTextPreview />;
     } else {
@@ -459,11 +504,7 @@ export function DashboardContent() {
     return scheduleType === "scheduled" ? "Schedule Post" : "Post Now";
   };
 
-  // Loading state from TanStack Query
-  if (isLoadingMedia) {
-    // Consider a more sophisticated loading skeleton
-    return <div>Loading Content Editor...</div>;
-  }
+  // Loading state is now handled by shouldShowSkeleton in the component render
 
   return (
     <div className="w-full max-w-full space-y-6 p-6">
@@ -546,9 +587,15 @@ export function DashboardContent() {
           {/* Step Content - Render conditionally based on UI store currentStep */}
           <Card className="border-none shadow-none flex-1 p-0">
             <CardContent className="p-6">
-              {currentStep === 0 && <MemoizedContent />}
-              {currentStep === 1 && <MemoizedSelectAccount />}
-              {currentStep === 2 && <MemoizedCaption />}
+              {shouldShowSkeleton ? (
+                <DynamicContentSkeleton step={currentStep} />
+              ) : (
+                <>
+                  {currentStep === 0 && <MemoizedContent />}
+                  {currentStep === 1 && <MemoizedSelectAccount />}
+                  {currentStep === 2 && <MemoizedCaption />}
+                </>
+              )}
             </CardContent>
           </Card>
 
