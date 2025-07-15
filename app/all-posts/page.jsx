@@ -8,6 +8,7 @@ import { CalendarDays, ChevronRight, X, Filter } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { useAllPosts } from "@/app/context/FetchAllPostsContext";
 import {
   Select,
   SelectContent,
@@ -15,142 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-
-// Dummy data with post dates for grouping
-const allPosts = [
-  {
-    id: "post1",
-    media: "/images/post1.jpg",
-    caption:
-      "Excited to announce our new product launch! Stay tuned for more updates coming soon. #newproduct #launch #exciting",
-    scheduledTime: "10:30 AM",
-    scheduledDate: "Jul 10, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "facebook",
-      },
-      {
-        id: "acc2",
-        name: "Marketing",
-        avatar: "/avatars/marketing.jpg",
-        platform: "instagram",
-      },
-    ],
-  },
-  {
-    id: "post2",
-    media: "/images/post2.jpg",
-    caption:
-      "Join our webinar next week to learn all about digital marketing strategies in 2023!",
-    scheduledTime: "2:00 PM",
-    scheduledDate: "Jul 25, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "linkedin",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "twitter",
-      },
-    ],
-  },
-  {
-    id: "post3",
-    media: "/images/post3.jpg",
-    caption:
-      "Check out our latest case study on how we helped XYZ company increase their social media engagement by 200%!",
-    scheduledTime: "3:15 PM",
-    scheduledDate: "Aug 5, 2023",
-    socialAccounts: [
-      {
-        id: "acc2",
-        name: "Marketing",
-        avatar: "/avatars/marketing.jpg",
-        platform: "instagram",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "facebook",
-      },
-    ],
-  },
-  {
-    id: "post4",
-    media: "/images/post4.jpg",
-    caption:
-      "Our Black Friday sale is just around the corner! Get ready for amazing deals across our entire product line.",
-    scheduledTime: "9:00 AM",
-    scheduledDate: "Aug 12, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "facebook",
-      },
-      {
-        id: "acc2",
-        name: "Marketing",
-        avatar: "/avatars/marketing.jpg",
-        platform: "instagram",
-      },
-    ],
-  },
-  {
-    id: "post5",
-    media: "/images/post5.jpg",
-    caption:
-      "Happy holidays from our team to yours! We're taking a short break, but we'll be back in the new year with exciting updates.",
-    scheduledTime: "12:00 PM",
-    scheduledDate: "Sep 10, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "instagram",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "linkedin",
-      },
-    ],
-  },
-  {
-    id: "post6",
-    media: null,
-    caption:
-      "We're hiring! Check out our careers page for exciting opportunities to join our growing team.",
-    scheduledTime: "11:30 AM",
-    scheduledDate: "Sep 22, 2023",
-    socialAccounts: [
-      {
-        id: "acc1",
-        name: "John Doe",
-        avatar: "/avatars/john.jpg",
-        platform: "linkedin",
-      },
-      {
-        id: "acc3",
-        name: "Business",
-        avatar: "/avatars/business.jpg",
-        platform: "twitter",
-      },
-    ],
-  },
-];
 
 // Group posts by month and year
 const groupPostsByDate = (posts) => {
@@ -246,15 +111,20 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
 
 export default function AllPosts() {
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [filteredPosts, setFilteredPosts] = useState(allPosts);
+  const [filteredPosts, setFilteredPosts] = useState(null); // Changed to null as data is now fetched
   const [selectedMonthFilter, setSelectedMonthFilter] = useState(null);
   const [selectedYearFilter, setSelectedYearFilter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { months, years } = getUniqueMonthsAndYears(allPosts);
+  const { allPosts, isLoading: contextLoading, error } = useAllPosts();
+
+  // Get unique months and years from all posts
+  const { months, years } = getUniqueMonthsAndYears(allPosts || []);
 
   // Apply filters when month or year selection changes
   useEffect(() => {
+    if (!allPosts) return;
+
     let filtered = [...allPosts];
 
     if (selectedMonthFilter) {
@@ -274,17 +144,14 @@ export default function AllPosts() {
     }
 
     setFilteredPosts(filtered);
-  }, [selectedMonthFilter, selectedYearFilter]);
+  }, [selectedMonthFilter, selectedYearFilter, allPosts]);
 
   // Simulate loading for the main view
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000); // Simulate a 1-second loading time
-    return () => clearTimeout(timer);
-  }, []);
+    setIsLoading(contextLoading);
+  }, [contextLoading]);
 
-  const groupedPosts = groupPostsByDate(filteredPosts);
+  const groupedPosts = groupPostsByDate(filteredPosts || []);
 
   const handleSelectMonth = (monthYear) => {
     setSelectedMonth(monthYear);
@@ -298,6 +165,25 @@ export default function AllPosts() {
     setSelectedMonthFilter(null);
     setSelectedYearFilter(null);
   };
+
+  // Handle error state
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="p-6">
+          <h1 className="text-2xl font-bold mb-4">All Posts</h1>
+          <div className="flex flex-col items-center justify-center py-12">
+            <p className="text-red-500 text-center mb-4">
+              Failed to load posts. Please try again.
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Reload Page
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // If a month is selected, show the posts for that month
   if (selectedMonth) {
@@ -493,7 +379,7 @@ export default function AllPosts() {
                   </div>
                 </div>
               ))
-          ) : Object.keys(groupedPosts).length === 0 ? (
+          ) : allPosts?.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <p className="text-muted-foreground text-center mb-4">
                 No posts found for the selected filters.
@@ -514,14 +400,18 @@ export default function AllPosts() {
           )}
         </div>
 
-        {Object.keys(groupedPosts).length === 0 && (
+        {!isLoading && Object.keys(groupedPosts).length === 0 && (
           <div className="flex flex-col items-center justify-center py-12">
             <p className="text-muted-foreground text-center mb-4">
-              No posts found for the selected filters.
+              {allPosts && allPosts.length === 0
+                ? "You don't have any posts yet."
+                : "No posts found for the selected filters."}
             </p>
-            <Button variant="outline" onClick={handleResetFilters}>
-              Reset Filters
-            </Button>
+            {allPosts && allPosts.length > 0 && (
+              <Button variant="outline" onClick={handleResetFilters}>
+                Reset Filters
+              </Button>
+            )}
           </div>
         )}
       </div>

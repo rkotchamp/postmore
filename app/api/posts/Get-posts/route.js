@@ -22,6 +22,7 @@ export async function GET(request) {
     // Check for status filter in query parameters
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get("status");
+    const excludeScheduled = searchParams.get("excludeScheduled");
 
     // Build query based on filters
     let query = { userId: session.user.id };
@@ -29,6 +30,9 @@ export async function GET(request) {
     if (statusFilter === "scheduled") {
       query.status = "scheduled";
       query["schedule.type"] = "scheduled";
+    } else if (excludeScheduled === "true") {
+      // Exclude scheduled posts - get all other statuses
+      query.status = { $ne: "scheduled" };
     }
 
     // Fetch posts for the logged-in user

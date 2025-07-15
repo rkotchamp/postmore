@@ -543,6 +543,17 @@ export function Post({ post }) {
         {/* Caption */}
         <div className="mb-2">{renderCaption()}</div>
 
+        {/* Status Indicator */}
+        {post.statusIndicator && (
+          <div className="mb-2">
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${post.statusIndicator.bgColor} ${post.statusIndicator.textColor} ${post.statusIndicator.borderColor} border`}
+            >
+              {post.statusIndicator.label}
+            </span>
+          </div>
+        )}
+
         {/* Date and Time */}
         <div className="flex justify-between items-center text-xs text-muted-foreground mb-3">
           <div className="flex items-center">
