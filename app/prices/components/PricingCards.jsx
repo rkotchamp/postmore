@@ -58,20 +58,60 @@ export function PricingCards({ mode = "home", className = "" }) {
     }
   }, [mode, isClient, searchParams, plans, selectPlan]);
 
-  const handleSelectPlan = async (plan) => {
-    if (mode === "home") {
-      // For homepage, redirect to pricing page or handle differently
-      window.location.href = `/prices?plan=${plan.id}`;
-      return;
-    }
+  // Handle automatic checkout after login
+  useEffect(() => {
+    if (mode === "pricing" && isClient && searchParams && user) {
+      const planParam = searchParams.get("plan");
+      const checkoutParam = searchParams.get("checkout");
 
+      if (
+        checkoutParam === "true" &&
+        planParam &&
+        plans.some((p) => p.id === planParam)
+      ) {
+        const selectedPlan = plans.find((p) => p.id === planParam);
+        if (selectedPlan) {
+          // Auto-initiate checkout
+          initiateCheckout(selectedPlan.id, {
+            successUrl: `${window.location.origin}/dashboard?checkout=success&plan=${selectedPlan.id}`,
+            cancelUrl: `${window.location.origin}/prices?checkout=cancelled`,
+            metadata: {
+              source: "post_login_checkout",
+              userEmail: user?.email,
+            },
+          }).catch((error) => {
+            console.error("Auto-checkout failed:", error);
+            toast.error("Failed to start checkout", {
+              description: "Please try selecting the plan again.",
+              duration: 5000,
+            });
+          });
+        }
+      }
+    }
+  }, [mode, isClient, searchParams, user, plans, initiateCheckout]);
+
+  const handleSelectPlan = async (plan) => {
     try {
-      // For pricing page, initiate checkout
+      // Check if user is authenticated
+      if (!user) {
+        // If not authenticated, redirect to login with plan selection in callback
+        const callbackUrl = encodeURIComponent(
+          `/prices?plan=${plan.id}&checkout=true`
+        );
+        window.location.href = `/auth/login?callbackUrl=${callbackUrl}`;
+        return;
+      }
+
+      // User is authenticated, proceed with checkout directly
       await initiateCheckout(plan.id, {
         successUrl: `${window.location.origin}/dashboard?checkout=success&plan=${plan.id}`,
-        cancelUrl: `${window.location.origin}/prices?checkout=cancelled`,
+        cancelUrl:
+          mode === "home"
+            ? `${window.location.origin}/?checkout=cancelled`
+            : `${window.location.origin}/prices?checkout=cancelled`,
         metadata: {
-          source: "pricing_page",
+          source: mode === "home" ? "homepage" : "pricing_page",
           userEmail: user?.email,
         },
       });
@@ -85,10 +125,6 @@ export function PricingCards({ mode = "home", className = "" }) {
   };
 
   const getPlanButtonText = (plan) => {
-    if (mode === "home") {
-      return "Start Free Trial";
-    }
-
     if (isRedirecting && selectedPlan === plan.id) {
       return "Redirecting to checkout...";
     }
@@ -105,7 +141,15 @@ export function PricingCards({ mode = "home", className = "" }) {
       return "Downgrade Plan";
     }
 
-    return "Start Free Trial";
+    // For authenticated users, show appropriate action
+    if (user) {
+      return mode === "home"
+        ? "Start 5 days free trial"
+        : "Start 5 days free trial";
+    }
+
+    // For unauthenticated users
+    return "Start 5 days free trial";
   };
 
   const isPlanCurrent = (plan) => {
