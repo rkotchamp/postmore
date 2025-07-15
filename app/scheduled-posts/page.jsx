@@ -157,37 +157,63 @@ export default function ScheduledPosts() {
     return (
       <DashboardLayout>
         <div className="p-3 sm:p-4 md:p-6">
-          <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
-            Scheduled Posts
-          </h1>
-          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
-            {/* Generate multiple skeleton cards */}
-            {Array(8)
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h1 className="text-xl sm:text-2xl font-bold">Scheduled Posts</h1>
+            <Skeleton className="h-8 w-24" />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {/* Generate multiple skeleton cards for grid view */}
+            {Array(6)
               .fill(0)
               .map((_, index) => (
                 <div
                   key={index}
-                  className="bg-background rounded-lg border shadow-sm overflow-hidden"
+                  className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden"
                 >
-                  {/* Skeleton image grid */}
-                  <div
-                    className="grid grid-cols-2 gap-0.5"
-                    style={{ aspectRatio: "4/3" }}
-                  >
-                    {Array(4)
-                      .fill(0)
-                      .map((_, i) => (
-                        <Skeleton key={i} className="w-full h-full" />
-                      ))}
+                  {/* Media Section - 3/5 of the height */}
+                  <div className="w-full h-3/5 bg-muted relative">
+                    <Skeleton className="w-full h-full rounded-t-lg" />
                   </div>
 
-                  {/* Skeleton text content */}
-                  <div className="p-2 sm:p-3">
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-4 sm:h-5 w-20 sm:w-24" />
-                      <Skeleton className="h-3 sm:h-4 w-3 sm:w-4 rounded-full" />
+                  {/* Content Section - remaining height */}
+                  <div className="flex-1 p-4 flex flex-col">
+                    {/* Caption */}
+                    <div className="mb-2">
+                      <Skeleton className="h-4 w-full mb-1" />
+                      <Skeleton className="h-4 w-3/4 mb-1" />
+                      <Skeleton className="h-4 w-1/2" />
                     </div>
-                    <Skeleton className="h-3 w-14 sm:w-16 mt-2" />
+
+                    {/* Date and Time */}
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center">
+                        <Skeleton className="h-3 w-3 mr-1 rounded-full" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                      <div className="flex items-center">
+                        <Skeleton className="h-3 w-3 mr-1 rounded-full" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                    </div>
+
+                    {/* Social Accounts */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center space-x-2">
+                          <Skeleton className="h-7 w-7 rounded-full" />
+                          <div className="flex items-center -space-x-2">
+                            <Skeleton className="h-7 w-7 rounded-full" />
+                            <Skeleton className="h-7 w-7 rounded-full" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mt-auto flex justify-end">
+                      <Skeleton className="h-8 w-16 rounded-md" />
+                    </div>
                   </div>
                 </div>
               ))}
