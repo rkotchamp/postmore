@@ -407,7 +407,7 @@ export function MediaPosts() {
           )}
           <span>
             {mode === "empty"
-              ? "Supported formats: JPG, PNG, WEBP, GIF, MP4, MOV"
+              ? ""
               : mode === "singleVideo"
               ? `Video: ${mediaItems[0]?.fileInfo?.name || "video file"}`
               : `Images: ${mediaItems.length} / ${MAX_IMAGES}`}

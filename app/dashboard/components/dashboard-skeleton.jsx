@@ -1,6 +1,6 @@
 "use client";
 
-import { Upload } from "lucide-react";
+import { Skeleton } from "@/app/components/ui/skeleton";
 
 export function DashboardSkeleton() {
   return (
@@ -8,16 +8,14 @@ export function DashboardSkeleton() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold mb-6">Create New Post</h1>
+          <Skeleton className="h-8 w-48 mb-6 bg-gray-800" />
 
           {/* Step Navigation */}
           <div className="flex items-center justify-center space-x-16 mb-8">
             {/* Step 1 - Content (Active) */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center text-white font-medium">
-                1
-              </div>
-              <span className="text-white font-medium">Content</span>
+              <Skeleton className="w-10 h-10 rounded-full bg-purple-600" />
+              <Skeleton className="h-4 w-16 bg-gray-700" />
             </div>
 
             {/* Connector line */}
@@ -25,10 +23,8 @@ export function DashboardSkeleton() {
 
             {/* Step 2 - Accounts (Inactive) */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-gray-400 font-medium">
-                2
-              </div>
-              <span className="text-gray-400 font-medium">Accounts</span>
+              <Skeleton className="w-10 h-10 rounded-full bg-gray-600" />
+              <Skeleton className="h-4 w-20 bg-gray-700" />
             </div>
 
             {/* Connector line */}
@@ -36,10 +32,8 @@ export function DashboardSkeleton() {
 
             {/* Step 3 - Caption (Inactive) */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-gray-400 font-medium">
-                3
-              </div>
-              <span className="text-gray-400 font-medium">Caption</span>
+              <Skeleton className="w-10 h-10 rounded-full bg-gray-600" />
+              <Skeleton className="h-4 w-16 bg-gray-700" />
             </div>
           </div>
         </div>
@@ -48,46 +42,44 @@ export function DashboardSkeleton() {
         <div className="mb-8">
           <div className="flex space-x-4 mb-6">
             {/* Media Tab (Active) */}
-            <button className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2">
-              <Upload className="w-5 h-5" />
-              <span>Media</span>
-            </button>
+            <div className="flex-1 bg-blue-600 py-3 rounded-lg flex items-center justify-center space-x-2">
+              <Skeleton className="w-5 h-5 bg-blue-500" />
+              <Skeleton className="h-4 w-12 bg-blue-500" />
+            </div>
 
             {/* Text Tab (Inactive) */}
-            <button className="flex-1 bg-gray-700 text-white py-3 rounded-lg font-medium flex items-center justify-center space-x-2">
-              <span>📝</span>
-              <span>Text</span>
-            </button>
+            <div className="flex-1 bg-gray-700 py-3 rounded-lg flex items-center justify-center space-x-2">
+              <Skeleton className="w-5 h-5 bg-gray-600" />
+              <Skeleton className="h-4 w-8 bg-gray-600" />
+            </div>
           </div>
         </div>
 
         {/* Media Post Section */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-6">Media Post</h2>
+          <Skeleton className="h-6 w-24 mb-6 bg-gray-800" />
 
           {/* Upload Area */}
           <div className="border-2 border-dashed border-gray-600 rounded-lg p-16 text-center">
             <div className="flex flex-col items-center space-y-4">
-              <Upload className="w-12 h-12 text-gray-400" />
-              <div className="text-lg text-gray-300">
-                Drag and drop video or up to 10 images
-              </div>
-              <div className="text-gray-400">or click to browse</div>
+              <Skeleton className="w-12 h-12 bg-gray-600" />
+              <Skeleton className="h-5 w-64 bg-gray-700" />
+              <Skeleton className="h-4 w-32 bg-gray-700" />
             </div>
           </div>
         </div>
 
         {/* Navigation Buttons */}
         <div className="flex justify-between items-center pt-6">
-          <button className="flex items-center space-x-2 px-4 py-2 bg-gray-700 text-gray-400 rounded-lg opacity-50 cursor-not-allowed">
-            <span>←</span>
-            <span>Previous</span>
-          </button>
+          <div className="flex items-center space-x-2 px-4 py-2 bg-gray-700 rounded-lg opacity-50">
+            <Skeleton className="w-4 h-4 bg-gray-600" />
+            <Skeleton className="h-4 w-16 bg-gray-600" />
+          </div>
 
-          <button className="flex items-center space-x-2 px-6 py-2 bg-purple-600 text-white rounded-lg">
-            <span>Next</span>
-            <span>→</span>
-          </button>
+          <div className="flex items-center space-x-2 px-6 py-2 bg-purple-600 rounded-lg">
+            <Skeleton className="h-4 w-8 bg-purple-500" />
+            <Skeleton className="w-4 h-4 bg-purple-500" />
+          </div>
         </div>
       </div>
     </div>
@@ -100,8 +92,8 @@ export function DynamicContentSkeleton({ step = 0 }) {
     <div className="space-y-6">
       <div className="border-2 border-dashed border-gray-600 rounded-lg p-16 text-center">
         <div className="flex flex-col items-center space-y-4">
-          <Upload className="w-12 h-12 text-gray-400" />
-          <div className="text-lg text-gray-300">Loading...</div>
+          <Skeleton className="w-12 h-12 bg-gray-600" />
+          <Skeleton className="h-5 w-32 bg-gray-700" />
         </div>
       </div>
     </div>
