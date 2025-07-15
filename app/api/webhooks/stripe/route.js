@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { connectDB } from "@/app/lib/db/mongodb";
+import { connectToDatabase } from "@/app/lib/db/mongodb";
 import User from "@/app/models/userSchema";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -30,7 +30,7 @@ export async function POST(request) {
     console.log(`Received Stripe webhook: ${event.type}`);
 
     // Connect to database
-    await connectDB();
+    await connectToDatabase();
 
     // Handle the event
     switch (event.type) {

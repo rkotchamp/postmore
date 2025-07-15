@@ -15,7 +15,7 @@ import { useStripeCheckout } from "@/app/hooks/useStripeCheckout";
 import { useUser } from "@/app/context/UserContext";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * PricingCards Component
@@ -25,7 +25,11 @@ import { useEffect } from "react";
  */
 export function PricingCards({ mode = "home", className = "" }) {
   const { user } = useUser();
+  const [isClient, setIsClient] = useState(false);
+
+  // Always call the hook, but only use it conditionally
   const searchParams = useSearchParams();
+
   const {
     plans,
     selectedPlan,
@@ -39,15 +43,20 @@ export function PricingCards({ mode = "home", className = "" }) {
   const { initiateCheckout, isRedirecting } = useStripeCheckout();
   const currentPlan = getCurrentPlanDetails();
 
-  // Handle URL parameters for plan selection
+  // Set client-side flag
   useEffect(() => {
-    if (mode === "pricing") {
+    setIsClient(true);
+  }, []);
+
+  // Handle URL parameters for plan selection - only in pricing mode on client side
+  useEffect(() => {
+    if (mode === "pricing" && isClient && searchParams) {
       const planParam = searchParams.get("plan");
       if (planParam && plans.some((p) => p.id === planParam)) {
         selectPlan(planParam);
       }
     }
-  }, [mode, searchParams, plans, selectPlan]);
+  }, [mode, isClient, searchParams, plans, selectPlan]);
 
   const handleSelectPlan = async (plan) => {
     if (mode === "home") {

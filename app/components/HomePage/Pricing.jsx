@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { PricingCards } from "@/app/prices/components/PricingCards";
 
 export function Pricing() {
@@ -14,7 +15,11 @@ export function Pricing() {
           </p>
         </div>
 
-        <PricingCards mode="home" />
+        <Suspense
+          fallback={<div className="text-center">Loading pricing...</div>}
+        >
+          <PricingCards mode="home" />
+        </Suspense>
 
         <div className="text-center mt-12">
           <p className="text-muted-foreground">
