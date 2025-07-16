@@ -4,9 +4,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/app/lib/db/mongodb";
 import { ObjectId } from "mongodb";
 import { deleteMultipleFiles } from "@/app/lib/storage/firebase";
-import { getFirestore, doc, deleteDoc, getDoc } from "firebase/firestore";
-import { db } from "@/app/lib/firebase-config";
-import { auth } from "@/app/lib/auth";
 
 // Helper function to extract storage path from Firebase URL
 const extractStoragePathFromUrl = (url) => {
@@ -22,13 +19,18 @@ const extractStoragePathFromUrl = (url) => {
       const pathMatch = urlObj.pathname.match(/\/o\/(.+)$/);
       if (pathMatch) {
         // Decode the path
-        return decodeURIComponent(pathMatch[1]);
+        const decodedPath = decodeURIComponent(pathMatch[1]);
+        return decodedPath;
+      } else {
+        console.warn("No path match found in Firebase URL:", url);
+        return null;
       }
+    } else {
+      console.warn("URL is not a Firebase Storage URL:", url);
+      return null;
     }
-
-    return null;
   } catch (error) {
-    console.error("Error extracting storage path from URL:", error);
+    console.error("Error extracting storage path from URL:", error, { url });
     return null;
   }
 };
@@ -44,15 +46,26 @@ const isPostEditable = (scheduledTime) => {
 // Helper function to reschedule BullMQ job
 const rescheduleJob = async (postId, newScheduledTime) => {
   try {
+    // Check if Redis environment variables are available
+    if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
+      console.warn("No Redis configuration found, skipping job reschedule");
+      return true; // Don't fail the operation
+    }
+
     // Import the queue management functions
     const { Queue } = await import("bullmq");
 
+    // Use Redis URL if available, otherwise use host/port
+    const redisConnection = process.env.REDIS_URL
+      ? { url: process.env.REDIS_URL }
+      : {
+          host: process.env.REDIS_HOST || "localhost",
+          port: process.env.REDIS_PORT || 6379,
+        };
+
     // Connect to the post queue
     const postQueue = new Queue("post-queue", {
-      connection: {
-        host: process.env.REDIS_HOST || "localhost",
-        port: process.env.REDIS_PORT || 6379,
-      },
+      connection: redisConnection,
     });
 
     // Remove the existing job if it exists
@@ -88,85 +101,243 @@ const rescheduleJob = async (postId, newScheduledTime) => {
 
 // DELETE - Delete a scheduled post
 export async function DELETE(request, { params }) {
-  console.log("DELETE route called with params:", params);
-
-  // Check authentication
-  const session = await auth();
-  if (!session?.user) {
-    console.log("Session: not authenticated");
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const userId = session.user.id;
-  const postId = params.id;
+  const debugInfo = {
+    step: "initialization",
+    error: null,
+    details: {},
+  };
 
   try {
-    const db = getFirestore();
-    const postRef = doc(db, "posts", postId);
-    const postSnap = await getDoc(postRef);
+    debugInfo.step = "resolving_params";
+    // Await params in Next.js 15
+    const resolvedParams = await params;
+    debugInfo.details.params = resolvedParams;
 
-    if (!postSnap.exists()) {
-      return new Response(JSON.stringify({ error: "Post not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+    debugInfo.step = "checking_session";
+    const session = await getServerSession(authOptions);
+    debugInfo.details.hasSession = !!session;
+    debugInfo.details.hasUserId = !!session?.user?.id;
+
+    if (!session) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+          debug: debugInfo,
+        },
+        { status: 401 }
+      );
     }
 
-    const postData = postSnap.data();
+    debugInfo.step = "connecting_database";
+    const { db } = await connectToDatabase();
+    debugInfo.details.dbConnected = true;
 
-    // Check if the user owns the post
-    if (postData.userId !== userId) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      });
+    const { id } = resolvedParams;
+    debugInfo.details.postId = id;
+
+    // Find the post to make sure it belongs to the user
+    debugInfo.step = "creating_object_id";
+    let objectId;
+    try {
+      objectId = new ObjectId(id);
+      debugInfo.details.objectIdCreated = true;
+    } catch (objectIdError) {
+      debugInfo.error = "Invalid post ID format";
+      debugInfo.details.objectIdError = objectIdError.message;
+      return NextResponse.json(
+        {
+          error: "Invalid post ID",
+          debug: debugInfo,
+        },
+        { status: 400 }
+      );
     }
 
-    // Delete associated media from Firebase Storage if it exists
-    if (
-      postData.media &&
-      Array.isArray(postData.media) &&
-      postData.media.length > 0
-    ) {
-      const mediaPaths = postData.media
-        .filter((mediaItem) => mediaItem && mediaItem.path)
-        .map((mediaItem) => mediaItem.path);
+    debugInfo.step = "finding_post";
+    const post = await db.collection("posts").findOne({
+      _id: objectId,
+      userId: session.user.id,
+    });
 
-      if (mediaPaths.length > 0) {
-        try {
-          await deleteMultipleFiles(mediaPaths);
-          console.log("Successfully deleted media files");
-        } catch (mediaError) {
-          console.error("Error deleting media files:", mediaError);
-          // Continue with deletion even if media deletion fails
+    debugInfo.details.postFound = !!post;
+    debugInfo.details.postId = post?._id;
+
+    if (!post) {
+      return NextResponse.json(
+        {
+          error: "Post not found",
+          debug: debugInfo,
+        },
+        { status: 404 }
+      );
+    }
+
+    // Remove the job from BullMQ queue
+    debugInfo.step = "removing_bullmq_job";
+    try {
+      // Check if Redis environment variables are available
+      if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
+        debugInfo.details.bullmqSkipped = true;
+        debugInfo.details.bullmqSkippedReason = "No Redis configuration found";
+      } else {
+        const { Queue } = await import("bullmq");
+
+        // Use Redis URL if available, otherwise use host/port
+        const redisConnection = process.env.REDIS_URL
+          ? { url: process.env.REDIS_URL }
+          : {
+              host: process.env.REDIS_HOST || "localhost",
+              port: process.env.REDIS_PORT || 6379,
+            };
+
+        const postQueue = new Queue("post-queue", {
+          connection: redisConnection,
+        });
+
+        const jobs = await postQueue.getJobs(["waiting", "delayed"]);
+        const job = jobs.find((j) => j.data.postId === id);
+        if (job) {
+          await job.remove();
+          debugInfo.details.bullmqJobRemoved = true;
+        } else {
+          debugInfo.details.bullmqJobRemoved = false;
+          debugInfo.details.bullmqJobNotFound = true;
         }
       }
+    } catch (bullmqError) {
+      debugInfo.details.bullmqError = bullmqError.message;
+      debugInfo.details.bullmqErrorStack = bullmqError.stack;
+      debugInfo.details.bullmqJobRemoved = false;
+      // Continue with deletion even if BullMQ fails
     }
 
-    // Delete the post document from Firestore
-    await deleteDoc(postRef);
+    // Delete associated media files from Firebase Storage
+    debugInfo.step = "processing_media_files";
+    const mediaFilesToDelete = [];
 
-    return new Response(
-      JSON.stringify({ message: "Post deleted successfully" }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
+    // Extract media file paths from the post
+    if (post.media && Array.isArray(post.media)) {
+      debugInfo.details.mediaItemsCount = post.media.length;
+      debugInfo.details.mediaProcessingErrors = [];
+
+      post.media.forEach((mediaItem, index) => {
+        try {
+          // Try to get the storage path directly, or extract it from the URL
+          let storagePath = mediaItem.path;
+          if (!storagePath && mediaItem.url) {
+            storagePath = extractStoragePathFromUrl(mediaItem.url);
+          }
+
+          if (storagePath) {
+            mediaFilesToDelete.push(storagePath);
+          } else {
+            debugInfo.details.mediaProcessingErrors.push({
+              index,
+              error: "No storage path found",
+              mediaItem: {
+                path: mediaItem.path,
+                url: mediaItem.url,
+                type: mediaItem.type,
+              },
+            });
+          }
+
+          // Also delete thumbnail if it exists (for videos)
+          if (mediaItem.thumbnail) {
+            const thumbnailPath = extractStoragePathFromUrl(
+              mediaItem.thumbnail
+            );
+            if (thumbnailPath) {
+              mediaFilesToDelete.push(thumbnailPath);
+            }
+          }
+        } catch (mediaError) {
+          debugInfo.details.mediaProcessingErrors.push({
+            index,
+            error: mediaError.message,
+            mediaItem: {
+              path: mediaItem.path,
+              url: mediaItem.url,
+              type: mediaItem.type,
+            },
+          });
+        }
+      });
+    } else {
+      debugInfo.details.mediaItemsCount = 0;
+      debugInfo.details.mediaArrayMissing = !post.media;
+      debugInfo.details.mediaNotArray =
+        post.media && !Array.isArray(post.media);
+    }
+
+    debugInfo.details.mediaFilesToDeleteCount = mediaFilesToDelete.length;
+
+    // Delete media files from Firebase Storage
+    debugInfo.step = "deleting_firebase_media";
+    if (mediaFilesToDelete.length > 0) {
+      try {
+        debugInfo.details.firebaseFilesToDelete = mediaFilesToDelete;
+        await deleteMultipleFiles(mediaFilesToDelete);
+        debugInfo.details.firebaseMediaDeleted = true;
+        debugInfo.details.firebaseFilesDeleted = mediaFilesToDelete.length;
+      } catch (firebaseError) {
+        debugInfo.details.firebaseError = firebaseError.message;
+        debugInfo.details.firebaseErrorStack = firebaseError.stack;
+        debugInfo.details.firebaseMediaDeleted = false;
+        debugInfo.details.firebaseFilesToDelete = mediaFilesToDelete;
+        // Continue with post deletion even if Firebase deletion fails
+        // This prevents orphaned database records
       }
-    );
+    } else {
+      debugInfo.details.firebaseMediaDeleted = true;
+      debugInfo.details.firebaseFilesDeleted = 0;
+      debugInfo.details.firebaseSkipped = true;
+    }
+
+    // Delete the post from database
+    debugInfo.step = "deleting_from_database";
+    try {
+      const deleteResult = await db
+        .collection("posts")
+        .deleteOne({ _id: objectId });
+      debugInfo.details.databaseDeleted = deleteResult.deletedCount === 1;
+      debugInfo.details.deleteResult = deleteResult;
+
+      if (deleteResult.deletedCount === 0) {
+        debugInfo.error = "Post not found in database during deletion";
+        return NextResponse.json(
+          {
+            error: "Post not found",
+            debug: debugInfo,
+          },
+          { status: 404 }
+        );
+      }
+
+      debugInfo.step = "completed";
+      return NextResponse.json({
+        message: "Post deleted successfully",
+        deletedMediaFiles: mediaFilesToDelete.length,
+        debug: debugInfo,
+      });
+    } catch (databaseError) {
+      debugInfo.error = "Database deletion failed";
+      debugInfo.details.databaseError = databaseError.message;
+      debugInfo.details.databaseErrorStack = databaseError.stack;
+      throw databaseError; // Re-throw to be caught by main catch block
+    }
   } catch (error) {
-    console.error("Error deleting post:", error);
-    return new Response(
-      JSON.stringify({
+    debugInfo.error = error.message;
+    debugInfo.details.errorStack = error.stack;
+    debugInfo.details.errorName = error.name;
+
+    return NextResponse.json(
+      {
         error: "Failed to delete post",
         details: error.message,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+        debug: debugInfo,
+      },
+      { status: 500 }
     );
   }
 }
@@ -232,11 +403,16 @@ export async function PUT(request, { params }) {
       updateObject.scheduledDate = newScheduledDate;
 
       // Reschedule the BullMQ job
-      const rescheduled = await rescheduleJob(id, newScheduledDate);
-      if (!rescheduled) {
-        console.warn(
-          "Failed to reschedule job, but proceeding with database update"
-        );
+      try {
+        const rescheduled = await rescheduleJob(id, newScheduledDate);
+        if (!rescheduled) {
+          console.warn(
+            "Failed to reschedule job, but proceeding with database update"
+          );
+        }
+      } catch (rescheduleError) {
+        console.error("Error rescheduling job:", rescheduleError);
+        // Continue with database update even if rescheduling fails
       }
     }
 
