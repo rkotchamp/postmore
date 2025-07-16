@@ -4,6 +4,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/app/lib/db/mongodb";
 import { ObjectId } from "mongodb";
 import { deleteMultipleFiles } from "@/app/lib/storage/firebase";
+import { getFirestore, doc, deleteDoc, getDoc } from "firebase/firestore";
+import { db } from "@/app/lib/firebase-config";
+import { auth } from "@/app/lib/auth";
 
 // Helper function to extract storage path from Firebase URL
 const extractStoragePathFromUrl = (url) => {
@@ -85,185 +88,85 @@ const rescheduleJob = async (postId, newScheduledTime) => {
 
 // DELETE - Delete a scheduled post
 export async function DELETE(request, { params }) {
-  const debugInfo = {
-    step: "initialization",
-    error: null,
-    details: {},
-  };
+  console.log("DELETE route called with params:", params);
+
+  // Check authentication
+  const session = await auth();
+  if (!session?.user) {
+    console.log("Session: not authenticated");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const userId = session.user.id;
+  const postId = params.id;
 
   try {
-    debugInfo.step = "resolving_params";
-    // Await params in Next.js 15
-    const resolvedParams = await params;
-    debugInfo.details.params = resolvedParams;
+    const db = getFirestore();
+    const postRef = doc(db, "posts", postId);
+    const postSnap = await getDoc(postRef);
 
-    debugInfo.step = "checking_session";
-    const session = await getServerSession(authOptions);
-    debugInfo.details.hasSession = !!session;
-    debugInfo.details.hasUserId = !!session?.user?.id;
-
-    if (!session) {
-      return NextResponse.json(
-        {
-          error: "Unauthorized",
-          debug: debugInfo,
-        },
-        { status: 401 }
-      );
-    }
-
-    debugInfo.step = "connecting_database";
-    const { db } = await connectToDatabase();
-    debugInfo.details.dbConnected = true;
-
-    const { id } = resolvedParams;
-    debugInfo.details.postId = id;
-
-    // Find the post to make sure it belongs to the user
-    debugInfo.step = "creating_object_id";
-    let objectId;
-    try {
-      objectId = new ObjectId(id);
-      debugInfo.details.objectIdCreated = true;
-    } catch (objectIdError) {
-      debugInfo.error = "Invalid post ID format";
-      debugInfo.details.objectIdError = objectIdError.message;
-      return NextResponse.json(
-        {
-          error: "Invalid post ID",
-          debug: debugInfo,
-        },
-        { status: 400 }
-      );
-    }
-
-    debugInfo.step = "finding_post";
-    const post = await db.collection("posts").findOne({
-      _id: objectId,
-      userId: session.user.id,
-    });
-
-    debugInfo.details.postFound = !!post;
-    debugInfo.details.postId = post?._id;
-
-    if (!post) {
-      return NextResponse.json(
-        {
-          error: "Post not found",
-          debug: debugInfo,
-        },
-        { status: 404 }
-      );
-    }
-
-    // Remove the job from BullMQ queue
-    debugInfo.step = "removing_bullmq_job";
-    try {
-      const { Queue } = await import("bullmq");
-      const postQueue = new Queue("post-queue", {
-        connection: {
-          host: process.env.REDIS_HOST || "localhost",
-          port: process.env.REDIS_PORT || 6379,
-        },
+    if (!postSnap.exists()) {
+      return new Response(JSON.stringify({ error: "Post not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
       });
-
-      const jobs = await postQueue.getJobs(["waiting", "delayed"]);
-      const job = jobs.find((j) => j.data.postId === id);
-      if (job) {
-        await job.remove();
-        debugInfo.details.bullmqJobRemoved = true;
-      } else {
-        debugInfo.details.bullmqJobRemoved = false;
-        debugInfo.details.bullmqJobNotFound = true;
-      }
-    } catch (bullmqError) {
-      debugInfo.details.bullmqError = bullmqError.message;
-      debugInfo.details.bullmqJobRemoved = false;
-      // Continue with deletion even if BullMQ fails
     }
 
-    // Delete associated media files from Firebase Storage
-    debugInfo.step = "processing_media_files";
-    const mediaFilesToDelete = [];
+    const postData = postSnap.data();
 
-    // Extract media file paths from the post
-    if (post.media && Array.isArray(post.media)) {
-      debugInfo.details.mediaItemsCount = post.media.length;
+    // Check if the user owns the post
+    if (postData.userId !== userId) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
-      post.media.forEach((mediaItem, index) => {
+    // Delete associated media from Firebase Storage if it exists
+    if (
+      postData.media &&
+      Array.isArray(postData.media) &&
+      postData.media.length > 0
+    ) {
+      const mediaPaths = postData.media
+        .filter((mediaItem) => mediaItem && mediaItem.path)
+        .map((mediaItem) => mediaItem.path);
+
+      if (mediaPaths.length > 0) {
         try {
-          // Try to get the storage path directly, or extract it from the URL
-          let storagePath = mediaItem.path;
-          if (!storagePath && mediaItem.url) {
-            storagePath = extractStoragePathFromUrl(mediaItem.url);
-          }
-
-          if (storagePath) {
-            mediaFilesToDelete.push(storagePath);
-          }
-
-          // Also delete thumbnail if it exists (for videos)
-          if (mediaItem.thumbnail) {
-            const thumbnailPath = extractStoragePathFromUrl(
-              mediaItem.thumbnail
-            );
-            if (thumbnailPath) {
-              mediaFilesToDelete.push(thumbnailPath);
-            }
-          }
+          await deleteMultipleFiles(mediaPaths);
+          console.log("Successfully deleted media files");
         } catch (mediaError) {
-          debugInfo.details.mediaProcessingError = mediaError.message;
-          debugInfo.details.failedMediaIndex = index;
+          console.error("Error deleting media files:", mediaError);
+          // Continue with deletion even if media deletion fails
         }
-      });
-    }
-
-    debugInfo.details.mediaFilesToDeleteCount = mediaFilesToDelete.length;
-
-    // Delete media files from Firebase Storage
-    debugInfo.step = "deleting_firebase_media";
-    if (mediaFilesToDelete.length > 0) {
-      try {
-        await deleteMultipleFiles(mediaFilesToDelete);
-        debugInfo.details.firebaseMediaDeleted = true;
-        debugInfo.details.firebaseFilesDeleted = mediaFilesToDelete.length;
-      } catch (firebaseError) {
-        debugInfo.details.firebaseError = firebaseError.message;
-        debugInfo.details.firebaseMediaDeleted = false;
-        // Continue with post deletion even if Firebase deletion fails
-        // This prevents orphaned database records
       }
-    } else {
-      debugInfo.details.firebaseMediaDeleted = true;
-      debugInfo.details.firebaseFilesDeleted = 0;
     }
 
-    // Delete the post from database
-    debugInfo.step = "deleting_from_database";
-    const deleteResult = await db
-      .collection("posts")
-      .deleteOne({ _id: objectId });
-    debugInfo.details.databaseDeleted = deleteResult.deletedCount === 1;
-    debugInfo.details.deleteResult = deleteResult;
+    // Delete the post document from Firestore
+    await deleteDoc(postRef);
 
-    debugInfo.step = "completed";
-    return NextResponse.json({
-      message: "Post deleted successfully",
-      deletedMediaFiles: mediaFilesToDelete.length,
-      debug: debugInfo,
-    });
-  } catch (error) {
-    debugInfo.error = error.message;
-    debugInfo.details.errorStack = error.stack;
-    debugInfo.details.errorName = error.name;
-
-    return NextResponse.json(
+    return new Response(
+      JSON.stringify({ message: "Post deleted successfully" }),
       {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  } catch (error) {
+    console.error("Error deleting post:", error);
+    return new Response(
+      JSON.stringify({
         error: "Failed to delete post",
         details: error.message,
-        debug: debugInfo,
-      },
-      { status: 500 }
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
     );
   }
 }
