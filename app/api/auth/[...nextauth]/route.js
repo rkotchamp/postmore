@@ -142,31 +142,60 @@ export const authOptions = {
       return token;
     },
     async redirect({ url, baseUrl }) {
-      // Handle return URL functionality
+      console.log("🔄 NextAuth redirect callback:", { url, baseUrl });
+
+      // Handle callback URLs
       if (url.includes("/api/auth/callback/")) {
-        // Check if there's a callbackUrl parameter
         const urlObj = new URL(url);
         const callbackUrl = urlObj.searchParams.get("callbackUrl");
 
         if (callbackUrl) {
-          // Decode the callback URL and make sure it's safe
           const decodedCallbackUrl = decodeURIComponent(callbackUrl);
+          console.log("📍 Decoded callback URL:", decodedCallbackUrl);
+
+          // Ensure it's a safe redirect within the same origin
           if (decodedCallbackUrl.startsWith(baseUrl)) {
+            // Don't redirect to login/register pages if user is authenticated
+            if (
+              decodedCallbackUrl.includes("/auth/login") ||
+              decodedCallbackUrl.includes("/auth/register")
+            ) {
+              console.log(
+                "🚫 Preventing redirect to auth page, going to dashboard"
+              );
+              return `${baseUrl}/dashboard`;
+            }
+            console.log("✅ Redirecting to callback URL:", decodedCallbackUrl);
             return decodedCallbackUrl;
           }
         }
 
-        // Default to dashboard if no valid callback URL
+        // Default to dashboard after authentication
+        console.log("📱 No valid callback URL, redirecting to dashboard");
+        return `${baseUrl}/dashboard`;
+      }
+
+      // Handle sign-in redirects
+      if (url.includes("/api/auth/signin")) {
+        console.log("🔐 Sign-in detected, redirecting to dashboard");
+        return `${baseUrl}/dashboard`;
+      }
+
+      // If trying to go to root or auth pages when authenticated, redirect to dashboard
+      if (url === baseUrl || url === `${baseUrl}/` || url.includes("/auth/")) {
+        console.log("🏠 Redirecting root/auth access to dashboard");
         return `${baseUrl}/dashboard`;
       }
 
       // If URL starts with baseUrl, allow it
       if (url.startsWith(baseUrl)) {
+        console.log("🏠 URL starts with baseUrl, allowing:", url);
         return url;
       }
 
-      // Default fallback
-      return baseUrl;
+      // Default fallback to dashboard for authenticated users
+      console.log("🔙 Default fallback to dashboard");
+      return `${baseUrl}/dashboard`;
     },
   },
   pages: {
