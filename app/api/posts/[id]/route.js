@@ -3,6 +3,32 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/app/lib/db/mongodb";
 import { ObjectId } from "mongodb";
+import { deleteMultipleFiles } from "@/app/lib/storage/firebase";
+
+// Helper function to extract storage path from Firebase URL
+const extractStoragePathFromUrl = (url) => {
+  if (!url) return null;
+
+  try {
+    // Firebase Storage URLs have the format:
+    // https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded_path}?alt=media&token={token}
+    const urlObj = new URL(url);
+
+    if (urlObj.hostname === "firebasestorage.googleapis.com") {
+      // Extract the path part after '/o/'
+      const pathMatch = urlObj.pathname.match(/\/o\/(.+)$/);
+      if (pathMatch) {
+        // Decode the path
+        return decodeURIComponent(pathMatch[1]);
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error extracting storage path from URL:", error);
+    return null;
+  }
+};
 
 // Helper function to check if post is editable (>10 minutes before scheduled time)
 const isPostEditable = (scheduledTime) => {
@@ -97,10 +123,72 @@ export async function DELETE(request, { params }) {
       console.error("Error removing job from queue:", error);
     }
 
+    // Delete associated media files from Firebase Storage
+    const mediaFilesToDelete = [];
+
+    // Extract media file paths from the post
+    if (post.media && Array.isArray(post.media)) {
+      console.log(`Processing ${post.media.length} media items for deletion`);
+
+      post.media.forEach((mediaItem, index) => {
+        console.log(
+          `Media item ${index + 1}: type=${mediaItem.type}, url=${
+            mediaItem.url
+          }, path=${mediaItem.path}`
+        );
+
+        // Try to get the storage path directly, or extract it from the URL
+        let storagePath = mediaItem.path;
+        if (!storagePath && mediaItem.url) {
+          storagePath = extractStoragePathFromUrl(mediaItem.url);
+        }
+
+        if (storagePath) {
+          mediaFilesToDelete.push(storagePath);
+          console.log(`Added main file to deletion queue: ${storagePath}`);
+        }
+
+        // Also delete thumbnail if it exists (for videos)
+        if (mediaItem.thumbnail) {
+          const thumbnailPath = extractStoragePathFromUrl(mediaItem.thumbnail);
+          if (thumbnailPath) {
+            mediaFilesToDelete.push(thumbnailPath);
+            console.log(`Added thumbnail to deletion queue: ${thumbnailPath}`);
+          }
+        }
+      });
+    }
+
+    // Delete media files from Firebase Storage
+    if (mediaFilesToDelete.length > 0) {
+      try {
+        console.log(
+          `Attempting to delete ${mediaFilesToDelete.length} media files from Firebase Storage:`,
+          mediaFilesToDelete
+        );
+        await deleteMultipleFiles(mediaFilesToDelete);
+        console.log(
+          `Successfully deleted ${mediaFilesToDelete.length} media files from Firebase Storage`
+        );
+      } catch (firebaseError) {
+        console.error(
+          "Error deleting media files from Firebase Storage:",
+          firebaseError
+        );
+        // Continue with post deletion even if Firebase deletion fails
+        // This prevents orphaned database records
+      }
+    } else {
+      console.log("No media files to delete from Firebase Storage");
+    }
+
     // Delete the post from database
     await db.collection("posts").deleteOne({ _id: new ObjectId(id) });
 
-    return NextResponse.json({ message: "Post deleted successfully" });
+    return NextResponse.json({
+      message: "Post deleted successfully",
+      deletedMediaFiles: mediaFilesToDelete.length,
+    });
   } catch (error) {
     console.error("Error deleting post:", error);
     return NextResponse.json(
