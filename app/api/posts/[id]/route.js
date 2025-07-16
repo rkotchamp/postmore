@@ -85,48 +85,80 @@ const rescheduleJob = async (postId, newScheduledTime) => {
 
 // DELETE - Delete a scheduled post
 export async function DELETE(request, { params }) {
-  try {
-    console.log("DELETE route called with params:", params);
+  const debugInfo = {
+    step: "initialization",
+    error: null,
+    details: {},
+  };
 
+  try {
+    debugInfo.step = "resolving_params";
     // Await params in Next.js 15
     const resolvedParams = await params;
-    console.log("Resolved params:", resolvedParams);
+    debugInfo.details.params = resolvedParams;
 
+    debugInfo.step = "checking_session";
     const session = await getServerSession(authOptions);
-    console.log(
-      "Session:",
-      session?.user?.id ? "authenticated" : "not authenticated"
-    );
+    debugInfo.details.hasSession = !!session;
+    debugInfo.details.hasUserId = !!session?.user?.id;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+          debug: debugInfo,
+        },
+        { status: 401 }
+      );
     }
 
+    debugInfo.step = "connecting_database";
     const { db } = await connectToDatabase();
-    console.log("Database connected successfully");
+    debugInfo.details.dbConnected = true;
 
     const { id } = resolvedParams;
-    console.log("Attempting to delete post with ID:", id);
+    debugInfo.details.postId = id;
 
     // Find the post to make sure it belongs to the user
-    console.log("Creating ObjectId for:", id);
-    const objectId = new ObjectId(id);
-    console.log("ObjectId created:", objectId);
+    debugInfo.step = "creating_object_id";
+    let objectId;
+    try {
+      objectId = new ObjectId(id);
+      debugInfo.details.objectIdCreated = true;
+    } catch (objectIdError) {
+      debugInfo.error = "Invalid post ID format";
+      debugInfo.details.objectIdError = objectIdError.message;
+      return NextResponse.json(
+        {
+          error: "Invalid post ID",
+          debug: debugInfo,
+        },
+        { status: 400 }
+      );
+    }
 
+    debugInfo.step = "finding_post";
     const post = await db.collection("posts").findOne({
       _id: objectId,
       userId: session.user.id,
     });
 
-    console.log("Post found:", post ? "yes" : "no");
+    debugInfo.details.postFound = !!post;
+    debugInfo.details.postId = post?._id;
 
     if (!post) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error: "Post not found",
+          debug: debugInfo,
+        },
+        { status: 404 }
+      );
     }
 
     // Remove the job from BullMQ queue
+    debugInfo.step = "removing_bullmq_job";
     try {
-      console.log("Attempting to remove job from BullMQ queue");
       const { Queue } = await import("bullmq");
       const postQueue = new Queue("post-queue", {
         connection: {
@@ -139,90 +171,98 @@ export async function DELETE(request, { params }) {
       const job = jobs.find((j) => j.data.postId === id);
       if (job) {
         await job.remove();
-        console.log("Successfully removed job from BullMQ queue");
+        debugInfo.details.bullmqJobRemoved = true;
       } else {
-        console.log("No BullMQ job found for this post");
+        debugInfo.details.bullmqJobRemoved = false;
+        debugInfo.details.bullmqJobNotFound = true;
       }
-    } catch (error) {
-      console.error("Error removing job from queue:", error);
+    } catch (bullmqError) {
+      debugInfo.details.bullmqError = bullmqError.message;
+      debugInfo.details.bullmqJobRemoved = false;
+      // Continue with deletion even if BullMQ fails
     }
 
     // Delete associated media files from Firebase Storage
+    debugInfo.step = "processing_media_files";
     const mediaFilesToDelete = [];
 
     // Extract media file paths from the post
     if (post.media && Array.isArray(post.media)) {
-      console.log(`Processing ${post.media.length} media items for deletion`);
+      debugInfo.details.mediaItemsCount = post.media.length;
 
       post.media.forEach((mediaItem, index) => {
-        console.log(
-          `Media item ${index + 1}: type=${mediaItem.type}, url=${
-            mediaItem.url
-          }, path=${mediaItem.path}`
-        );
-
-        // Try to get the storage path directly, or extract it from the URL
-        let storagePath = mediaItem.path;
-        if (!storagePath && mediaItem.url) {
-          storagePath = extractStoragePathFromUrl(mediaItem.url);
-        }
-
-        if (storagePath) {
-          mediaFilesToDelete.push(storagePath);
-          console.log(`Added main file to deletion queue: ${storagePath}`);
-        }
-
-        // Also delete thumbnail if it exists (for videos)
-        if (mediaItem.thumbnail) {
-          const thumbnailPath = extractStoragePathFromUrl(mediaItem.thumbnail);
-          if (thumbnailPath) {
-            mediaFilesToDelete.push(thumbnailPath);
-            console.log(`Added thumbnail to deletion queue: ${thumbnailPath}`);
+        try {
+          // Try to get the storage path directly, or extract it from the URL
+          let storagePath = mediaItem.path;
+          if (!storagePath && mediaItem.url) {
+            storagePath = extractStoragePathFromUrl(mediaItem.url);
           }
+
+          if (storagePath) {
+            mediaFilesToDelete.push(storagePath);
+          }
+
+          // Also delete thumbnail if it exists (for videos)
+          if (mediaItem.thumbnail) {
+            const thumbnailPath = extractStoragePathFromUrl(
+              mediaItem.thumbnail
+            );
+            if (thumbnailPath) {
+              mediaFilesToDelete.push(thumbnailPath);
+            }
+          }
+        } catch (mediaError) {
+          debugInfo.details.mediaProcessingError = mediaError.message;
+          debugInfo.details.failedMediaIndex = index;
         }
       });
     }
 
+    debugInfo.details.mediaFilesToDeleteCount = mediaFilesToDelete.length;
+
     // Delete media files from Firebase Storage
+    debugInfo.step = "deleting_firebase_media";
     if (mediaFilesToDelete.length > 0) {
       try {
-        console.log(
-          `Attempting to delete ${mediaFilesToDelete.length} media files from Firebase Storage:`,
-          mediaFilesToDelete
-        );
         await deleteMultipleFiles(mediaFilesToDelete);
-        console.log(
-          `Successfully deleted ${mediaFilesToDelete.length} media files from Firebase Storage`
-        );
+        debugInfo.details.firebaseMediaDeleted = true;
+        debugInfo.details.firebaseFilesDeleted = mediaFilesToDelete.length;
       } catch (firebaseError) {
-        console.error(
-          "Error deleting media files from Firebase Storage:",
-          firebaseError
-        );
+        debugInfo.details.firebaseError = firebaseError.message;
+        debugInfo.details.firebaseMediaDeleted = false;
         // Continue with post deletion even if Firebase deletion fails
         // This prevents orphaned database records
       }
     } else {
-      console.log("No media files to delete from Firebase Storage");
+      debugInfo.details.firebaseMediaDeleted = true;
+      debugInfo.details.firebaseFilesDeleted = 0;
     }
 
     // Delete the post from database
-    console.log("Attempting to delete post from database");
+    debugInfo.step = "deleting_from_database";
     const deleteResult = await db
       .collection("posts")
       .deleteOne({ _id: objectId });
-    console.log("Delete result:", deleteResult);
+    debugInfo.details.databaseDeleted = deleteResult.deletedCount === 1;
+    debugInfo.details.deleteResult = deleteResult;
 
+    debugInfo.step = "completed";
     return NextResponse.json({
       message: "Post deleted successfully",
       deletedMediaFiles: mediaFilesToDelete.length,
+      debug: debugInfo,
     });
   } catch (error) {
-    console.error("Error deleting post:", error);
-    console.error("Error stack:", error.stack);
-    console.error("Error message:", error.message);
+    debugInfo.error = error.message;
+    debugInfo.details.errorStack = error.stack;
+    debugInfo.details.errorName = error.name;
+
     return NextResponse.json(
-      { error: "Failed to delete post", details: error.message },
+      {
+        error: "Failed to delete post",
+        details: error.message,
+        debug: debugInfo,
+      },
       { status: 500 }
     );
   }
