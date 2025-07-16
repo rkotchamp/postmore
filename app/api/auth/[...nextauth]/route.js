@@ -142,7 +142,10 @@ export const authOptions = {
       return token;
     },
     async redirect({ url, baseUrl }) {
-      console.log("🔄 NextAuth redirect callback:", { url, baseUrl });
+      // Handle signout - allow it to go to the specified callback URL
+      if (url.includes("/api/auth/signout") || url.includes("signout")) {
+        return url;
+      }
 
       // Handle callback URLs
       if (url.includes("/api/auth/callback/")) {
@@ -151,7 +154,6 @@ export const authOptions = {
 
         if (callbackUrl) {
           const decodedCallbackUrl = decodeURIComponent(callbackUrl);
-          console.log("📍 Decoded callback URL:", decodedCallbackUrl);
 
           // Ensure it's a safe redirect within the same origin
           if (decodedCallbackUrl.startsWith(baseUrl)) {
@@ -160,41 +162,32 @@ export const authOptions = {
               decodedCallbackUrl.includes("/auth/login") ||
               decodedCallbackUrl.includes("/auth/register")
             ) {
-              console.log(
-                "🚫 Preventing redirect to auth page, going to dashboard"
-              );
               return `${baseUrl}/dashboard`;
             }
-            console.log("✅ Redirecting to callback URL:", decodedCallbackUrl);
             return decodedCallbackUrl;
           }
         }
 
         // Default to dashboard after authentication
-        console.log("📱 No valid callback URL, redirecting to dashboard");
         return `${baseUrl}/dashboard`;
       }
 
       // Handle sign-in redirects
       if (url.includes("/api/auth/signin")) {
-        console.log("🔐 Sign-in detected, redirecting to dashboard");
         return `${baseUrl}/dashboard`;
       }
 
       // If trying to go to root or auth pages when authenticated, redirect to dashboard
       if (url === baseUrl || url === `${baseUrl}/` || url.includes("/auth/")) {
-        console.log("🏠 Redirecting root/auth access to dashboard");
         return `${baseUrl}/dashboard`;
       }
 
       // If URL starts with baseUrl, allow it
       if (url.startsWith(baseUrl)) {
-        console.log("🏠 URL starts with baseUrl, allowing:", url);
         return url;
       }
 
       // Default fallback to dashboard for authenticated users
-      console.log("🔙 Default fallback to dashboard");
       return `${baseUrl}/dashboard`;
     },
   },
@@ -206,7 +199,7 @@ export const authOptions = {
     strategy: "jwt",
   },
   secret: process.env.NEXTAUTH_SECRET,
-  debug: true, // Enable debug logs
+  debug: false, // Disable debug logs
 };
 
 const handler = NextAuth(authOptions);

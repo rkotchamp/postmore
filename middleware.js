@@ -18,11 +18,10 @@ export default withAuth(
     const { pathname } = request.nextUrl;
     const token = request.nextauth.token;
 
-    console.log("🔒 Middleware processing:", {
-      pathname,
-      hasToken: !!token,
-      userEmail: token?.email || "No email",
-    });
+    // Don't interfere with NextAuth signout process
+    if (pathname.startsWith("/api/auth/signout")) {
+      return NextResponse.next();
+    }
 
     // Check if the route needs authentication
     const isProtectedRoute = protectedRoutes.some(
@@ -34,30 +33,17 @@ export default withAuth(
       (route) => pathname.startsWith(route) || pathname === route
     );
 
-    console.log("🔍 Route analysis:", {
-      isProtectedRoute,
-      isAuthRoute,
-      pathname,
-    });
-
     // If user is authenticated and trying to access auth routes, redirect to dashboard
     if (token && isAuthRoute) {
-      console.log(
-        "🔄 Authenticated user on auth route, redirecting to dashboard"
-      );
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
     // If user is authenticated and trying to access root route, redirect to dashboard
     if (token && pathname === "/") {
-      console.log(
-        "🏠 Authenticated user on root route, redirecting to dashboard"
-      );
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
 
     // Continue with the request in all other cases
-    console.log("✅ Continuing with request");
     return NextResponse.next();
   },
   {
@@ -98,7 +84,9 @@ export const config = {
     "/auth/register",
     // Match root route specifically
     "/",
-    // Don't match API routes, static files, etc.
-    "/((?!api|_next/static|_next/image|favicon.ico|public|.*\\.).*)",
+    // Match pricing page
+    "/prices",
+    "/privacy",
+    // Don't use catch-all - be more specific to avoid interfering with NextAuth
   ],
 };

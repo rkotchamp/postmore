@@ -25,7 +25,7 @@ export function UserNav() {
   const { user, isLoading, isAuthenticated } = useUser();
 
   const handleLogout = async () => {
-    await signOut({ callbackUrl: "/" });
+    await signOut({ callbackUrl: "/auth/login" });
   };
 
   if (isLoading) {

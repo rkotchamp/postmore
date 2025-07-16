@@ -11,24 +11,40 @@ export function ThemeProvider({
   storageKey = "theme",
   ...props
 }) {
-  const { user, isLoading: isUserLoading, refetch } = useUser();
+  const {
+    user,
+    isLoading: isUserLoading,
+    isAuthenticated,
+    refetch,
+  } = useUser();
   const [theme, setTheme] = useState(defaultTheme);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize theme from user settings when user data is available
   useEffect(() => {
-    if (!isUserLoading && user?.settings?.theme) {
-      setTheme(user.settings.theme);
-      setIsInitialized(true);
-    } else if (!isUserLoading && !user?.settings?.theme) {
-      // If no user settings, try localStorage as fallback
-      const savedTheme = localStorage.getItem(storageKey);
-      if (savedTheme) {
-        setTheme(savedTheme);
+    if (!isUserLoading) {
+      if (isAuthenticated && user?.settings?.theme) {
+        // User is authenticated and has theme settings
+        setTheme(user.settings.theme);
+        setIsInitialized(true);
+      } else {
+        // User is not authenticated or has no theme settings, use localStorage fallback
+        const savedTheme = localStorage.getItem(storageKey);
+        if (savedTheme) {
+          setTheme(savedTheme);
+        } else {
+          setTheme(defaultTheme);
+        }
+        setIsInitialized(true);
       }
-      setIsInitialized(true);
     }
-  }, [isUserLoading, user?.settings?.theme, storageKey]);
+  }, [
+    isUserLoading,
+    isAuthenticated,
+    user?.settings?.theme,
+    storageKey,
+    defaultTheme,
+  ]);
 
   // Apply theme to DOM
   useEffect(() => {
@@ -58,8 +74,8 @@ export function ThemeProvider({
       // Save to localStorage as fallback
       localStorage.setItem(storageKey, newTheme);
 
-      // If user is logged in, update database
-      if (user) {
+      // If user is logged in and authenticated, update database
+      if (isAuthenticated && user) {
         const response = await fetch("/api/user/profile", {
           method: "PUT",
           headers: {
