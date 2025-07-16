@@ -86,19 +86,35 @@ const rescheduleJob = async (postId, newScheduledTime) => {
 // DELETE - Delete a scheduled post
 export async function DELETE(request, { params }) {
   try {
+    console.log("DELETE route called with params:", params);
+
     const session = await getServerSession(authOptions);
+    console.log(
+      "Session:",
+      session?.user?.id ? "authenticated" : "not authenticated"
+    );
+
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { db } = await connectToDatabase();
+    console.log("Database connected successfully");
+
     const { id } = params;
+    console.log("Attempting to delete post with ID:", id);
 
     // Find the post to make sure it belongs to the user
+    console.log("Creating ObjectId for:", id);
+    const objectId = new ObjectId(id);
+    console.log("ObjectId created:", objectId);
+
     const post = await db.collection("posts").findOne({
-      _id: new ObjectId(id),
+      _id: objectId,
       userId: session.user.id,
     });
+
+    console.log("Post found:", post ? "yes" : "no");
 
     if (!post) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
@@ -106,19 +122,22 @@ export async function DELETE(request, { params }) {
 
     // Remove the job from BullMQ queue
     try {
-      const { Queue } = await import("bullmq");
-      const postQueue = new Queue("post-queue", {
-        connection: {
-          host: process.env.REDIS_HOST || "localhost",
-          port: process.env.REDIS_PORT || 6379,
-        },
-      });
+      console.log("Attempting to remove job from BullMQ queue");
+      // Temporarily comment out BullMQ for testing
+      // const { Queue } = await import("bullmq");
+      // const postQueue = new Queue("post-queue", {
+      //   connection: {
+      //     host: process.env.REDIS_HOST || "localhost",
+      //     port: process.env.REDIS_PORT || 6379,
+      //   },
+      // });
 
-      const jobs = await postQueue.getJobs(["waiting", "delayed"]);
-      const job = jobs.find((j) => j.data.postId === id);
-      if (job) {
-        await job.remove();
-      }
+      // const jobs = await postQueue.getJobs(["waiting", "delayed"]);
+      // const job = jobs.find((j) => j.data.postId === id);
+      // if (job) {
+      //   await job.remove();
+      // }
+      console.log("Skipped BullMQ job removal for testing");
     } catch (error) {
       console.error("Error removing job from queue:", error);
     }
@@ -166,9 +185,10 @@ export async function DELETE(request, { params }) {
           `Attempting to delete ${mediaFilesToDelete.length} media files from Firebase Storage:`,
           mediaFilesToDelete
         );
-        await deleteMultipleFiles(mediaFilesToDelete);
+        // Temporarily comment out Firebase deletion to test
+        // await deleteMultipleFiles(mediaFilesToDelete);
         console.log(
-          `Successfully deleted ${mediaFilesToDelete.length} media files from Firebase Storage`
+          `Skipped Firebase deletion for testing - would delete ${mediaFilesToDelete.length} files`
         );
       } catch (firebaseError) {
         console.error(
@@ -183,7 +203,11 @@ export async function DELETE(request, { params }) {
     }
 
     // Delete the post from database
-    await db.collection("posts").deleteOne({ _id: new ObjectId(id) });
+    console.log("Attempting to delete post from database");
+    const deleteResult = await db
+      .collection("posts")
+      .deleteOne({ _id: objectId });
+    console.log("Delete result:", deleteResult);
 
     return NextResponse.json({
       message: "Post deleted successfully",
@@ -191,8 +215,10 @@ export async function DELETE(request, { params }) {
     });
   } catch (error) {
     console.error("Error deleting post:", error);
+    console.error("Error stack:", error.stack);
+    console.error("Error message:", error.message);
     return NextResponse.json(
-      { error: "Failed to delete post" },
+      { error: "Failed to delete post", details: error.message },
       { status: 500 }
     );
   }
