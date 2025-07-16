@@ -129,7 +129,7 @@ export async function DELETE(request, { params }) {
     }
 
     debugInfo.step = "connecting_database";
-    const { db } = await connectToDatabase();
+    const db = await connectToDatabase();
     debugInfo.details.dbConnected = true;
 
     const { id } = resolvedParams;
@@ -350,7 +350,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { db } = await connectToDatabase();
+    const db = await connectToDatabase();
     const resolvedParams = await params;
     const { id } = resolvedParams;
     const updateData = await request.json();
@@ -451,7 +451,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { db } = await connectToDatabase();
+    const db = await connectToDatabase();
     const resolvedParams = await params;
     const { id } = resolvedParams;
 
