@@ -88,6 +88,10 @@ export async function DELETE(request, { params }) {
   try {
     console.log("DELETE route called with params:", params);
 
+    // Await params in Next.js 15
+    const resolvedParams = await params;
+    console.log("Resolved params:", resolvedParams);
+
     const session = await getServerSession(authOptions);
     console.log(
       "Session:",
@@ -101,7 +105,7 @@ export async function DELETE(request, { params }) {
     const { db } = await connectToDatabase();
     console.log("Database connected successfully");
 
-    const { id } = params;
+    const { id } = resolvedParams;
     console.log("Attempting to delete post with ID:", id);
 
     // Find the post to make sure it belongs to the user
@@ -123,21 +127,22 @@ export async function DELETE(request, { params }) {
     // Remove the job from BullMQ queue
     try {
       console.log("Attempting to remove job from BullMQ queue");
-      // Temporarily comment out BullMQ for testing
-      // const { Queue } = await import("bullmq");
-      // const postQueue = new Queue("post-queue", {
-      //   connection: {
-      //     host: process.env.REDIS_HOST || "localhost",
-      //     port: process.env.REDIS_PORT || 6379,
-      //   },
-      // });
+      const { Queue } = await import("bullmq");
+      const postQueue = new Queue("post-queue", {
+        connection: {
+          host: process.env.REDIS_HOST || "localhost",
+          port: process.env.REDIS_PORT || 6379,
+        },
+      });
 
-      // const jobs = await postQueue.getJobs(["waiting", "delayed"]);
-      // const job = jobs.find((j) => j.data.postId === id);
-      // if (job) {
-      //   await job.remove();
-      // }
-      console.log("Skipped BullMQ job removal for testing");
+      const jobs = await postQueue.getJobs(["waiting", "delayed"]);
+      const job = jobs.find((j) => j.data.postId === id);
+      if (job) {
+        await job.remove();
+        console.log("Successfully removed job from BullMQ queue");
+      } else {
+        console.log("No BullMQ job found for this post");
+      }
     } catch (error) {
       console.error("Error removing job from queue:", error);
     }
@@ -185,10 +190,9 @@ export async function DELETE(request, { params }) {
           `Attempting to delete ${mediaFilesToDelete.length} media files from Firebase Storage:`,
           mediaFilesToDelete
         );
-        // Temporarily comment out Firebase deletion to test
-        // await deleteMultipleFiles(mediaFilesToDelete);
+        await deleteMultipleFiles(mediaFilesToDelete);
         console.log(
-          `Skipped Firebase deletion for testing - would delete ${mediaFilesToDelete.length} files`
+          `Successfully deleted ${mediaFilesToDelete.length} media files from Firebase Storage`
         );
       } catch (firebaseError) {
         console.error(
@@ -233,7 +237,8 @@ export async function PUT(request, { params }) {
     }
 
     const { db } = await connectToDatabase();
-    const { id } = params;
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
     const updateData = await request.json();
 
     // Find the existing post
@@ -328,7 +333,8 @@ export async function GET(request, { params }) {
     }
 
     const { db } = await connectToDatabase();
-    const { id } = params;
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
 
     const post = await db.collection("posts").findOne({
       _id: new ObjectId(id),
