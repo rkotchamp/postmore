@@ -7,9 +7,14 @@ import { deleteMultipleFiles } from "@/app/lib/storage/firebase";
 
 // Helper function to extract storage path from Firebase URL
 const extractStoragePathFromUrl = (url) => {
-  if (!url) return null;
+  if (!url) {
+    console.log("❌ No URL provided to extractStoragePathFromUrl");
+    return null;
+  }
 
   try {
+    console.log("🔍 Extracting storage path from URL:", url);
+
     // Firebase Storage URLs have the format:
     // https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encoded_path}?alt=media&token={token}
     const urlObj = new URL(url);
@@ -20,17 +25,18 @@ const extractStoragePathFromUrl = (url) => {
       if (pathMatch) {
         // Decode the path
         const decodedPath = decodeURIComponent(pathMatch[1]);
+        console.log("✅ Successfully extracted path:", decodedPath);
         return decodedPath;
       } else {
-        console.warn("No path match found in Firebase URL:", url);
+        console.log("❌ No path match found in URL pathname:", urlObj.pathname);
         return null;
       }
     } else {
-      console.warn("URL is not a Firebase Storage URL:", url);
+      console.log("❌ URL is not from Firebase Storage:", urlObj.hostname);
       return null;
     }
   } catch (error) {
-    console.error("Error extracting storage path from URL:", error, { url });
+    console.error("❌ Error extracting storage path from URL:", error, { url });
     return null;
   }
 };
@@ -222,15 +228,24 @@ export async function DELETE(request, { params }) {
 
       post.media.forEach((mediaItem, index) => {
         try {
+          console.log(`📁 Processing media item ${index}:`, {
+            path: mediaItem.path,
+            url: mediaItem.url,
+            type: mediaItem.type,
+          });
+
           // Try to get the storage path directly, or extract it from the URL
           let storagePath = mediaItem.path;
           if (!storagePath && mediaItem.url) {
             storagePath = extractStoragePathFromUrl(mediaItem.url);
+            console.log(`🔍 Extracted storage path from URL: ${storagePath}`);
           }
 
           if (storagePath) {
             mediaFilesToDelete.push(storagePath);
+            console.log(`✅ Added to delete list: ${storagePath}`);
           } else {
+            console.log(`⚠️ No storage path found for media item ${index}`);
             debugInfo.details.mediaProcessingErrors.push({
               index,
               error: "No storage path found",
@@ -247,11 +262,16 @@ export async function DELETE(request, { params }) {
             const thumbnailPath = extractStoragePathFromUrl(
               mediaItem.thumbnail
             );
+            console.log(`🖼️ Thumbnail path extracted: ${thumbnailPath}`);
             if (thumbnailPath) {
               mediaFilesToDelete.push(thumbnailPath);
+              console.log(
+                `✅ Added thumbnail to delete list: ${thumbnailPath}`
+              );
             }
           }
         } catch (mediaError) {
+          console.error(`❌ Error processing media item ${index}:`, mediaError);
           debugInfo.details.mediaProcessingErrors.push({
             index,
             error: mediaError.message,
@@ -277,10 +297,16 @@ export async function DELETE(request, { params }) {
     if (mediaFilesToDelete.length > 0) {
       try {
         debugInfo.details.firebaseFilesToDelete = mediaFilesToDelete;
+        console.log(
+          "🔥 Attempting to delete Firebase files:",
+          mediaFilesToDelete
+        );
         await deleteMultipleFiles(mediaFilesToDelete);
+        console.log("✅ Firebase files deleted successfully");
         debugInfo.details.firebaseMediaDeleted = true;
         debugInfo.details.firebaseFilesDeleted = mediaFilesToDelete.length;
       } catch (firebaseError) {
+        console.error("❌ Firebase deletion error:", firebaseError);
         debugInfo.details.firebaseError = firebaseError.message;
         debugInfo.details.firebaseErrorStack = firebaseError.stack;
         debugInfo.details.firebaseMediaDeleted = false;
@@ -292,6 +318,7 @@ export async function DELETE(request, { params }) {
       debugInfo.details.firebaseMediaDeleted = true;
       debugInfo.details.firebaseFilesDeleted = 0;
       debugInfo.details.firebaseSkipped = true;
+      console.log("⚠️ No Firebase files to delete");
     }
 
     // Delete the post from database

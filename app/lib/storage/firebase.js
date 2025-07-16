@@ -208,11 +208,13 @@ export const uploadProfilePicture = async (file, userId) => {
  */
 export const deleteFile = async (path) => {
   try {
+    console.log("🗑️ Deleting file at path:", path);
     const fileRef = ref(storage, path);
     await deleteObject(fileRef);
+    console.log("✅ File deleted successfully:", path);
     return { success: true, message: "File deleted successfully" };
   } catch (error) {
-    console.error("Error deleting file:", error);
+    console.error("❌ Error deleting file:", path, error);
     throw error;
   }
 };
@@ -224,11 +226,17 @@ export const deleteFile = async (path) => {
  */
 export const deleteMultipleFiles = async (paths) => {
   try {
-    const deletePromises = paths.map((path) => deleteFile(path));
+    console.log("🔥 deleteMultipleFiles called with paths:", paths);
+    const deletePromises = paths.map((path) => {
+      console.log("🔥 Creating delete promise for path:", path);
+      return deleteFile(path);
+    });
+    console.log("🔥 Waiting for all deletions to complete...");
     await Promise.all(deletePromises);
+    console.log("✅ All files deleted successfully");
     return { success: true, message: "All files deleted successfully" };
   } catch (error) {
-    console.error("Error deleting multiple files:", error);
+    console.error("❌ Error deleting multiple files:", error);
     throw error;
   }
 };
