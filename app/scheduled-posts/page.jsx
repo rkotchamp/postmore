@@ -14,6 +14,7 @@ import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { Skeleton } from "@/app/components/ui/skeleton";
 import { toast } from "sonner";
 import { DeletePostDialog } from "@/app/components/posts/DeletePostDialog";
+import { EditScheduledPostModal } from "./components/EditScheduledPostModal";
 
 // Group posts by month and year
 const groupPostsByDate = (posts) => {
@@ -94,6 +95,11 @@ export default function ScheduledPosts() {
     post: null,
     isLoading: false,
   });
+
+  const [editModal, setEditModal] = useState({
+    isOpen: false,
+    post: null,
+  });
   const {
     scheduledPosts,
     isLoading: postsLoading,
@@ -161,10 +167,10 @@ export default function ScheduledPosts() {
 
   // Handle edit post
   const handleEditPost = (post) => {
-    // For now, show a placeholder - you can implement actual edit functionality
-    toast.info(`Edit post: ${post.id}`);
-    // TODO: Navigate to edit page or open edit modal
-    // router.push(`/dashboard/edit-post/${post.id}`);
+    setEditModal({
+      isOpen: true,
+      post: post,
+    });
   };
 
   // Handle delete post
@@ -204,6 +210,37 @@ export default function ScheduledPosts() {
   const handleCloseDeleteDialog = () => {
     if (!deleteDialog.isLoading) {
       setDeleteDialog({ isOpen: false, post: null, isLoading: false });
+    }
+  };
+
+  // Handle closing edit modal
+  const handleCloseEditModal = () => {
+    setEditModal({ isOpen: false, post: null });
+  };
+
+  // Handle saving edited post
+  const handleSaveEditedPost = async (updatedPost) => {
+    try {
+      const response = await fetch(`/api/posts/${updatedPost.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedPost),
+      });
+
+      if (response.ok) {
+        // Refresh the posts list
+        if (typeof refetch === "function") {
+          refetch();
+        }
+        return true;
+      } else {
+        throw new Error("Failed to update post");
+      }
+    } catch (error) {
+      console.error("Error updating post:", error);
+      throw error;
     }
   };
 
@@ -402,6 +439,13 @@ export default function ScheduledPosts() {
         onConfirm={handleConfirmDelete}
         post={deleteDialog.post}
         isLoading={deleteDialog.isLoading}
+      />
+
+      <EditScheduledPostModal
+        isOpen={editModal.isOpen}
+        onClose={handleCloseEditModal}
+        onSave={handleSaveEditedPost}
+        post={editModal.post}
       />
     </DashboardLayout>
   );
