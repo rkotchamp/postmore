@@ -16,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
+import { toast } from "sonner";
+import { DeletePostDialog } from "@/app/components/posts/DeletePostDialog";
 
 // Group posts by month and year
 const groupPostsByDate = (posts) => {
@@ -115,6 +117,11 @@ export default function AllPosts() {
   const [selectedMonthFilter, setSelectedMonthFilter] = useState(null);
   const [selectedYearFilter, setSelectedYearFilter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    post: null,
+    isLoading: false,
+  });
 
   const { allPosts, isLoading: contextLoading, error } = useAllPosts();
 
@@ -164,6 +171,55 @@ export default function AllPosts() {
   const handleResetFilters = () => {
     setSelectedMonthFilter(null);
     setSelectedYearFilter(null);
+  };
+
+  // Handle edit post
+  const handleEditPost = (post) => {
+    // For now, show a placeholder - you can implement actual edit functionality
+    toast.info(`Edit post: ${post.id}`);
+    // TODO: Navigate to edit page or open edit modal
+    // router.push(`/dashboard/edit-post/${post.id}`);
+  };
+
+  // Handle delete post
+  const handleDeletePost = (post) => {
+    setDeleteDialog({
+      isOpen: true,
+      post: post,
+      isLoading: false,
+    });
+  };
+
+  // Handle confirming delete
+  const handleConfirmDelete = async (post) => {
+    setDeleteDialog((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      const response = await fetch(`/api/posts/${post.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        toast.success("Post deleted successfully");
+        // Refresh the posts list by invalidating the query
+        // You might need to add a refetch method to the context
+        window.location.reload(); // Temporary solution
+        setDeleteDialog({ isOpen: false, post: null, isLoading: false });
+      } else {
+        throw new Error("Failed to delete post");
+      }
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      toast.error("Failed to delete post");
+      setDeleteDialog((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Handle closing delete dialog
+  const handleCloseDeleteDialog = () => {
+    if (!deleteDialog.isLoading) {
+      setDeleteDialog({ isOpen: false, post: null, isLoading: false });
+    }
   };
 
   // Handle error state
@@ -271,7 +327,14 @@ export default function AllPosts() {
                 </Button>
               </div>
             ) : (
-              postsForMonth.map((post) => <Post key={post.id} post={post} />)
+              postsForMonth.map((post) => (
+                <Post
+                  key={post.id}
+                  post={post}
+                  onEdit={handleEditPost}
+                  onDelete={handleDeletePost}
+                />
+              ))
             )}
           </div>
         </div>
@@ -415,6 +478,14 @@ export default function AllPosts() {
           </div>
         )}
       </div>
+
+      <DeletePostDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+        post={deleteDialog.post}
+        isLoading={deleteDialog.isLoading}
+      />
     </DashboardLayout>
   );
 }

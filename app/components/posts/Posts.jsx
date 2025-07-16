@@ -8,6 +8,13 @@ import {
   AvatarImage,
 } from "@/app/components/ui/avatar";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
+import {
   PenSquare,
   Calendar,
   Clock,
@@ -23,12 +30,15 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
+  MoreHorizontal,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { SelectedAccountsDisplay } from "./SelectedAccountsDisplay";
 import { useState, useEffect } from "react";
 import { VideoPreview } from "./VideoPreview";
 import { ImagePreview } from "./ImagePreview";
+import { toast } from "sonner";
 
 // Dummy data for demonstration
 const dummyPosts = [
@@ -128,7 +138,7 @@ const platformConfig = {
   linkedin: { name: "LinkedIn", Icon: Linkedin },
 };
 
-export function Post({ post }) {
+export function Post({ post, onEdit, onDelete, showActions = true }) {
   // Add state for caption carousel
   const [currentCaptionIndex, setCurrentCaptionIndex] = useState(0);
   const [captionAccountIds, setCaptionAccountIds] = useState([]);
@@ -533,6 +543,26 @@ export function Post({ post }) {
     );
   };
 
+  // Handle edit action
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(post);
+    } else {
+      // Default behavior - you can customize this
+      toast.info("Edit functionality not implemented yet");
+    }
+  };
+
+  // Handle delete action
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete(post);
+    } else {
+      // Default behavior - you can customize this
+      toast.info("Delete functionality not implemented yet");
+    }
+  };
+
   return (
     <div className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden">
       {/* Media Section */}
@@ -572,15 +602,32 @@ export function Post({ post }) {
         </div>
 
         {/* Actions */}
-        <div className="mt-auto flex justify-end mb-4">
-          <Button
-            size="sm"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <PenSquare className="h-3.5 w-3.5 mr-1" />
-            Edit
-          </Button>
-        </div>
+        {showActions && (
+          <div className="mt-auto flex justify-end mb-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[160px]">
+                <DropdownMenuItem onClick={handleEdit}>
+                  <PenSquare className="mr-2 h-4 w-4" />
+                  <span>Edit</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleDelete}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  <span>Delete</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
     </div>
   );

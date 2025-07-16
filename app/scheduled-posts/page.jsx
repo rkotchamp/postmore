@@ -12,6 +12,8 @@ import { useScheduledPosts } from "@/app/context/FetchPostContext";
 import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 import { useUserSettings } from "@/app/hooks/useUserSettings";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { toast } from "sonner";
+import { DeletePostDialog } from "@/app/components/posts/DeletePostDialog";
 
 // Group posts by month and year
 const groupPostsByDate = (posts) => {
@@ -87,6 +89,11 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
 
 export default function ScheduledPosts() {
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    post: null,
+    isLoading: false,
+  });
   const {
     scheduledPosts,
     isLoading: postsLoading,
@@ -150,6 +157,54 @@ export default function ScheduledPosts() {
 
   const handleBack = () => {
     setSelectedMonth(null);
+  };
+
+  // Handle edit post
+  const handleEditPost = (post) => {
+    // For now, show a placeholder - you can implement actual edit functionality
+    toast.info(`Edit post: ${post.id}`);
+    // TODO: Navigate to edit page or open edit modal
+    // router.push(`/dashboard/edit-post/${post.id}`);
+  };
+
+  // Handle delete post
+  const handleDeletePost = (post) => {
+    setDeleteDialog({
+      isOpen: true,
+      post: post,
+      isLoading: false,
+    });
+  };
+
+  // Handle confirming delete
+  const handleConfirmDelete = async (post) => {
+    setDeleteDialog((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      const response = await fetch(`/api/posts/${post.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        toast.success("Post deleted successfully");
+        // Refresh the posts list
+        refreshPosts();
+        setDeleteDialog({ isOpen: false, post: null, isLoading: false });
+      } else {
+        throw new Error("Failed to delete post");
+      }
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      toast.error("Failed to delete post");
+      setDeleteDialog((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Handle closing delete dialog
+  const handleCloseDeleteDialog = () => {
+    if (!deleteDialog.isLoading) {
+      setDeleteDialog({ isOpen: false, post: null, isLoading: false });
+    }
   };
 
   // If loading, show skeleton UI
@@ -264,7 +319,12 @@ export default function ScheduledPosts() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {postsForMonth.map((post) => (
-              <Post key={post.id} post={post} />
+              <Post
+                key={post.id}
+                post={post}
+                onEdit={handleEditPost}
+                onDelete={handleDeletePost}
+              />
             ))}
           </div>
         </div>
@@ -314,7 +374,12 @@ export default function ScheduledPosts() {
           // Ungrouped view - show all posts in a grid
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {enhancedPosts.map((post) => (
-              <Post key={post.id} post={post} />
+              <Post
+                key={post.id}
+                post={post}
+                onEdit={handleEditPost}
+                onDelete={handleDeletePost}
+              />
             ))}
           </div>
         )}
@@ -330,6 +395,14 @@ export default function ScheduledPosts() {
           </div>
         )}
       </div>
+
+      <DeletePostDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+        post={deleteDialog.post}
+        isLoading={deleteDialog.isLoading}
+      />
     </DashboardLayout>
   );
 }
