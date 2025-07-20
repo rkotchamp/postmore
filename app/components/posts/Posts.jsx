@@ -144,7 +144,27 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
   const [captionAccountIds, setCaptionAccountIds] = useState([]);
 
   // Make sure we handle both socialAccounts and accounts fields for compatibility
-  const accountsArray = post.socialAccounts || post.accounts || [];
+  const accountsArray =
+    post.socialAccounts ||
+    post.accounts ||
+    post.selectedAccounts ||
+    post.originalPost?.accounts ||
+    post.originalPost?.socialAccounts ||
+    post.originalPost?.selectedAccounts ||
+    [];
+
+  // Debug: Log the post structure to see what accounts data we have
+  console.log("🔍 Post object:", post);
+  console.log("🔍 Available account fields:", {
+    socialAccounts: post.socialAccounts,
+    accounts: post.accounts,
+    selectedAccounts: post.selectedAccounts,
+    originalPostAccounts: post.originalPost?.accounts,
+    originalPostSocialAccounts: post.originalPost?.socialAccounts,
+    originalPostSelectedAccounts: post.originalPost?.selectedAccounts,
+    accountsArray: accountsArray,
+    accountsArrayLength: accountsArray.length,
+  });
 
   // Extract caption data and account IDs on component mount
   useEffect(() => {

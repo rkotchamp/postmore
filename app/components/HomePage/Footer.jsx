@@ -17,24 +17,23 @@ export function Footer() {
               />
             </div>
             <p className="text-muted-foreground mb-4">
-              The ultimate social media scheduling platform for creators and
-              businesses.
+              Cross-Platform content scheduling for everyone
             </p>
             <div className="flex space-x-4">
               <Link
-                href="#"
+                href="https://x.com/postmoore_?s=21"
                 className="text-gray-400 hover:text-white transition-colors"
               >
-                Twitter
+                X
               </Link>
               <Link
-                href="#"
+                href="https://www.linkedin.com/company/postmoore/"
                 className="text-gray-400 hover:text-white transition-colors"
               >
                 LinkedIn
               </Link>
               <Link
-                href="#"
+                href="https://www.facebook.com/share/16g3Th2B9w/?mibextid=wwXIfr"
                 className="text-gray-400 hover:text-white transition-colors"
               >
                 Facebook
@@ -55,26 +54,10 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="#"
+                  href="/prices"
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Pricing
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Integrations
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  API
                 </Link>
               </li>
             </ul>
@@ -99,17 +82,10 @@ export function Footer() {
                   Blog
                 </Link>
               </li>
+
               <li>
                 <Link
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Careers
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="#"
+                  href="/privacy"
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Contact
@@ -123,31 +99,16 @@ export function Footer() {
             <ul className="space-y-2">
               <li>
                 <Link
-                  href="#"
+                  href="/privacy"
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Help Center
                 </Link>
               </li>
+
               <li>
                 <Link
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Documentation
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Status
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="#"
+                  href="/privacy"
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   Privacy Policy
@@ -159,7 +120,7 @@ export function Footer() {
 
         <div className="border-t border-gray-800 mt-12 pt-8 text-center">
           <p className="text-muted-foreground">
-            © 2024 PostMoore. All rights reserved.
+            © 2025 PostMoore. All rights reserved.
           </p>
         </div>
       </div>

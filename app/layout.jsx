@@ -12,8 +12,35 @@ import { UserProvider } from "@/app/context/UserContext";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Your App Title",
-  description: "Your app description",
+  title: {
+    default: "postMoore - Social Media Scheduling Platform",
+    template: "%s | postMoore",
+  },
+  description:
+    "Schedule and publish content to YouTube Shorts, TikTok, Instagram, Bluesky, and more from one dashboard. Save time and grow your social media presence.",
+  keywords: [
+    "social media scheduler",
+    "content scheduling",
+    "multi-platform posting",
+  ],
+  authors: [{ name: "postMoore Team" }],
+  creator: "postMoore",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://postmore.app"
+  ),
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "postMoore",
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@postmore",
+  },
 };
 
 export default function RootLayout({ children }) {

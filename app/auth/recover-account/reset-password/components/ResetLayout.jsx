@@ -10,7 +10,7 @@ export function ResetLayout({ children }) {
       <div className="hidden lg:flex flex-col bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 p-10 text-white dark:border-r relative">
         <div className="flex items-center gap-2 text-lg font-bold text-primary">
           <SendHorizontal className="h-6 w-6" />
-          <span>Postmore</span>
+          <span>postMoore</span>
         </div>
 
         {/* Abstract shapes for visual interest */}
@@ -35,7 +35,7 @@ export function ResetLayout({ children }) {
           <div className="flex flex-col space-y-2 text-center mb-8">
             <div className="flex items-center justify-center gap-2 text-2xl font-bold lg:hidden">
               <SendHorizontal className="h-6 w-6 text-primary" />
-              <span>Postmore</span>
+              <span>postMoore</span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">
               Create a new password

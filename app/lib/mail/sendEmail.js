@@ -90,7 +90,7 @@ export const sendEmail = async ({ to, subject, text, html }) => {
       process.env.EMAIL_FROM ||
       process.env.GMAIL_USER ||
       "postmore@example.com";
-    const fromName = process.env.EMAIL_FROM_NAME || "Postmore App";
+    const fromName = process.env.EMAIL_FROM_NAME || "postMoore App";
 
     console.log(`Sending email from: "${fromName}" <${fromEmail}>`);
 
@@ -134,21 +134,21 @@ const sendPasswordResetEmail = async ({ email, resetToken, name = "" }) => {
     email
   )}`;
 
-  const subject = "Reset Your Postmore Password";
+  const subject = "Reset Your postMoore Password";
 
   const greeting = name ? `Hello ${name},` : "Hello,";
 
   const text = `
 ${greeting}
 
-You requested a password reset for your Postmore account. Please click the link below to reset your password:
+You requested a password reset for your postMoore account. Please click the link below to reset your password:
 
 ${resetUrl}
 
 This link will expire in 10 minutes. If you didn't request this, please ignore this email.
 
 Thank you,
-The Postmore Team
+The postMoore Team
   `;
 
   const html = `
@@ -167,10 +167,10 @@ The Postmore Team
 <body>
   <div class="container">
     <div class="logo">
-      <h1>Postmore</h1>
+      <h1>postMoore</h1>
     </div>
     <p>${greeting}</p>
-    <p>You requested a password reset for your Postmore account. Please click the button below to reset your password:</p>
+    <p>You requested a password reset for your postMoore account. Please click the button below to reset your password:</p>
     <p style="text-align: center; margin: 30px 0;">
       <a href="${resetUrl}" class="button">Reset Password</a>
     </p>
@@ -178,7 +178,7 @@ The Postmore Team
     <p><a href="${resetUrl}">${resetUrl}</a></p>
     <p>This link will expire in 10 minutes. If you didn't request this, please ignore this email.</p>
     <div class="footer">
-      <p>Thank you,<br>The Postmore Team</p>
+      <p>Thank you,<br>The postMoore Team</p>
     </div>
   </div>
 </body>

@@ -8,13 +8,13 @@ import { X } from "lucide-react";
 const testimonials = [
   {
     quote:
-      "Postmore has completely transformed how we manage our social media presence. The scheduling feature saves us hours each week.",
+      "postMoore has completely transformed how we manage our social media presence. The scheduling feature saves us hours each week.",
     author: "Sofia Davis",
     role: "Social Media Manager",
   },
   {
     quote:
-      "We've increased our engagement by 40% since using Postmore. The analytics provide valuable insights that help us optimize our content strategy.",
+      "We've increased our engagement by 40% since using postMoore. The analytics provide valuable insights that help us optimize our content strategy.",
     author: "Michael Chen",
     role: "Marketing Director",
   },
@@ -26,7 +26,7 @@ const testimonials = [
   },
   {
     quote:
-      "As a small business owner, Postmore has made social media management feasible for me. It's intuitive and time-saving.",
+      "As a small business owner, postMoore has made social media management feasible for me. It's intuitive and time-saving.",
     author: "James Wilson",
     role: "Entrepreneur",
   },

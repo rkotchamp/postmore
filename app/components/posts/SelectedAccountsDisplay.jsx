@@ -91,8 +91,15 @@ const PlatformIcon = ({ platform, className }) => {
 // --- End Icon Components ---
 
 export function SelectedAccountsDisplay({ accounts }) {
+  // Debug: Log what accounts data we're receiving
+  console.log("🎯 SelectedAccountsDisplay received accounts:", accounts);
+  console.log("🎯 Accounts type:", typeof accounts);
+  console.log("🎯 Is array:", Array.isArray(accounts));
+  console.log("🎯 Accounts length:", accounts?.length);
+
   // Early return if no accounts provided
   if (!accounts || !Array.isArray(accounts) || accounts.length === 0) {
+    console.log("❌ SelectedAccountsDisplay: No accounts to display");
     return (
       <div className="text-xs text-muted-foreground">No accounts selected</div>
     );
