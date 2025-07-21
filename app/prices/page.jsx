@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, Suspense } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import {
   Card,
@@ -29,12 +30,14 @@ export default function PricingPage() {
       {/* Header */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="flex items-center gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            className="flex items-center gap-2"
+            onClick={() => window.history.back()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium">14-day free trial</span>
