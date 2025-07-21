@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<!-- Home Page - Most Important -->
+   <url>
+
+      <loc>https://www.postmoo.re/</loc>
+
+      <lastmod>2025-07-21</lastmod>
+
+      <changefreq>weekly</changefreq>
+
+      <priority>1.0</priority>
+
+   </url>
+
+
+<!-- User Registration - Second Most Important -->
+   <url>
+
+      <loc>https://www.postmoo.re/auth/register</loc>
+
+      <lastmod>2025-07-21</lastmod>
+
+      <changefreq>monthly</changefreq>
+
+      <priority>0.9</priority>
+
+   </url>
+
+<!-- User Login - Third Most Important -->
+   <url>
+
+      <loc>https://www.postmoo.re/auth/login</loc>
+
+      <lastmod>2025-07-21</lastmod>
+
+      <changefreq>monthly</changefreq>
+
+      <priority>0.8</priority>
+
+   </url>
+
+<!-- Pricing Page - Fourth Most Important -->
+   <url>
+
+      <loc>https://www.postmoo.re/prices</loc>
+
+      <lastmod>2025-07-21</lastmod>
+
+      <changefreq>monthly</changefreq>
+
+      <priority>0.7</priority>
+
+   </url>
+
+<!-- Blogs Page -->
+   <url>
+
+      <loc>https://www.postmoo.re/blogs</loc>
+
+      <lastmod>2025-07-21</lastmod>
+
+      <changefreq>weekly</changefreq>
+
+      <priority>0.6</priority>
+
+   </url>
+
+<!-- Privacy Page -->
+   <url>
+
+      <loc>https://www.postmoo.re/privacy</loc>
+
+      <lastmod>2025-07-21</lastmod>
+
+      <changefreq>yearly</changefreq>
+
+      <priority>0.5</priority>
+
+   </url>
+
+
+</urlset>

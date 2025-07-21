@@ -188,7 +188,7 @@ export function PricingCards({ mode = "home", className = "" }) {
     if (mode === "home") {
       return `${baseClasses} ${
         plan.popular
-          ? "border-orange-500 shadow-xl scale-105"
+          ? "border-primary shadow-xl scale-105"
           : "border-gray-200 dark:border-gray-700"
       }`;
     }
