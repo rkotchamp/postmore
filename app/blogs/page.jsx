@@ -17,7 +17,7 @@ export default function BlogsPage() {
           {/* Blog Header */}
           <div className="text-center max-w-4xl mx-auto mb-16">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6">
-              The post bridge blog
+              Creator's Hub
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
               Learn the strategies top creators use to grow their audience, go viral consistently, 
