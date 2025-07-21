@@ -28,6 +28,7 @@ export function RegisterForm() {
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [registerError, setRegisterError] = useState("");
 
   // Get the return URL from search params
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
@@ -44,6 +45,7 @@ export function RegisterForm() {
 
   const handleRegisterSubmit = async (values) => {
     setIsLoading(true);
+    setRegisterError("");
 
     try {
       // Make API call to the registration endpoint
@@ -60,9 +62,14 @@ export function RegisterForm() {
       if (!response.ok) {
         // Handle server-side validation errors
         if (data.errors) {
-          throw new Error(data.errors[0]?.message || "Validation failed");
+          setRegisterError(data.errors[0]?.message || "Validation failed");
+        } else if (data.message === "Email already registered") {
+          setRegisterError("This email is already registered. Please use a different email or try signing in.");
+        } else {
+          setRegisterError(data.message || "Registration failed");
         }
-        throw new Error(data.message || "Registration failed");
+        setIsLoading(false);
+        return;
       }
 
       // Successfully registered
@@ -79,10 +86,7 @@ export function RegisterForm() {
       router.push("/auth/login");
     } catch (error) {
       console.error("Registration error:", error);
-      toast.error(error.message, {
-        description: error.message || "Something went wrong. Please try again.",
-      });
-    } finally {
+      setRegisterError("Something went wrong. Please try again.");
       setIsLoading(false);
     }
   };
@@ -111,9 +115,12 @@ export function RegisterForm() {
       setIsGithubLoading(true);
       console.log("Initiating GitHub sign-in from Register page");
 
-      await signIn("github", {
-        callbackUrl: `${window.location.origin}${callbackUrl}`,
+      const result = await signIn("github", {
+        callbackUrl: callbackUrl,
+        redirect: true,
       });
+
+      console.log("GitHub sign-in result:", result);
     } catch (error) {
       console.error("GitHub sign-in error:", error);
       toast.error("Authentication error", {
@@ -150,7 +157,9 @@ export function RegisterForm() {
                     <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Full Name"
-                      className="pl-9"
+                      className={`pl-9 ${
+                        registerError ? 'border-red-500 animate-shake' : ''
+                      }`}
                       {...field}
                       disabled={isLoading}
                     />
@@ -173,13 +182,18 @@ export function RegisterForm() {
                     <Input
                       placeholder="email@example.com"
                       type="email"
-                      className="pl-9"
+                      className={`pl-9 ${
+                        registerError ? 'border-red-500 animate-shake' : ''
+                      }`}
                       {...field}
                       disabled={isLoading}
                     />
                   </div>
                 </FormControl>
                 <FormMessage />
+                {registerError && (
+                  <p className="text-sm text-red-500 mt-1">{registerError}</p>
+                )}
               </FormItem>
             )}
           />
@@ -196,7 +210,9 @@ export function RegisterForm() {
                     <Input
                       placeholder="••••••••"
                       type={showPassword ? "text" : "password"}
-                      className="pl-9 pr-9"
+                      className={`pl-9 pr-9 ${
+                        registerError ? 'border-red-500 animate-shake' : ''
+                      }`}
                       {...field}
                       disabled={isLoading}
                     />
@@ -234,7 +250,9 @@ export function RegisterForm() {
                     <Input
                       placeholder="••••••••"
                       type={showConfirmPassword ? "text" : "password"}
-                      className="pl-9 pr-9"
+                      className={`pl-9 pr-9 ${
+                        registerError ? 'border-red-500 animate-shake' : ''
+                      }`}
                       {...field}
                       disabled={isLoading}
                     />

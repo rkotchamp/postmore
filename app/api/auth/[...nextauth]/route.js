@@ -59,12 +59,10 @@ export const authOptions = {
           response_type: "code",
         },
       },
-      callbackUrl: `${baseUrl}/api/auth/callback/google`,
     }),
     GithubProvider({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      callbackUrl: `${baseUrl}/api/auth/callback/github`,
     }),
   ],
   callbacks: {

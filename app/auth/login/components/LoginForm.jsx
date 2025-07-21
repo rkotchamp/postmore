@@ -28,6 +28,7 @@ export function LoginForm() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
   // Get the return URL from search params
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
@@ -43,26 +44,27 @@ export function LoginForm() {
 
   const handleLoginSubmit = async (values) => {
     setIsLoading(true);
+    setLoginError("");
 
     try {
-      // Use NextAuth's built-in redirect handling
+      // Don't redirect automatically - handle errors inline
       const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
         callbackUrl: callbackUrl,
-        redirect: true, // Let NextAuth handle the redirect
+        redirect: false, // Handle errors inline instead of redirecting
       });
 
-      // Note: This code won't execute if redirect: true is successful
-      // It only executes if there's an error
       if (result?.error) {
-        throw new Error(result.error);
+        setLoginError("Incorrect email or password");
+        setIsLoading(false);
+      } else if (result?.ok) {
+        // Only redirect on success
+        router.push(callbackUrl);
       }
     } catch (error) {
       console.error("Login error:", error);
-      toast.error("Invalid email or password", {
-        description: error.message || "Login failed. Please try again.",
-      });
+      setLoginError("Incorrect email or password");
       setIsLoading(false);
     }
   };
@@ -88,10 +90,14 @@ export function LoginForm() {
   const handleGithubSignIn = async () => {
     try {
       setIsGithubLoading(true);
+      console.log("Initiating GitHub sign-in from Login page");
 
-      await signIn("github", {
-        callbackUrl: `${window.location.origin}${callbackUrl}`,
+      const result = await signIn("github", {
+        callbackUrl: callbackUrl,
+        redirect: true,
       });
+
+      console.log("GitHub sign-in result:", result);
     } catch (error) {
       console.error("GitHub sign-in error:", error);
       toast.error("Authentication error", {
@@ -125,13 +131,18 @@ export function LoginForm() {
                     <Input
                       placeholder="email@example.com"
                       type="email"
-                      className="pl-9"
+                      className={`pl-9 ${
+                        loginError ? 'border-red-500 animate-shake' : ''
+                      }`}
                       {...field}
                       disabled={isLoading}
                     />
                   </div>
                 </FormControl>
                 <FormMessage />
+                {loginError && (
+                  <p className="text-sm text-red-500 mt-1">{loginError}</p>
+                )}
               </FormItem>
             )}
           />
@@ -156,7 +167,9 @@ export function LoginForm() {
                     <Input
                       placeholder="••••••••"
                       type={showPassword ? "text" : "password"}
-                      className="pl-9 pr-9"
+                      className={`pl-9 pr-9 ${
+                        loginError ? 'border-red-500 animate-shake' : ''
+                      }`}
                       {...field}
                       disabled={isLoading}
                     />
