@@ -81,10 +81,10 @@ export function Header() {
       {mobileMenuOpen && (
         <div className="md:hidden">
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md" onClick={() => setMobileMenuOpen(false)} />
-          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-2xl border-l border-border">
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm bg-gray-900 shadow-2xl border-l border-gray-700">
             <div className="flex flex-col h-full">
               {/* Mobile menu header */}
-              <div className="flex items-center justify-between p-6 border-b border-border">
+              <div className="flex items-center justify-between p-6 border-b border-gray-700">
                 <Link href="/" onClick={() => setMobileMenuOpen(false)}>
                   <Image
                     src="/PostmooreSvg.svg"
@@ -111,7 +111,7 @@ export function Header() {
                   <Link
                     key={item.name}
                     href={item.href}
-                    className="block px-4 py-4 text-lg font-medium text-foreground hover:text-primary hover:bg-white/10 rounded-xl transition-all duration-200 backdrop-blur-sm border border-transparent hover:border-white/15"
+                    className="block px-4 py-4 text-lg font-medium text-foreground hover:text-primary transition-colors duration-200"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {item.name}
@@ -119,10 +119,10 @@ export function Header() {
                 ))}
                 
                 {/* Sign In Link */}
-                <div className="pt-6 mt-6 border-t border-border">
+                <div className="pt-6 mt-6 border-t border-gray-700">
                   <Link
                     href="/auth/login"
-                    className="block px-4 py-4 text-lg font-medium text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-xl transition-all duration-200 backdrop-blur-sm border border-transparent hover:border-white/15"
+                    className="block px-4 py-4 text-lg font-medium text-muted-foreground hover:text-foreground transition-colors duration-200"
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     Sign In
@@ -131,7 +131,7 @@ export function Header() {
               </nav>
 
               {/* Mobile CTA */}
-              <div className="p-6 border-t border-border">
+              <div className="p-6 border-t border-gray-700">
                 <Link href="/auth/register" onClick={() => setMobileMenuOpen(false)}>
                   <Button className="w-full bg-primary hover:bg-primary/90 text-lg py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 border border-primary/20">
                     Try it for free

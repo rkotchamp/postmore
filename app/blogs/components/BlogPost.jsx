@@ -7,8 +7,10 @@ import { MobileSocialShare } from "./MobileSocialShare";
 import { BottomBlogCTA } from "./BlogCTA";
 import { Avatar, AvatarFallback, AvatarImage } from "@/app/components/ui/avatar";
 import { Badge } from "@/app/components/ui/badge";
-import { CalendarDays, Clock, Share2 } from "lucide-react";
+import { Button } from "@/app/components/ui/button";
+import { CalendarDays, Clock, Share2, ArrowLeft } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 export function BlogPost({ post }) {
   const [scrollY, setScrollY] = useState(0);
@@ -58,6 +60,20 @@ export function BlogPost({ post }) {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
             <div className="space-y-8">
+              {/* Back Arrow */}
+              <div className="flex items-center">
+                <Link href="/blogs">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors -ml-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span className="text-sm">Back to Blog</span>
+                  </Button>
+                </Link>
+              </div>
+
               {/* Meta Info */}
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
