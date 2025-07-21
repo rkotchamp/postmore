@@ -44,6 +44,12 @@ export function Header() {
             >
               Privacy & Terms
             </Link>
+            <Link
+              href="/blog"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Blog
+            </Link>
           </nav>
 
           <div className="flex items-center space-x-4">

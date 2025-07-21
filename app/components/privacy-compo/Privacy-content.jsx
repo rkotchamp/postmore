@@ -25,7 +25,7 @@ export function PrivacyContent() {
         </div>
 
         {/* Main Content */}
-        <Card className="shadow-lg border-0">
+        <Card className="bg-card border-border shadow-lg">
           <CardContent className="p-8 lg:p-12">
             <div className="prose prose-gray max-w-none">
               {/* Introduction */}
@@ -535,11 +535,169 @@ export function PrivacyContent() {
                 </p>
               </section>
 
-              {/* Contact Information */}
+              {/* Third-Party Platform Integration */}
               <section className="mb-8">
                 <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
                   <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
                     12
+                  </span>
+                  Third-Party Platform Integration
+                </h2>
+                <p className="text-muted-foreground mb-4">
+                  PostMoore integrates with various social media platforms to provide our services. By using PostMoore, you acknowledge and agree to the following platform-specific terms:
+                </p>
+                
+                <div className="space-y-6">
+                  {/* YouTube */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-red-600 rounded-full mr-2"></span>
+                      YouTube Integration
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We use YouTube's API services to enable content posting. By connecting your YouTube account:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>You agree to be bound by YouTube's <a href="https://www.youtube.com/t/terms" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
+                      <li>Google's <a href="https://policies.google.com/privacy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a> applies to your data</li>
+                      <li>PostMoore accesses your YouTube account only to post content on your behalf</li>
+                      <li>You can revoke PostMoore's access through your Google Account settings at any time</li>
+                    </ul>
+                  </div>
+
+                  {/* TikTok */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-black rounded-full mr-2"></span>
+                      TikTok Integration
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We integrate with TikTok's API to enable content posting:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>You agree to TikTok's <a href="https://www.tiktok.com/legal/terms-of-service" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a></li>
+                      <li>TikTok's <a href="https://www.tiktok.com/legal/privacy-policy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a> governs data handling</li>
+                      <li>We only post content you explicitly schedule through PostMoore</li>
+                      <li>Content must comply with TikTok's Community Guidelines</li>
+                    </ul>
+                  </div>
+
+                  {/* Google/Gmail */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-blue-600 rounded-full mr-2"></span>
+                      Google Authentication
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We use Google OAuth for secure authentication:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>Google's <a href="https://policies.google.com/terms" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a> apply</li>
+                      <li>Your Google account data is protected by Google's <a href="https://policies.google.com/privacy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a></li>
+                      <li>We only access basic profile information for authentication</li>
+                      <li>We do not access your Gmail or other Google services beyond authentication</li>
+                    </ul>
+                  </div>
+
+                  {/* GitHub */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-gray-800 rounded-full mr-2"></span>
+                      GitHub Authentication
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We offer GitHub OAuth as an authentication option:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>GitHub's <a href="https://docs.github.com/en/site-policy/github-terms/github-terms-of-service" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a> apply</li>
+                      <li>GitHub's <a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Statement</a> governs data handling</li>
+                      <li>We only access public profile information for authentication</li>
+                      <li>We do not access your repositories or other GitHub data</li>
+                    </ul>
+                  </div>
+
+                  {/* Facebook */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-blue-600 rounded-full mr-2"></span>
+                      Facebook Integration
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We integrate with Facebook's API to post content:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>Facebook's <a href="https://www.facebook.com/legal/terms" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a> apply</li>
+                      <li>Meta's <a href="https://www.facebook.com/privacy/policy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a> governs data handling</li>
+                      <li>We only post content you explicitly schedule through PostMoore</li>
+                      <li>You can revoke PostMoore's access through Facebook settings</li>
+                    </ul>
+                  </div>
+
+                  {/* Instagram */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mr-2"></span>
+                      Instagram Integration
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We use Instagram's Basic Display API and Content Publishing API:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>Instagram's <a href="https://help.instagram.com/581066165581870" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Use</a> apply</li>
+                      <li>Meta's <a href="https://www.facebook.com/privacy/policy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a> governs data handling</li>
+                      <li>We post content on your behalf only when scheduled through PostMoore</li>
+                      <li>Content must comply with Instagram's Community Guidelines</li>
+                    </ul>
+                  </div>
+
+                  {/* Bluesky */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                      Bluesky Integration
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We integrate with Bluesky's AT Protocol to post content:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>Bluesky's <a href="https://blueskyweb.xyz/support/tos" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Service</a> apply</li>
+                      <li>Bluesky's <a href="https://blueskyweb.xyz/support/privacy-policy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a> governs data handling</li>
+                      <li>We only post content you explicitly schedule through PostMoore</li>
+                      <li>You can revoke access by changing your Bluesky app passwords</li>
+                    </ul>
+                  </div>
+
+                  {/* Threads */}
+                  <div className="bg-muted/20 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-foreground mb-2 flex items-center">
+                      <span className="w-2 h-2 bg-black rounded-full mr-2"></span>
+                      Threads Integration
+                    </h4>
+                    <p className="text-muted-foreground mb-2">
+                      We integrate with Threads' API to post content:
+                    </p>
+                    <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-4">
+                      <li>Threads' <a href="https://help.instagram.com/769983657850450" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Terms of Use</a> apply</li>
+                      <li>Meta's <a href="https://www.facebook.com/privacy/policy" className="text-primary hover:text-primary/80 underline" target="_blank" rel="noopener noreferrer">Privacy Policy</a> governs data handling</li>
+                      <li>We only post content you explicitly schedule through PostMoore</li>
+                      <li>Content must comply with Threads' Community Guidelines</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-6 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+                  <p className="text-foreground font-semibold mb-2">Important Note:</p>
+                  <p className="text-muted-foreground">
+                    PostMoore acts as an intermediary to help you manage your social media accounts. We do not control the policies, availability, or functionality of third-party platforms. Changes to platform APIs or policies may affect PostMoore's functionality. We will make reasonable efforts to adapt to such changes but cannot guarantee uninterrupted service.
+                  </p>
+                </div>
+              </section>
+
+              {/* Contact Information */}
+              <section className="mb-8">
+                <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center">
+                  <span className="bg-muted text-primary rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold mr-3">
+                    13
                   </span>
                   Contact Information
                 </h2>

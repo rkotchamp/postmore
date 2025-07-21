@@ -13,8 +13,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
   title: {
-    default: "postMoore - Social Media Scheduling Platform",
-    template: "%s | postMoore",
+    default: "PostMoore - Social Media Scheduling Platform",
+    template: "%s | PostMoore",
   },
   description:
     "Schedule and publish content to YouTube Shorts, TikTok, Instagram, Bluesky, and more from one dashboard. Save time and grow your social media presence.",
@@ -23,10 +23,10 @@ export const metadata = {
     "content scheduling",
     "multi-platform posting",
   ],
-  authors: [{ name: "postMoore Team" }],
+  authors: [{ name: "PostMoore Team" }],
   creator: "postMoore",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "https://postmore.app"
+    process.env.NEXT_PUBLIC_APP_URL || "https://postmoo.re"
   ),
   robots: {
     index: true,
@@ -35,11 +35,11 @@ export const metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "postMoore",
+    siteName: "PostMoore",
   },
   twitter: {
     card: "summary_large_image",
-    site: "@postmore",
+    site: "@postmoore_",
   },
 };
 

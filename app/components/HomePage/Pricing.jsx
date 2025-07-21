@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { PricingCards } from "@/app/prices/components/PricingCards";
+import { Platforms } from "./Platform";
 
 export function Pricing() {
   return (
@@ -22,15 +23,7 @@ export function Pricing() {
         </Suspense>
 
         <div className="text-center mt-12">
-          <p className="text-muted-foreground">
-            Need a custom plan?{" "}
-            <a
-              href="#"
-              className="text-primary hover:text-primary/80 font-semibold"
-            >
-              Contact our sales team
-            </a>
-          </p>
+          <Platforms />
         </div>
       </div>
     </section>

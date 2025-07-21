@@ -4,6 +4,7 @@ import { Features } from "@/app/components/HomePage/Features";
 import { Platforms } from "@/app/components/HomePage/Platform";
 import { Testimonials } from "@/app/components/HomePage/Testimonials";
 import { Pricing } from "@/app/components/HomePage/Pricing";
+import { SupportedPlatforms } from "@/app/components/HomePage/SupportedPlatforms";
 import { CTA } from "@/app/components/HomePage/CTA";
 import { Footer } from "@/app/components/HomePage/Footer";
 
@@ -99,6 +100,7 @@ export default function Home() {
         <Features />
         <Testimonials />
         <Pricing />
+        <SupportedPlatforms />
         <CTA />
       </div>
       <Footer />
