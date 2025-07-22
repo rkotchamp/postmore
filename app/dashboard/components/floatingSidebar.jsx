@@ -26,6 +26,7 @@ import {
   TooltipTrigger,
 } from "@/app/components/ui/tooltip";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
+import { UserNav } from "./userProfile";
 
 // Custom Bluesky icon component
 
@@ -135,6 +136,28 @@ export function FloatingSidebar({ onExpandChange, initialExpanded }) {
                 expanded={expanded}
               />
             ))}
+          </div>
+
+          {/* User Profile at bottom */}
+          <div className="mt-auto pt-4 border-t border-border/50">
+            <div className={cn(
+              "flex items-center justify-center",
+              expanded && "w-full px-3"
+            )}>
+              {expanded ? (
+                <div className="flex items-center w-full p-2 rounded-md hover:bg-muted/50 transition-colors">
+                  <div className="scale-90 origin-left">
+                    <UserNav />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center">
+                  <div className="scale-75">
+                    <UserNav />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Sidebar>

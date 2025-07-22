@@ -76,7 +76,10 @@ export function DashboardLayout({ children }) {
                     : "Switch to light mode"}
                 </TooltipContent>
               </Tooltip>
-              <UserNav />
+              {/* Hide UserNav on mobile since it's now in the floating sidebar */}
+              <div className="hidden lg:block">
+                <UserNav />
+              </div>
             </div>
           </header>
           <main className="w-full p-0 md:p-2 lg:p-4">{children}</main>
