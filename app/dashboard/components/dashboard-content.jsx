@@ -507,16 +507,16 @@ export function DashboardContent() {
   // Loading state is now handled by shouldShowSkeleton in the component render
 
   return (
-    <div className="w-full max-w-full space-y-6 p-6">
-      <h1 className="text-2xl font-bold mb-6 max-w-5xl mx-auto">
+    <div className="w-full max-w-full space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 max-w-5xl mx-auto">
         Create New Post
       </h1>
 
       {/* Main container with content and preview side by side */}
-      <div className="flex flex-col lg:flex-row gap-6 max-w-5xl mx-auto">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 max-w-5xl mx-auto">
         {/* Left side: Progress Bar, Content, and Navigation buttons together */}
         <div
-          className={`flex-1 flex flex-col space-y-6 ${
+          className={`flex-1 flex flex-col space-y-4 sm:space-y-6 ${
             !showPreviews ? "lg:w-full" : "" // Adjust width if preview is hidden
           }`}
         >
@@ -524,14 +524,12 @@ export function DashboardContent() {
           <div className="mb-0">
             {" "}
             {/* Removed mb-8, adjust spacing as needed */}
-            <div className="flex items-center justify-center space-x-0">
-              {" "}
-              {/* Use space-x-0 on parent */}
+            <div className="flex items-center justify-center space-x-0 overflow-x-auto px-2">
               {steps.map((step, index) => (
-                <div key={step.id} className="flex items-center">
+                <div key={step.id} className="flex items-center flex-shrink-0">
                   {/* Step circle using UI store currentStep */}
                   <div
-                    className={`flex items-center justify-center h-10 w-10 rounded-full border-2 transition-colors duration-300 ${
+                    className={`flex items-center justify-center h-8 w-8 sm:h-10 sm:w-10 rounded-full border-2 transition-colors duration-300 ${
                       index < currentStep
                         ? "border-primary bg-primary text-primary-foreground"
                         : index === currentStep
@@ -540,9 +538,9 @@ export function DashboardContent() {
                     }`}
                   >
                     {index < currentStep ? (
-                      <CheckCircle2 className="h-6 w-6" />
+                      <CheckCircle2 className="h-4 w-4 sm:h-6 sm:w-6" />
                     ) : (
-                      <span className="text-sm font-medium">{index + 1}</span>
+                      <span className="text-xs sm:text-sm font-medium">{index + 1}</span>
                     )}
                   </div>
 
@@ -550,7 +548,7 @@ export function DashboardContent() {
                   {index < steps.length - 1 && (
                     <div className="flex items-center">
                       <span
-                        className={`ml-2 mr-2 text-sm font-medium transition-colors duration-300 ${
+                        className={`ml-1 sm:ml-2 mr-1 sm:mr-2 text-xs sm:text-sm font-medium transition-colors duration-300 whitespace-nowrap ${
                           index <= currentStep
                             ? "text-foreground"
                             : "text-muted-foreground"
@@ -559,7 +557,7 @@ export function DashboardContent() {
                         {step.name}
                       </span>
                       <div
-                        className={`h-0.5 w-10 md:w-16 lg:w-20 xl:w-36 transition-colors duration-300 ${
+                        className={`h-0.5 w-6 sm:w-10 md:w-16 lg:w-20 xl:w-36 transition-colors duration-300 ${
                           index < currentStep
                             ? "bg-primary"
                             : "bg-muted-foreground/30"
@@ -570,7 +568,7 @@ export function DashboardContent() {
                   {/* Render last step name separately */}
                   {index === steps.length - 1 && (
                     <span
-                      className={`ml-2 text-sm font-medium transition-colors duration-300 ${
+                      className={`ml-1 sm:ml-2 text-xs sm:text-sm font-medium transition-colors duration-300 whitespace-nowrap ${
                         index <= currentStep
                           ? "text-foreground"
                           : "text-muted-foreground"
@@ -586,7 +584,7 @@ export function DashboardContent() {
 
           {/* Step Content - Render conditionally based on UI store currentStep */}
           <Card className="border-none shadow-none flex-1 p-0">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               {shouldShowSkeleton ? (
                 <DynamicContentSkeleton step={currentStep} />
               ) : (
@@ -600,12 +598,12 @@ export function DashboardContent() {
           </Card>
 
           {/* Navigation Buttons (Uses UI store state/actions) */}
-          <div className="flex justify-between items-center pt-4 border-t">
+          <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t gap-3 sm:gap-0">
             <Button
               variant="outline"
               onClick={handlePrevious}
               disabled={currentStep === 0}
-              className="flex items-center gap-1"
+              className="flex items-center gap-1 w-full sm:w-auto order-2 sm:order-1"
             >
               <ChevronLeft className="h-4 w-4" />
               Previous
@@ -615,7 +613,7 @@ export function DashboardContent() {
               <Button
                 onClick={handleNext}
                 disabled={!canProceed()} // Based on step completion logic
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 w-full sm:w-auto order-1 sm:order-2"
               >
                 Next
                 <ChevronRight className="h-4 w-4" />
@@ -625,13 +623,13 @@ export function DashboardContent() {
               <Button
                 onClick={handleSubmit}
                 disabled={!canProceed() || isSubmitting} // Add isSubmitting here
-                className="flex items-center gap-2 py-3 px-6 md:py-4 md:px-8 text-base"
+                className="flex items-center gap-2 py-3 px-4 sm:px-6 md:py-4 md:px-8 text-sm sm:text-base w-full sm:w-auto order-1 sm:order-2"
                 size="lg"
               >
                 {isSubmitting ? (
                   <>
                     <span className="animate-spin mr-1">
-                      <svg className="h-5 w-5" viewBox="0 0 24 24">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 24 24">
                         <circle
                           className="opacity-25"
                           cx="12"
@@ -654,7 +652,7 @@ export function DashboardContent() {
                   </>
                 ) : (
                   <>
-                    <SendHorizontal className="h-5 w-5" />
+                    <SendHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
                     {getSubmitButtonText()}
                   </>
                 )}
