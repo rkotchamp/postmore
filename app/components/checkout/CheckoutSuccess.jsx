@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
+import { useCheckoutStore } from "@/app/lib/store/checkoutStore";
+import { useUser } from "@/app/context/UserContext";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { CheckCircle2, Loader2 } from "lucide-react";
@@ -13,19 +15,47 @@ export const CheckoutSuccess = () => {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useUser();
 
-  const { setCurrentSubscription, setIsLoading } = useSubscriptionStore();
+  const { setCurrentSubscription, setIsLoading, plans } = useSubscriptionStore();
+  const { setCheckoutSession, hasValidSession } = useCheckoutStore();
 
   useEffect(() => {
     const handleCheckoutSuccess = async () => {
       const sessionId = searchParams.get("session_id");
       const checkoutStatus = searchParams.get("checkout");
+      const planParam = searchParams.get("plan");
 
       if (checkoutStatus === "success" && sessionId) {
         try {
           setIsLoading(true);
 
-          // Verify the checkout session with your backend
+          // If user is not authenticated, store checkout session and redirect to signup
+          if (!user) {
+            // Find the selected plan details
+            const selectedPlan = plans.find((p) => p.id === planParam);
+            
+            if (selectedPlan) {
+              // Store checkout session data for use after signup
+              setCheckoutSession({
+                sessionId,
+                planId: selectedPlan.id,
+                planName: selectedPlan.name,
+                planPrice: selectedPlan.price,
+              });
+
+              toast.success("Payment successful!", {
+                description: "Please create your account to complete the process.",
+                duration: 5000,
+              });
+
+              // Redirect to signup page
+              router.push("/auth/register?checkout=pending");
+              return;
+            }
+          }
+
+          // User is authenticated, proceed with normal verification
           const response = await fetch("/api/checkout/verify-session", {
             method: "POST",
             headers: {
@@ -76,7 +106,7 @@ export const CheckoutSuccess = () => {
     };
 
     handleCheckoutSuccess();
-  }, [searchParams, setCurrentSubscription, setIsLoading]);
+  }, [searchParams, setCurrentSubscription, setIsLoading, user, plans, setCheckoutSession, router]);
 
   const handleContinue = () => {
     router.push("/dashboard");

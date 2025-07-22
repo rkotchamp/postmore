@@ -33,10 +33,13 @@ export function PricingCards({ mode = "home", className = "" }) {
   const {
     plans,
     selectedPlan,
+    billingPeriod,
     isCheckoutLoading,
     canUpgrade,
     canDowngrade,
     getCurrentPlanDetails,
+    getCurrentPrice,
+    getCurrentPriceId,
     selectPlan,
   } = useSubscriptionStore();
 
@@ -58,11 +61,15 @@ export function PricingCards({ mode = "home", className = "" }) {
     }
   }, [mode, isClient, searchParams, plans, selectPlan]);
 
+  // Check if this is a profile upgrade request
+  const isProfileUpgrade = searchParams?.get("source") === "profile_upgrade";
+
   // Handle automatic checkout after login
   useEffect(() => {
     if (mode === "pricing" && isClient && searchParams && user) {
       const planParam = searchParams.get("plan");
       const checkoutParam = searchParams.get("checkout");
+      const sourceParam = searchParams.get("source");
 
       if (
         checkoutParam === "true" &&
@@ -76,7 +83,7 @@ export function PricingCards({ mode = "home", className = "" }) {
             successUrl: `${window.location.origin}/dashboard?checkout=success&plan=${selectedPlan.id}`,
             cancelUrl: `${window.location.origin}/prices?checkout=cancelled`,
             metadata: {
-              source: "post_login_checkout",
+              source: sourceParam === "profile_upgrade" ? "profile_upgrade" : "post_login_checkout",
               userEmail: user?.email,
             },
           }).catch((error) => {
@@ -93,13 +100,29 @@ export function PricingCards({ mode = "home", className = "" }) {
 
   const handleSelectPlan = async (plan) => {
     try {
-      // Check if user is authenticated
-      if (!user) {
+      // For profile upgrades, require authentication
+      if (isProfileUpgrade && !user) {
         // If not authenticated, redirect to login with plan selection in callback
         const callbackUrl = encodeURIComponent(
-          `/prices?plan=${plan.id}&checkout=true`
+          `/prices?plan=${plan.id}&checkout=true&source=profile_upgrade`
         );
         window.location.href = `/auth/login?callbackUrl=${callbackUrl}`;
+        return;
+      }
+
+      // For non-profile upgrades, allow guest checkout
+      if (!isProfileUpgrade && !user) {
+        // Proceed with guest checkout
+        await initiateCheckout(plan.id, {
+          successUrl: `${window.location.origin}/dashboard?checkout=success&plan=${plan.id}`,
+          cancelUrl:
+            mode === "home"
+              ? `${window.location.origin}/?checkout=cancelled`
+              : `${window.location.origin}/prices?checkout=cancelled`,
+          metadata: {
+            source: mode === "home" ? "homepage" : "pricing_page",
+          },
+        });
         return;
       }
 
@@ -111,8 +134,11 @@ export function PricingCards({ mode = "home", className = "" }) {
             ? `${window.location.origin}/?checkout=cancelled`
             : `${window.location.origin}/prices?checkout=cancelled`,
         metadata: {
-          source: mode === "home" ? "homepage" : "pricing_page",
+          source: isProfileUpgrade 
+            ? "profile_upgrade" 
+            : mode === "home" ? "homepage" : "pricing_page",
           userEmail: user?.email,
+          billingPeriod,
         },
       });
     } catch (error) {
@@ -224,9 +250,16 @@ export function PricingCards({ mode = "home", className = "" }) {
             <CardTitle className="text-2xl">{plan.name}</CardTitle>
             <div className="mt-4">
               <span className="text-4xl font-bold text-foreground">
-                ${plan.price}
+                ${getCurrentPrice(plan.id)}
               </span>
-              <span className="text-muted-foreground">/month</span>
+              <span className="text-muted-foreground">
+                {billingPeriod === "yearly" ? "/year" : "/month"}
+              </span>
+              {billingPeriod === "yearly" && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  ${Math.round(getCurrentPrice(plan.id) / 12 * 100) / 100}/month billed yearly
+                </div>
+              )}
             </div>
             <CardDescription className="mt-4 text-base">
               {plan.description}
@@ -279,6 +312,18 @@ export function PricingCards({ mode = "home", className = "" }) {
                 getPlanButtonText(plan)
               )}
             </Button>
+
+            {/* Trial messaging under CTA button */}
+            <div className="flex items-center justify-center gap-1 mt-3">
+              <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                $0.00 due today, cancel anytime
+              </span>
+            </div>
           </CardContent>
         </Card>
       ))}

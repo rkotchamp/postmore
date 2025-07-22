@@ -551,7 +551,7 @@ export default function Profile() {
                     Active
                   </span>
                 </div>
-                <Link href="/price">
+                <Link href="/prices?source=profile_upgrade">
                   <Button
                     variant="outline"
                     size="sm"

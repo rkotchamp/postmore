@@ -3,21 +3,30 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import Stripe from "stripe";
 
+// Validate Stripe secret key
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error("STRIPE_SECRET_KEY environment variable is not set");
+}
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-12-18.acacia",
 });
 
 export async function POST(request) {
   try {
+    // Parse request body first to check metadata
+    const body = await request.json();
+    const { planId, priceId, successUrl, cancelUrl, metadata } = body;
+
     // Get the current session
     const session = await getServerSession(authOptions);
 
-    if (!session || !session.user) {
+    // Only require authentication for profile page upgrades
+    const isProfileUpgrade = metadata?.source === "profile_upgrade";
+    
+    if (isProfileUpgrade && (!session || !session.user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    // Parse request body
-    const { planId, successUrl, cancelUrl, metadata } = await request.json();
 
     // Validate required fields
     if (!planId) {
@@ -27,54 +36,51 @@ export async function POST(request) {
       );
     }
 
-    // Plan configuration mapping to your Stripe Price IDs
-    const planConfig = {
-      basic: {
-        name: "Basic",
-        price: 5,
-        priceId:
-          process.env.STRIPE_BASIC_PRICE_ID || "price_1RkThRGR3RTuDO766eMwFnUG",
-      },
-      pro: {
-        name: "Pro",
-        price: 11,
-        priceId:
-          process.env.STRIPE_PRO_PRICE_ID || "price_1RkThRGR3RTuDO76jjjAXDzp",
-      },
-      premium: {
-        name: "Premium",
-        price: 19,
-        priceId:
-          process.env.STRIPE_PREMIUM_PRICE_ID ||
-          "price_1RkThRGR3RTuDO7663YF2ROU",
-      },
-    };
 
-    const selectedPlan = planConfig[planId];
-    if (!selectedPlan) {
-      return NextResponse.json({ error: "Invalid plan ID" }, { status: 400 });
+    // Use provided priceId or fallback to legacy plan configuration
+    let selectedPriceId = priceId;
+    
+    if (!selectedPriceId) {
+      // Legacy fallback - plan configuration mapping to your Stripe Price IDs
+      const planConfig = {
+        basic: {
+          name: "Basic",
+          price: 5,
+          priceId: process.env.STRIPE_MONTHLY_BASIC_PRICE_ID || "price_1RndT7GR3RTuDO76YnIS0frc",
+        },
+        creator: {
+          name: "Creator", 
+          price: 9,
+          priceId: process.env.STRIPE_MONTHLY_CREATOR_PRICE_ID || "price_1RndXyGR3RTuDO76l0nsbdWV",
+        },
+        premium: {
+          name: "Premium",
+          price: 19,
+          priceId: process.env.STRIPE_MONTHLY_PREMIUM_PRICE_ID || "price_1RndeEGR3RTuDO76bstknjni",
+        },
+      };
+
+      const selectedPlan = planConfig[planId];
+      if (!selectedPlan) {
+        return NextResponse.json({ error: "Invalid plan ID" }, { status: 400 });
+      }
+      selectedPriceId = selectedPlan.priceId;
     }
 
-    if (!selectedPlan.priceId) {
-      console.error("Price ID not configured for plan:", planId, selectedPlan);
+    if (!selectedPriceId) {
       return NextResponse.json(
         { error: "Price ID not configured for this plan" },
         { status: 500 }
       );
     }
 
-    console.log("Creating checkout with:", {
-      planId,
-      priceId: selectedPlan.priceId,
-      userEmail: session.user.email,
-    });
 
-    // Create simple Stripe checkout session
-    const checkoutSession = await stripe.checkout.sessions.create({
+    // Create Stripe checkout session configuration
+    const checkoutConfig = {
       payment_method_types: ["card"],
       line_items: [
         {
-          price: selectedPlan.priceId,
+          price: selectedPriceId,
           quantity: 1,
         },
       ],
@@ -89,23 +95,25 @@ export async function POST(request) {
         `${
           process.env.NEXT_PUBLIC_APP_URL || "https://www.postmoo.re"
         }/prices?checkout=cancelled`,
-      customer_email: session.user.email,
-      client_reference_id: session.user.id,
-    });
+    };
+
+    // Add user info if authenticated
+    if (session?.user) {
+      checkoutConfig.customer_email = session.user.email;
+      checkoutConfig.client_reference_id = session.user.id;
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create(checkoutConfig);
 
     return NextResponse.json({
       sessionId: checkoutSession.id,
       url: checkoutSession.url,
-      plan: selectedPlan,
+      planId: planId,
+      priceId: selectedPriceId,
     });
   } catch (error) {
-    console.error("Error creating checkout session:", error);
-    console.error("Error details:", {
-      type: error.type,
-      message: error.message,
-      param: error.param,
-      code: error.code,
-    });
+    // Log error without sensitive details
+    console.error("Checkout session creation failed");
 
     // Provide more specific error messages based on Stripe error types
     let errorMessage = "Failed to create checkout session";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,9 +16,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/app/components/ui/form";
-import { Loader2, User, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Loader2, User, Mail, Lock, Eye, EyeOff, Crown } from "lucide-react";
 import { registerSchema } from "@/app/models/ZodFormSchemas";
 import { signIn } from "next-auth/react";
+import { useCheckoutStore } from "@/app/lib/store/checkoutStore";
+import { Card, CardContent } from "@/app/components/ui/card";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -29,6 +31,17 @@ export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [registerError, setRegisterError] = useState("");
+  const [isActivatingSubscription, setIsActivatingSubscription] = useState(false);
+
+  const { 
+    checkoutSession, 
+    hasValidSession, 
+    clearCheckoutSession, 
+    markSessionCompleted 
+  } = useCheckoutStore();
+
+  // Check if this is a post-checkout signup
+  const isCheckoutFlow = searchParams.get("checkout") === "pending" && hasValidSession();
 
   // Get the return URL from search params
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
@@ -48,13 +61,21 @@ export function RegisterForm() {
     setRegisterError("");
 
     try {
+      // Prepare registration data
+      const registrationData = { ...values };
+      
+      // Include checkout session data if available
+      if (isCheckoutFlow && checkoutSession) {
+        registrationData.checkoutSession = checkoutSession;
+      }
+
       // Make API call to the registration endpoint
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify(registrationData),
       });
 
       const data = await response.json();
@@ -82,8 +103,70 @@ export function RegisterForm() {
         localStorage.setItem("access_token", data.token);
       }
 
-      // Redirect to dashboard or login page based on your flow
-      router.push("/auth/login");
+      // If this is a checkout flow, activate subscription after registration
+      if (isCheckoutFlow && checkoutSession) {
+        try {
+          setIsActivatingSubscription(true);
+          
+          // First, sign in to get authenticated session
+          const signInResult = await signIn("credentials", {
+            email: values.email,
+            password: values.password,
+            redirect: false,
+          });
+
+          if (signInResult?.ok) {
+            // Now activate the subscription
+            const subscriptionResponse = await fetch("/api/checkout/activate-subscription", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ sessionId: checkoutSession.sessionId }),
+            });
+
+            if (subscriptionResponse.ok) {
+              const subscriptionData = await subscriptionResponse.json();
+              
+              toast.success("Subscription activated!", {
+                description: `Welcome to your ${checkoutSession.planName} plan!`,
+                duration: 5000,
+              });
+
+              // Mark checkout as completed and clear session
+              markSessionCompleted();
+              clearCheckoutSession();
+
+              // Redirect to dashboard
+              router.push("/dashboard?welcome=true");
+            } else {
+              toast.error("Subscription activation failed", {
+                description: "Please contact support to activate your subscription.",
+                duration: 5000,
+              });
+              router.push("/dashboard");
+            }
+          } else {
+            toast.error("Auto-login failed", {
+              description: "Please sign in to activate your subscription.",
+              duration: 5000,
+            });
+            router.push("/auth/login");
+          }
+        } catch (error) {
+          console.error("Error activating subscription:", error);
+          toast.error("Subscription activation failed", {
+            description: "Please contact support to activate your subscription.",
+            duration: 5000,
+          });
+          router.push("/dashboard");
+        } finally {
+          setIsActivatingSubscription(false);
+        }
+      } else {
+        // Normal registration flow
+        router.push("/auth/login");
+      }
     } catch (error) {
       console.error("Registration error:", error);
       setRegisterError("Something went wrong. Please try again.");
@@ -96,8 +179,22 @@ export function RegisterForm() {
       setIsGoogleLoading(true);
       console.log("Initiating Google sign-in from Register page");
 
+      // If checkout flow, store checkout session in URL params for OAuth callback
+      let signInCallbackUrl = `${window.location.origin}${callbackUrl}`;
+      
+      if (isCheckoutFlow && checkoutSession) {
+        const params = new URLSearchParams({
+          checkout: "pending",
+          sessionId: checkoutSession.sessionId,
+          planId: checkoutSession.planId,
+          planName: checkoutSession.planName,
+          planPrice: checkoutSession.planPrice.toString(),
+        });
+        signInCallbackUrl += `?${params.toString()}`;
+      }
+
       await signIn("google", {
-        callbackUrl: `${window.location.origin}${callbackUrl}`,
+        callbackUrl: signInCallbackUrl,
         prompt: "select_account",
       });
     } catch (error) {
@@ -115,8 +212,22 @@ export function RegisterForm() {
       setIsGithubLoading(true);
       console.log("Initiating GitHub sign-in from Register page");
 
+      // If checkout flow, store checkout session in URL params for OAuth callback
+      let signInCallbackUrl = callbackUrl;
+      
+      if (isCheckoutFlow && checkoutSession) {
+        const params = new URLSearchParams({
+          checkout: "pending",
+          sessionId: checkoutSession.sessionId,
+          planId: checkoutSession.planId,
+          planName: checkoutSession.planName,
+          planPrice: checkoutSession.planPrice.toString(),
+        });
+        signInCallbackUrl += `?${params.toString()}`;
+      }
+
       const result = await signIn("github", {
-        callbackUrl: callbackUrl,
+        callbackUrl: signInCallbackUrl,
         redirect: true,
       });
 
@@ -141,6 +252,25 @@ export function RegisterForm() {
 
   return (
     <div className="grid gap-6">
+      {/* Show checkout session info if available */}
+      {isCheckoutFlow && checkoutSession && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-primary/10 p-2">
+                <Crown className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Payment Complete!</h3>
+                <p className="text-xs text-muted-foreground">
+                  Create your account to activate your {checkoutSession.planName} plan (${checkoutSession.planPrice}/month)
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(handleRegisterSubmit)}
@@ -278,11 +408,21 @@ export function RegisterForm() {
             )}
           />
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? (
+          <Button type="submit" className="w-full" disabled={isLoading || isActivatingSubscription}>
+            {isActivatingSubscription ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Activating subscription...
+              </>
+            ) : isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating account...
+              </>
+            ) : isCheckoutFlow ? (
+              <>
+                <Crown className="mr-2 h-4 w-4" />
+                Complete account & activate plan
               </>
             ) : (
               "Create account"

@@ -2,14 +2,23 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 /**
- * @typedef {'basic' | 'pro' | 'premium'} PlanType
+ * @typedef {'basic' | 'creator' | 'premium'} PlanType
+ * @typedef {'monthly' | 'yearly'} BillingPeriod
+ */
+
+/**
+ * @typedef {object} PlanPricing
+ * @property {number} monthly
+ * @property {number} yearly
+ * @property {string} monthlyPriceId
+ * @property {string} yearlyPriceId
  */
 
 /**
  * @typedef {object} Plan
  * @property {string} id
  * @property {string} name
- * @property {number} price
+ * @property {PlanPricing} pricing
  * @property {string} description
  * @property {string[]} features
  * @property {boolean} popular
@@ -31,16 +40,20 @@ import { persist, createJSONStorage } from "zustand/middleware";
  * @property {Plan[]} plans
  * @property {Subscription | null} currentSubscription
  * @property {PlanType | null} selectedPlan
+ * @property {BillingPeriod} billingPeriod
  * @property {boolean} isLoading
  * @property {string | null} error
  * @property {boolean} isCheckoutLoading
  * @property {(planId: PlanType) => void} selectPlan
  * @property {(subscription: Subscription) => void} setCurrentSubscription
+ * @property {(period: BillingPeriod) => void} setBillingPeriod
  * @property {(isLoading: boolean) => void} setIsLoading
  * @property {(error: string | null) => void} setError
  * @property {(isLoading: boolean) => void} setIsCheckoutLoading
  * @property {() => void} clearSelectedPlan
  * @property {() => void} resetSubscriptionState
+ * @property {(planId: PlanType) => number} getCurrentPrice
+ * @property {(planId: PlanType) => string} getCurrentPriceId
  */
 
 // Default plans configuration
@@ -48,7 +61,12 @@ const defaultPlans = [
   {
     id: "basic",
     name: "Basic",
-    price: 5,
+    pricing: {
+      monthly: 5,
+      yearly: 51, // $51/year as per Stripe
+      monthlyPriceId: process.env.STRIPE_MONTHLY_BASIC_PRICE_ID || "price_1RndT7GR3RTuDO76YnIS0frc",
+      yearlyPriceId: process.env.STRIPE_YEARLY_BASIC_PRICE_ID || "price_1RndT7GR3RTuDO76OBhqqBqb",
+    },
     description: "Perfect for individual creators and small businesses",
     features: [
       "3 social media accounts",
@@ -66,9 +84,14 @@ const defaultPlans = [
     },
   },
   {
-    id: "pro",
-    name: "Pro",
-    price: 11,
+    id: "creator",
+    name: "Creator",
+    pricing: {
+      monthly: 9,
+      yearly: 91.80, // $91.80/year as per Stripe
+      monthlyPriceId: process.env.STRIPE_MONTHLY_CREATOR_PRICE_ID || "price_1RndXyGR3RTuDO76l0nsbdWV",
+      yearlyPriceId: process.env.STRIPE_YEARLY_CREATOR_PRICE_ID || "price_1RndXyGR3RTuDO76AGpk1MAh",
+    },
     description: "Ideal for growing businesses and marketing teams",
     features: [
       "10 social media accounts",
@@ -90,7 +113,12 @@ const defaultPlans = [
   {
     id: "premium",
     name: "Premium",
-    price: 19,
+    pricing: {
+      monthly: 19,
+      yearly: 193, // $193/year as per Stripe
+      monthlyPriceId: process.env.STRIPE_MONTHLY_PREMIUM_PRICE_ID || "price_1RndeEGR3RTuDO76bstknjni",
+      yearlyPriceId: process.env.STRIPE_YEARLY_PREMIUM_PRICE_ID || "price_1RndeEGR3RTuDO76JOkEv5YC",
+    },
     description: "For large organizations with advanced needs",
     features: [
       "Unlimited social media accounts",
@@ -113,11 +141,12 @@ const defaultPlans = [
   },
 ];
 
-/** @type {Pick<SubscriptionState, 'plans' | 'currentSubscription' | 'selectedPlan' | 'isLoading' | 'error' | 'isCheckoutLoading'>} */
+/** @type {Pick<SubscriptionState, 'plans' | 'currentSubscription' | 'selectedPlan' | 'billingPeriod' | 'isLoading' | 'error' | 'isCheckoutLoading'>} */
 const initialState = {
   plans: defaultPlans,
   currentSubscription: null,
   selectedPlan: null,
+  billingPeriod: "monthly", // Default to monthly
   isLoading: false,
   error: null,
   isCheckoutLoading: false,
@@ -153,12 +182,29 @@ export const useSubscriptionStore = create(
         set({ isCheckoutLoading });
       },
 
+      setBillingPeriod: (period) => {
+        set({ billingPeriod: period });
+      },
+
       clearSelectedPlan: () => {
         set({ selectedPlan: null });
       },
 
       resetSubscriptionState: () => {
         set(initialState);
+      },
+
+      // Helper functions for pricing
+      getCurrentPrice: (planId) => {
+        const { plans, billingPeriod } = get();
+        const plan = plans.find((p) => p.id === planId);
+        return plan ? plan.pricing[billingPeriod] : 0;
+      },
+
+      getCurrentPriceId: (planId) => {
+        const { plans, billingPeriod } = get();
+        const plan = plans.find((p) => p.id === planId);
+        return plan ? plan.pricing[`${billingPeriod}PriceId`] : "";
       },
 
       // Computed getters
@@ -191,7 +237,7 @@ export const useSubscriptionStore = create(
       },
 
       canUpgrade: (targetPlanId) => {
-        const { currentSubscription, plans } = get();
+        const { currentSubscription, plans, billingPeriod } = get();
         if (!currentSubscription) return true;
 
         const currentPlan = plans.find(
@@ -200,11 +246,11 @@ export const useSubscriptionStore = create(
         const targetPlan = plans.find((plan) => plan.id === targetPlanId);
 
         if (!currentPlan || !targetPlan) return false;
-        return targetPlan.price > currentPlan.price;
+        return targetPlan.pricing[billingPeriod] > currentPlan.pricing[billingPeriod];
       },
 
       canDowngrade: (targetPlanId) => {
-        const { currentSubscription, plans } = get();
+        const { currentSubscription, plans, billingPeriod } = get();
         if (!currentSubscription) return false;
 
         const currentPlan = plans.find(
@@ -213,7 +259,7 @@ export const useSubscriptionStore = create(
         const targetPlan = plans.find((plan) => plan.id === targetPlanId);
 
         if (!currentPlan || !targetPlan) return false;
-        return targetPlan.price < currentPlan.price;
+        return targetPlan.pricing[billingPeriod] < currentPlan.pricing[billingPeriod];
       },
     }),
     {
@@ -222,6 +268,7 @@ export const useSubscriptionStore = create(
       partialize: (state) => ({
         selectedPlan: state.selectedPlan,
         currentSubscription: state.currentSubscription,
+        billingPeriod: state.billingPeriod,
         // Don't persist loading states or errors
       }),
     }
@@ -232,6 +279,7 @@ export const useSubscriptionStore = create(
 export const selectPlans = (state) => state.plans;
 export const selectCurrentSubscription = (state) => state.currentSubscription;
 export const selectSelectedPlan = (state) => state.selectedPlan;
+export const selectBillingPeriod = (state) => state.billingPeriod;
 export const selectIsLoading = (state) => state.isLoading;
 export const selectError = (state) => state.error;
 export const selectIsCheckoutLoading = (state) => state.isCheckoutLoading;

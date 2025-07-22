@@ -14,6 +14,7 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
 import { PricingCards } from "@/app/prices/components/PricingCards";
+import { BillingToggle } from "@/app/components/ui/BillingToggle";
 
 export default function PricingPage() {
   const { error, setError, getCurrentPlanDetails } = useSubscriptionStore();
@@ -77,6 +78,9 @@ export default function PricingPage() {
             </div>
           </div>
         )}
+
+        {/* Billing Toggle */}
+        <BillingToggle />
 
         {/* Pricing Cards */}
         <Suspense

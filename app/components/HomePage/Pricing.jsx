@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { PricingCards } from "@/app/prices/components/PricingCards";
+import { BillingToggle } from "@/app/components/ui/BillingToggle";
 import { Platforms } from "./Platform";
 
 export function Pricing() {
@@ -15,6 +16,8 @@ export function Pricing() {
             free trial.
           </p>
         </div>
+
+        <BillingToggle />
 
         <Suspense
           fallback={<div className="text-center">Loading pricing...</div>}

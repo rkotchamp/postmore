@@ -16,6 +16,7 @@ export const useStripeCheckout = () => {
     setError,
     selectPlan,
     setCurrentSubscription,
+    getCurrentPriceId,
   } = useSubscriptionStore();
 
   /**
@@ -37,6 +38,7 @@ export const useStripeCheckout = () => {
         // Prepare checkout data
         const checkoutData = {
           planId,
+          priceId: getCurrentPriceId(planId), // Use the correct price ID based on billing period
           successUrl:
             options.successUrl ||
             `${window.location.origin}/dashboard?checkout=success`,

@@ -155,6 +155,21 @@ export const authOptions = {
 
           // Ensure it's a safe redirect within the same origin
           if (decodedCallbackUrl.startsWith(baseUrl)) {
+            // Check for checkout parameters in the callback URL
+            const callbackUrlObj = new URL(decodedCallbackUrl);
+            const checkoutParam = callbackUrlObj.searchParams.get("checkout");
+            const sessionId = callbackUrlObj.searchParams.get("sessionId");
+
+            // If this is a checkout flow, redirect to subscription activation
+            if (checkoutParam === "pending" && sessionId) {
+              const activationUrl = new URL(`${baseUrl}/auth/activate-subscription`);
+              activationUrl.searchParams.set("sessionId", sessionId);
+              activationUrl.searchParams.set("planId", callbackUrlObj.searchParams.get("planId"));
+              activationUrl.searchParams.set("planName", callbackUrlObj.searchParams.get("planName"));
+              activationUrl.searchParams.set("planPrice", callbackUrlObj.searchParams.get("planPrice"));
+              return activationUrl.toString();
+            }
+
             // Don't redirect to login/register pages if user is authenticated
             if (
               decodedCallbackUrl.includes("/auth/login") ||
