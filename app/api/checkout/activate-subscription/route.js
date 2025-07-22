@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import Stripe from "stripe";
-import { connectToDatabase } from "@/app/lib/mongodb";
+import { connectToMongoose } from "@/app/lib/db/mongoose";
 import User from "@/app/models/userSchema";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -49,7 +49,7 @@ export async function POST(request) {
     }
 
     // Connect to database
-    await connectToDatabase();
+    await connectToMongoose();
 
     // Map Stripe price ID to internal plan ID
     const priceIdToPlanMap = {
