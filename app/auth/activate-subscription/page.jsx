@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useUser } from "@/app/context/UserContext";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/app/components/ui/card";
 import { CheckCircle2, Loader2, Crown } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
-export default function ActivateSubscription() {
+function ActivateSubscriptionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, isLoading: isUserLoading } = useUser();
@@ -173,4 +173,22 @@ export default function ActivateSubscription() {
   }
 
   return null;
+}
+
+export default function ActivateSubscription() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+            <h2 className="text-2xl font-semibold mb-2">Loading...</h2>
+            <p className="text-muted-foreground">Please wait while we prepare your subscription activation.</p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <ActivateSubscriptionContent />
+    </Suspense>
+  );
 }
