@@ -77,7 +77,7 @@ export const metadata = {
   },
   verification: {
     google: "your-google-verification-code", // Add your Google Search Console verification code
-    yandex: "your-yandex-verification-code", // Optional
+
     yahoo: "your-yahoo-verification-code", // Optional
   },
   other: {
