@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
 import { PricingCards } from "@/app/prices/components/PricingCards";
 import { BillingToggle } from "@/app/components/ui/BillingToggle";
+import { FAQ } from "@/app/components/HomePage/FAQ";
 
 export default function PricingPage() {
   const { error, setError, getCurrentPlanDetails } = useSubscriptionStore();
@@ -92,81 +93,8 @@ export default function PricingPage() {
         </Suspense>
 
         {/* FAQ Section */}
-        <div className="mt-20 text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-8">
-            Frequently Asked Questions
-          </h2>
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-left">
-                  Can I change plans anytime?
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-left">
-                  Yes! You can upgrade or downgrade your plan at any time.
-                  Changes take effect immediately, and we'll prorate your
-                  billing.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-left">
-                  What happens after the free trial?
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-left">
-                  After your 14-day free trial, you'll be charged for your
-                  selected plan. You can cancel anytime during the trial with no
-                  charges.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-left">
-                  Do you offer refunds?
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-left">
-                  Yes, we offer a 30-day money-back guarantee. If you're not
-                  satisfied, contact us within 30 days for a full refund.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-left">Is my data secure?</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-left">
-                  Absolutely! We use enterprise-grade security with SSL
-                  encryption, regular backups, and comply with GDPR and other
-                  privacy regulations.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Contact Section */}
-        <div className="text-center mt-16">
-          <p className="text-muted-foreground text-lg">
-            Need a custom plan or have questions?{" "}
-            <a
-              href="mailto:support@postmore.com"
-              className="text-primary hover:text-primary/80 font-semibold"
-            >
-              Contact our team
-            </a>
-          </p>
+        <div className="mt-20">
+          <FAQ />
         </div>
       </div>
     </div>
