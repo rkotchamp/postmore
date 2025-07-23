@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { connectToMongoose } from "@/app/lib/db/mongoose";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import connectToMongoose from "@/app/lib/db/mongoose";
 import SocialAccount from "@/app/models/SocialAccount";
-import User from "@/app/models/userSchema";
 
 const clientId = process.env.LINKEDIN_CLIENT_ID;
 const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
@@ -115,70 +115,67 @@ export async function GET(request) {
     const profile = await getLinkedInProfile(tokenData.access_token);
     console.log("LinkedIn Callback: Successfully obtained profile");
 
-    // 4. Get user from session
-    const cookieStore = cookies();
-    const session = cookieStore.get("session")?.value;
-
-    if (!session) {
-      return redirectWithError("User not authenticated");
+    // 4. Get user session
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return redirectWithError("Authentication required. Please log in to connect LinkedIn.");
     }
+    const userId = session.user.id;
 
+    // 5. Connect to database
     await connectToMongoose();
-    const user = await User.findOne({ session });
 
-    if (!user) {
-      return redirectWithError("User not found");
-    }
-
-    // 5. Save LinkedIn account
+    // 6. Prepare data for database
+    const linkedinUserId = profile.sub; // LinkedIn's unique user ID
+    const displayName = profile.name || session.user.name || "LinkedIn User";
+    const profileImage = profile.picture || session.user.image;
+    
     const accountData = {
-      userId: user._id,
+      userId: userId,
       platform: "linkedin",
-      platformAccountId: profile.sub, // LinkedIn user ID
+      platformAccountId: linkedinUserId,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token || null,
-      tokenExpiresAt: tokenData.expires_in ? 
+      tokenExpiry: tokenData.expires_in ? 
         new Date(Date.now() + tokenData.expires_in * 1000) : null,
-      profileImage: profile.picture || null,
-      platformUsername: profile.email,
-      displayName: profile.name,
-      status: "active",
-      lastRefreshed: new Date(),
       scope: tokenData.scope,
+      profileImage: profileImage,
+      displayName: displayName,
+      platformUsername: profile.email,
+      status: "active",
+      errorMessage: null,
     };
 
-    console.log("LinkedIn Callback: Upserting account:", {
-      userId: user._id,
-      platformAccountId: profile.sub,
-      displayName: profile.name,
-      email: profile.email,
-    });
+    console.log("LinkedIn Callback: Preparing to upsert data for user:", userId, "LinkedIn User ID:", linkedinUserId);
 
-    const result = await SocialAccount.findOneAndUpdate(
-      {
-        userId: user._id,
-        platform: "linkedin",
-        platformAccountId: profile.sub,
-      },
-      accountData,
-      { upsert: true, new: true }
+    // 7. Upsert SocialAccount in Database
+    const updateResult = await SocialAccount.updateOne(
+      { userId: userId, platform: "linkedin", platformAccountId: linkedinUserId },
+      { $set: accountData },
+      { upsert: true }
     );
 
-    console.log("LinkedIn Callback: Successfully saved account");
-
-    // 6. Redirect to success page
-    const successParams = new URLSearchParams({
-      platform: "linkedin",
-      success: "true",
-      username: profile.name,
-    });
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/authenticate?${successParams}`
-    );
+    if (updateResult.acknowledged) {
+      const action = updateResult.upsertedId ? "created" : "updated";
+      console.log(`LinkedIn account ${action} successfully for user: ${userId}`);
+      // Redirect back to authenticate page with success
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/authenticate?platform=linkedin&success=true`
+      );
+    } else {
+      console.error("LinkedIn Callback Error: Database update failed to acknowledge for user:", userId);
+      throw new Error("Failed to save LinkedIn account information to the database.");
+    }
   } catch (error) {
     console.error("LinkedIn Callback Error:", error);
-    return redirectWithError(error.message || "An unexpected error occurred", {
-      stack: error.stack,
-    });
+    let message = "Failed to connect LinkedIn account.";
+    if (error?.response?.data?.error_description) {
+      message = `LinkedIn Error: ${error.response.data.error_description}`;
+    } else if (error.message?.includes("invalid_grant")) {
+      message = "Authorization code invalid or expired. Please try connecting again.";
+    } else {
+      message = error.message || message;
+    }
+    return redirectWithError(message);
   }
 }
