@@ -66,6 +66,7 @@ export default function Authenticate() {
     ytShorts: [],
     tiktok: [],
     bluesky: [],
+    linkedin: [],
   };
 
   const connectedAccounts =
@@ -375,6 +376,39 @@ export default function Authenticate() {
     setIsBlueskyModalOpen(true);
   };
 
+  const handleLinkedInConnection = async () => {
+    setIsLoadingAuthAction(true);
+    setAuthStatus(null);
+
+    // Update platform consent acknowledgment
+    await updatePlatformConsent("linkedin");
+
+    try {
+      const response = await fetch("/api/auth/linkedin/connect");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to get LinkedIn authorization URL"
+        );
+      }
+
+      if (data.authorizeUrl) {
+        window.location.href = data.authorizeUrl;
+      } else {
+        throw new Error("Authorization URL not received from server.");
+      }
+    } catch (error) {
+      console.error("Error initiating LinkedIn connection:", error);
+      setAuthStatus({
+        type: "error",
+        platform: "linkedin",
+        message: `Failed to connect LinkedIn: ${error.message}`,
+      });
+      setIsLoadingAuthAction(false);
+    }
+  };
+
   const handleBlueskyLoginSubmit = async (credentials) => {
     setIsLoadingAuthAction(true);
     setBlueskyLoginError(null);
@@ -427,6 +461,7 @@ export default function Authenticate() {
     ytShorts: handleYtShortsConnection,
     tiktok: handleTikTokAuth,
     bluesky: handleBlueskyAuth,
+    linkedin: handleLinkedInConnection,
   };
 
   const PlatformIcon = ({ platform }) => {
@@ -446,6 +481,8 @@ export default function Authenticate() {
         return <TikTokIcon {...iconProps} />;
       case "bluesky":
         return <BlueskyIcon {...iconProps} />;
+      case "linkedin":
+        return <LinkedInIcon {...iconProps} />;
       default:
         return null;
     }
@@ -481,6 +518,17 @@ export default function Authenticate() {
     </svg>
   );
 
+  const LinkedInIcon = ({ className }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  );
+
   const platformNames = {
     instagram: "Instagram",
     twitter: "Twitter",
@@ -489,6 +537,7 @@ export default function Authenticate() {
     ytShorts: "YouTube Shorts",
     tiktok: "TikTok",
     bluesky: "Bluesky",
+    linkedin: "LinkedIn",
   };
 
   const AvatarGroup = ({ accounts, max = 3 }) => {
@@ -653,14 +702,16 @@ export default function Authenticate() {
                           (isLoadingAuthAction && platform === "tiktok") ||
                           (isLoadingAuthAction && platform === "bluesky") ||
                           (isLoadingAuthAction && platform === "ytShorts") ||
-                          (isLoadingAuthAction && platform === "instagram")
+                          (isLoadingAuthAction && platform === "instagram") ||
+                          (isLoadingAuthAction && platform === "linkedin")
                         }
                       >
                         <PlatformIcon platform={platform} />
                         {(isLoadingAuthAction && platform === "tiktok") ||
                         (isLoadingAuthAction && platform === "bluesky") ||
                         (isLoadingAuthAction && platform === "ytShorts") ||
-                        (isLoadingAuthAction && platform === "instagram")
+                        (isLoadingAuthAction && platform === "instagram") ||
+                        (isLoadingAuthAction && platform === "linkedin")
                           ? "Connecting..."
                           : `Connect a ${platformNames[platform]} Account`}
                       </Button>

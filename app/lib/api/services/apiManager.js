@@ -7,6 +7,7 @@
 import blueSkyService from "./BlueSky/blueSkyService";
 import youtubeService from "./youtube/youtubeService";
 import tiktokService from "./tiktok/tiktokService";
+import linkedinService from "./linkedinService";
 import { addPostToQueue } from "@/app/lib/queues/postQueue";
 
 // Platform service registry
@@ -39,6 +40,7 @@ const platformServices = {
   bluesky: blueSkyService,
   ytShorts: youtubeService, // YouTube Shorts service
   tiktok: tiktokService, // TikTok service
+  linkedin: linkedinService, // LinkedIn service
 };
 
 /**
