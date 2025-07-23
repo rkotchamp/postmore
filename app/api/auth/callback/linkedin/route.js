@@ -149,22 +149,23 @@ export async function GET(request) {
     console.log("LinkedIn Callback: Preparing to upsert data for user:", userId, "LinkedIn User ID:", linkedinUserId);
 
     // 7. Upsert SocialAccount in Database
-    const updateResult = await SocialAccount.updateOne(
-      { userId: userId, platform: "linkedin", platformAccountId: linkedinUserId },
-      { $set: accountData },
-      { upsert: true }
-    );
-
-    if (updateResult.acknowledged) {
-      const action = updateResult.upsertedId ? "created" : "updated";
-      console.log(`LinkedIn account ${action} successfully for user: ${userId}`);
-      // Redirect back to authenticate page with success
-      return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/authenticate?platform=linkedin&success=true`
+    try {
+      const updateResult = await SocialAccount.findOneAndUpdate(
+        { userId: userId, platform: "linkedin", platformAccountId: linkedinUserId },
+        accountData,
+        { upsert: true, new: true }
       );
-    } else {
-      console.error("LinkedIn Callback Error: Database update failed to acknowledge for user:", userId);
-      throw new Error("Failed to save LinkedIn account information to the database.");
+
+      if (updateResult) {
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_APP_URL}/authenticate?platform=linkedin&success=true`
+        );
+      } else {
+        throw new Error("Database operation returned null");
+      }
+    } catch (dbError) {
+      console.error("LinkedIn DB Error:", dbError.message);
+      throw new Error("Failed to save LinkedIn account to database");
     }
   } catch (error) {
     console.error("LinkedIn Callback Error:", error);
