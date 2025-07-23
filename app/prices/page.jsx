@@ -1,17 +1,8 @@
 "use client";
 
 import { useEffect, Suspense } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
 import { ArrowLeft, Sparkles } from "lucide-react";
-import Link from "next/link";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
 import { PricingCards } from "@/app/prices/components/PricingCards";
 import { BillingToggle } from "@/app/components/ui/BillingToggle";
@@ -27,8 +18,50 @@ export default function PricingPage() {
     setError(null);
   }, [setError]);
 
+  // Structured data for SEO
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "PostMoore Social Media Scheduler",
+    "description": "Professional social media scheduling and content management platform for YouTube, TikTok, Instagram, and more.",
+    "brand": {
+      "@type": "Brand",
+      "name": "PostMoore"
+    },
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Free Plan",
+        "price": "0",
+        "priceCurrency": "USD",
+        "description": "Perfect for getting started with social media scheduling"
+      },
+      {
+        "@type": "Offer", 
+        "name": "Pro Plan",
+        "price": "19",
+        "priceCurrency": "USD",
+        "description": "Advanced features for growing businesses and content creators"
+      },
+      {
+        "@type": "Offer",
+        "name": "Business Plan", 
+        "price": "49",
+        "priceCurrency": "USD",
+        "description": "Enterprise-level features for teams and agencies"
+      }
+    ]
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <>
+      {/* Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+      
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between">
@@ -42,7 +75,7 @@ export default function PricingPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">14-day free trial</span>
+            <span className="text-sm font-medium">5-day free trial</span>
           </div>
         </div>
       </div>
@@ -65,7 +98,7 @@ export default function PricingPage() {
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             Scale your social media presence with our flexible pricing plans.
-            All plans include a 14-day free trial with no commitment.
+            All plans include a 5-day free trial with no commitment.
           </p>
         </div>
 
@@ -98,5 +131,6 @@ export default function PricingPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
