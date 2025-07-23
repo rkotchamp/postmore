@@ -12,6 +12,7 @@ const nextConfig = {
       "p16-pu-sign-no.tiktokcdn-eu.com",
       "images.ctfassets.net",
       "ctfassets.net",
+      "media.licdn.com",
     ],
   },
   async headers() {
@@ -19,7 +20,7 @@ const nextConfig = {
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com;
       style-src 'self' 'unsafe-inline';
-      img-src 'self' blob: data: https://cdn.bsky.app https://*.twitter.com https://*.twimg.com https://*.instagram.com https://*.fbcdn.net https://*.facebook.com https://*.tiktokcdn.com https://*.tiktokcdn-eu.com https://*.cdninstagram.com https://*.firebasestorage.googleapis.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.googleusercontent.com https://images.ctfassets.net https://*.ctfassets.net;
+      img-src 'self' blob: data: https://cdn.bsky.app https://*.twitter.com https://*.twimg.com https://*.instagram.com https://*.fbcdn.net https://*.facebook.com https://*.tiktokcdn.com https://*.tiktokcdn-eu.com https://*.cdninstagram.com https://*.firebasestorage.googleapis.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.googleusercontent.com https://images.ctfassets.net https://*.ctfassets.net https://media.licdn.com;
       font-src 'self';
       object-src 'none';
       base-uri 'self';
