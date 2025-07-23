@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 
 // Define the necessary scopes for LinkedIn functionality
-// profile: Read user's basic profile information
-// w_member_social: Share content on user's behalf
-// r_basicprofile: Read basic profile information (deprecated, but included for compatibility)
-// r_emailaddress: Read user's email address
+// These must match exactly what's configured in your LinkedIn app
 const scopes = [
-  "profile",
+  "openid",
+  "profile", 
   "w_member_social",
-  "r_emailaddress",
+  "email",
 ].join(" "); // LinkedIn scopes should be space-separated
 
 /**

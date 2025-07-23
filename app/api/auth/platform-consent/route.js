@@ -33,6 +33,7 @@ export async function POST(request) {
       "ytShorts",
       "tiktok",
       "bluesky",
+      "linkedin",
     ];
 
     if (!validPlatforms.includes(platform)) {
