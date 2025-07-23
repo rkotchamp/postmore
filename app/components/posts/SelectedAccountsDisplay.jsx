@@ -84,6 +84,8 @@ const PlatformIcon = ({ platform, className }) => {
       return <TikTokIcon {...iconProps} />;
     case "bluesky":
       return <BlueskyIcon {...iconProps} />;
+    case "linkedin":
+      return <Linkedin {...iconProps} />;
     default:
       return null;
   }
@@ -125,6 +127,7 @@ export function SelectedAccountsDisplay({ accounts }) {
     "youtube",
     "tiktok",
     "bluesky",
+    "linkedin",
   ];
 
   // Sort the platforms based on the defined order

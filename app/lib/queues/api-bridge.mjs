@@ -399,6 +399,80 @@ async function postToBlueSky(account, postData) {
 }
 
 /**
+ * Post to LinkedIn - Direct implementation for worker
+ * @param {object} account - LinkedIn account data with tokens
+ * @param {object} postData - The post content and media
+ * @returns {Promise<object>} Result of the LinkedIn post operation
+ */
+async function postToLinkedIn(account, postData) {
+  console.log("Worker: Posting to LinkedIn");
+
+  try {
+    // Extract account information
+    const { accessToken, platformAccountId } = account;
+    
+    if (!accessToken) {
+      throw new Error("No access token available for LinkedIn account");
+    }
+
+    // Prepare LinkedIn post data
+    const linkedInPostData = {
+      author: `urn:li:person:${platformAccountId}`,
+      lifecycleState: "PUBLISHED",
+      specificContent: {
+        "com.linkedin.ugc.ShareContent": {
+          shareCommentary: {
+            text: postData.text || "",
+          },
+          media: [],
+        },
+      },
+      visibility: {
+        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+      },
+    };
+
+    // Post to LinkedIn API
+    const response = await fetch("https://api.linkedin.com/v2/ugcPosts", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+      body: JSON.stringify(linkedInPostData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`LinkedIn API error: ${response.status} - ${errorData.message || response.statusText}`);
+    }
+
+    const responseData = await response.json();
+    
+    console.log("Worker: LinkedIn post successful");
+    
+    return {
+      success: true,
+      platform: "linkedin",
+      postId: responseData.id,
+      postUrl: `https://www.linkedin.com/feed/update/urn:li:share:${responseData.id}`,
+    };
+  } catch (error) {
+    console.error("Worker: LinkedIn posting error:", error);
+    return {
+      success: false,
+      message: `Failed to post to LinkedIn: ${error.message}`,
+      platform: "linkedin",
+      error: {
+        name: error.name,
+        message: error.message,
+      },
+    };
+  }
+}
+
+/**
  * Direct implementation of postToPlatform that works without importing
  * the original apiManager
  */
@@ -412,6 +486,9 @@ export async function postToPlatform(platform, account, postData) {
     // Platform-specific implementations
     if (platform === "bluesky") {
       return await postToBlueSky(account, postData);
+    }
+    if (platform === "linkedin") {
+      return await postToLinkedIn(account, postData);
     }
 
     // For other platforms, we'll create simplified mock implementations for now

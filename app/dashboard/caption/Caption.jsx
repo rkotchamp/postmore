@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, memo, useMemo } from "react";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
-import { Instagram, Twitter, Facebook, AtSign, Youtube } from "lucide-react";
+import { Instagram, Twitter, Facebook, AtSign, Youtube, Linkedin } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -39,6 +39,8 @@ const PlatformIcon = memo(({ platform }) => {
       return null;
     case "bluesky":
       return null;
+    case "linkedin":
+      return <Linkedin {...iconProps} />;
     default:
       return null;
   }
@@ -143,6 +145,7 @@ export function Caption() {
     tiktok: 2000,
     ytShorts: 100,
     bluesky: 300,
+    linkedin: 3000,
   };
 
   const handleCaptionUpdate = (value, accountId = null) => {
@@ -165,6 +168,7 @@ export function Caption() {
     ytShorts: "YouTube Shorts",
     tiktok: "TikTok",
     bluesky: "Bluesky",
+    linkedin: "LinkedIn",
   };
 
   // Memoize the character limit calculation
