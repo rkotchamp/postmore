@@ -23,18 +23,19 @@ A comprehensive social media management platform that allows users to schedule a
 PostMoore is a modern social media scheduling platform built with Next.js 15 that enables content creators, businesses, and agencies to efficiently manage their social media presence across multiple platforms including:
 
 - **YouTube Shorts**
-- **TikTok** 
+- **TikTok**
 - **Instagram**
 - **Twitter/X**
 - **Facebook**
 - **LinkedIn**
 - **Bluesky**
 - **Threads**
-- **Pinterest**
+- **Pinterest** -**Twitch may be**
 
 ## ✨ Features
 
 ### Core Features
+
 - 📅 **Content Scheduling** - Schedule posts across multiple platforms
 - 🎨 **Media Management** - Upload and manage images, videos, and carousels
 - 📊 **Analytics Dashboard** - Track post performance and engagement
@@ -43,6 +44,7 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 - 🎯 **Content Customization** - Tailor content for each platform's requirements
 
 ### Advanced Features
+
 - 🤖 **Queue Management** - Background job processing with BullMQ
 - 🔐 **OAuth Integration** - Secure authentication with social platforms
 - 💳 **Subscription Management** - Stripe-powered billing system
@@ -52,6 +54,7 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 - 🔒 **Security** - JWT authentication, CSRF protection, CSP headers
 
 ### User Experience
+
 - 📲 **Responsive Design** - Works on desktop and mobile
 - ⚡ **Performance Optimized** - 100/92 PageSpeed scores
 - 🎭 **Modern UI** - Built with Radix UI and Tailwind CSS
@@ -60,6 +63,7 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 ## 🛠 Tech Stack
 
 ### Frontend
+
 - **Framework**: Next.js 15 (App Router)
 - **Language**: JavaScript (JSX)
 - **Styling**: Tailwind CSS + DaisyUI
@@ -70,6 +74,7 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 - **Animations**: Framer Motion
 
 ### Backend
+
 - **Runtime**: Node.js
 - **API**: Next.js API Routes
 - **Database**: MongoDB with Mongoose ODM
@@ -80,6 +85,7 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 - **Payments**: Stripe
 
 ### DevOps & Deployment
+
 - **Deployment**: Vercel
 - **Process Manager**: PM2
 - **Database Migrations**: migrate-mongo
@@ -87,6 +93,7 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 - **Performance**: Built-in optimization
 
 ### Third-Party Integrations
+
 - **Social Platforms**: OAuth 2.0 APIs for all supported platforms
 - **CMS**: Contentful for blog content
 - **Analytics**: Custom analytics system
@@ -107,23 +114,28 @@ Before running this application, make sure you have:
 ## 🚀 Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/your-username/postmore.git
    cd postmore
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Set up environment variables**
+
    ```bash
    cp .env.example .env.local
    ```
+
    Edit `.env.local` with your configuration (see [Environment Variables](#environment-variables))
 
 4. **Set up the database**
+
    ```bash
    # Run database migrations
    npm run migrate:up
@@ -141,12 +153,14 @@ The application will be available at `http://localhost:3000`
 Create a `.env.local` file in the root directory with the following variables:
 
 ### Database
+
 ```env
 MONGODB_URI=mongodb://localhost:27017/postmore
 REDIS_URL=redis://localhost:6379
 ```
 
 ### Authentication
+
 ```env
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secret-key
@@ -154,6 +168,7 @@ JWT_SECRET=your-jwt-secret
 ```
 
 ### Firebase Storage
+
 ```env
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_PRIVATE_KEY=your-private-key
@@ -161,6 +176,7 @@ FIREBASE_CLIENT_EMAIL=your-client-email
 ```
 
 ### Stripe Payments
+
 ```env
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_PUBLISHABLE_KEY=pk_test_...
@@ -168,6 +184,7 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 ### Social Platform APIs
+
 ```env
 # YouTube
 GOOGLE_CLIENT_ID=your-google-client-id
@@ -189,6 +206,7 @@ TWITTER_CLIENT_SECRET=your-twitter-client-secret
 ```
 
 ### Email Configuration
+
 ```env
 SMTP_HOST=your-smtp-host
 SMTP_PORT=587
@@ -199,14 +217,18 @@ SMTP_PASS=your-email-password
 ## 🗄 Database Setup
 
 ### MongoDB Collections
+
 The application uses the following main collections:
+
 - `users` - User accounts and profiles
 - `posts` - Scheduled and published posts
 - `socialaccounts` - Connected social media accounts
 - `sessions` - User sessions
 
 ### Migrations
+
 Run database migrations:
+
 ```bash
 # Check migration status
 npm run migrate:status
@@ -221,6 +243,7 @@ npm run migrate:down
 ## 🏃‍♂️ Running the Application
 
 ### Development Mode
+
 ```bash
 # Start the main application
 npm run dev
@@ -231,6 +254,7 @@ npm run standalone-worker
 ```
 
 ### Production Mode
+
 ```bash
 # Build the application
 npm run build
@@ -243,6 +267,7 @@ npm run pm2-start
 ```
 
 ### PM2 Commands
+
 ```bash
 npm run pm2-start     # Start all processes
 npm run pm2-stop      # Stop all processes
@@ -284,11 +309,13 @@ postmore/
 ## 🔌 API Documentation
 
 ### Authentication
+
 - `POST /api/auth/login` - User login
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/refresh` - Refresh tokens
 
 ### Posts Management
+
 - `GET /api/posts` - Get user posts
 - `POST /api/posts` - Create new post
 - `PUT /api/posts/[id]` - Update post
@@ -296,11 +323,13 @@ postmore/
 - `POST /api/posts/submit` - Submit post for publishing
 
 ### Social Accounts
+
 - `GET /api/social-accounts` - Get connected accounts
 - `POST /api/social-accounts` - Connect new account
 - `DELETE /api/social-accounts/[id]` - Disconnect account
 
 ### Platform-Specific Endpoints
+
 - `POST /api/auth/youtube/connect` - Connect YouTube
 - `POST /api/auth/instagram/connect` - Connect Instagram
 - `POST /api/auth/tiktok/connect` - Connect TikTok
@@ -309,18 +338,21 @@ postmore/
 ## 🚀 Deployment
 
 ### Vercel (Recommended)
+
 1. Push your code to GitHub
 2. Connect your repository to Vercel
 3. Configure environment variables in Vercel dashboard
 4. Deploy automatically with git push
 
 ### Manual Deployment
+
 1. Build the application: `npm run build`
 2. Set up production environment variables
 3. Start with PM2: `npm run pm2-start`
 4. Configure reverse proxy (nginx/Apache)
 
 ### Environment-Specific Considerations
+
 - **Production**: Use PM2 for process management
 - **Staging**: Enable debug logging
 - **Development**: Hot reload with turbopack
@@ -336,6 +368,7 @@ We welcome contributions! Please follow these steps:
 5. Open a Pull Request
 
 ### Development Guidelines
+
 - Follow ESLint configuration
 - Write meaningful commit messages
 - Test your changes thoroughly
@@ -348,6 +381,7 @@ This project is proprietary software. All rights reserved.
 ## 🆘 Support
 
 For support and questions:
+
 - **Email**: support@postmoo.re
 - **Documentation**: [docs.postmoo.re](https://docs.postmoo.re)
 - **GitHub Issues**: For bug reports and feature requests
