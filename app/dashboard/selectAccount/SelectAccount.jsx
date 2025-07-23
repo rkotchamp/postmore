@@ -9,7 +9,7 @@ import {
 } from "@/app/components/ui/accordion";
 import { Username } from "@/app/authenticate/components/Username";
 import { Button } from "@/app/components/ui/button";
-import { Instagram, Twitter, Facebook, AtSign, Youtube } from "lucide-react";
+import { Instagram, Twitter, Facebook, AtSign, Youtube, Linkedin } from "lucide-react";
 import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 import { useRouter } from "next/navigation";
 import { usePostStore } from "@/app/lib/store/postStore";
@@ -199,6 +199,8 @@ export function SelectAccount() {
         return <TikTokIcon {...iconProps} />;
       case "bluesky":
         return <BlueskyIcon {...iconProps} />;
+      case "linkedin":
+        return <Linkedin {...iconProps} />;
       default:
         return null;
     }
@@ -213,6 +215,7 @@ export function SelectAccount() {
     ytShorts: "YouTube Shorts",
     tiktok: "TikTok",
     bluesky: "Bluesky",
+    linkedin: "LinkedIn",
   };
 
   return (
