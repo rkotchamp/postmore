@@ -264,9 +264,26 @@ export async function GET(request) {
     }
 
     if (!instagramAccount) {
+      // Add comprehensive debug info for production debugging
+      const debugInfo = {
+        pagesChecked: pages.length,
+        pagesFound: pages.map(p => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          hasAccessToken: !!p.access_token,
+          tokenLength: p.access_token?.length || 0
+        })),
+        tokenValid: !!longLivedToken,
+        tokenLength: longLivedToken?.length || 0,
+        timestamp: new Date().toISOString(),
+        graphApiVersion: graphApiVersion
+      };
+      
       return redirectWithError(
         "No Instagram Business or Creator accounts found",
-        { pagesChecked: pages.length }
+        { pagesChecked: pages.length },
+        debugInfo
       );
     }
 

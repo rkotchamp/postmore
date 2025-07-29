@@ -213,10 +213,26 @@ export default function Authenticate() {
           refetchAccounts();
         } else if (error) {
           console.error("Instagram authentication error:", error, debug);
+          const debugInfo = params.get("debugInfo");
+          let debugMessage = error || "Failed to connect to Instagram";
+          
+          if (debugInfo) {
+            try {
+              const parsed = JSON.parse(debugInfo);
+              debugMessage = `${error}\n\nDEBUG INFO:\n• Pages found: ${parsed.pagesFound?.length || 0}\n• Token valid: ${parsed.tokenValid ? 'Yes' : 'No'}\n• Graph API: ${parsed.graphApiVersion}\n• Timestamp: ${parsed.timestamp}`;
+              
+              if (parsed.pagesFound?.length > 0) {
+                debugMessage += `\n• Page details: ${parsed.pagesFound.map(p => `${p.name} (${p.hasAccessToken ? 'has token' : 'no token'})`).join(', ')}`;
+              }
+            } catch (e) {
+              debugMessage += `\n\nRaw debug: ${debugInfo}`;
+            }
+          }
+          
           setAuthStatus({
             type: "error",
             platform: "instagram",
-            message: error || "Failed to connect to Instagram",
+            message: debugMessage,
           });
         }
       } else if (platform === "tiktok") {
