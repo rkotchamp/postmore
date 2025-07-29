@@ -1,22 +1,15 @@
 import { NextResponse } from "next/server";
 
-// Define the necessary scopes for Instagram functionality
+// Define the essential scopes for Instagram Business functionality
 // instagram_basic: Read user profile info and media
 // pages_show_list: List Facebook Pages the user manages (needed to find linked IG accounts)
 // instagram_content_publish: Publish media to Instagram Business/Creator account
 // pages_read_engagement: Read page engagement metrics
-// instagram_manage_basic: Manage Instagram Business accounts
-// instagram_manage_insights: Access Instagram insights
-// business_management: Access business management features
 const scopes = [
   "instagram_basic",
   "pages_show_list",
   "instagram_content_publish",
   "pages_read_engagement",
-  "instagram_manage_basic",
-  "instagram_manage_insights",
-  "business_management",
-  "pages_manage_metadata",
 ].join(","); // Scopes should be a comma-separated string
 
 /**
