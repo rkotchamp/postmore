@@ -187,35 +187,16 @@ export async function GET(request) {
     const longLivedToken = await getLongLivedToken(data.access_token);
     console.log("Instagram Callback: Successfully obtained long-lived token");
 
-    // 4. Get User's Facebook Pages - try both endpoints
+    // 4. Get User's Facebook Pages using me/accounts endpoint
     console.log("📄 Instagram Callback: Fetching Facebook Pages...");
     
-    // Try me/accounts first
     const accountsUrl = `https://graph.facebook.com/${graphApiVersion}/me/accounts?access_token=${longLivedToken}`;
-    console.log("🔗 Trying me/accounts endpoint...");
+    console.log("🔗 Using me/accounts endpoint...");
     
-    // Also try me/pages as fallback
-    const pagesUrl = `https://graph.facebook.com/${graphApiVersion}/me/pages?access_token=${longLivedToken}`;
-    console.log("🔗 Will fallback to me/pages endpoint if needed...");
-    
-    // Try accounts endpoint first
-    const accountsResponse = await fetch(accountsUrl);
-    const accountsData = await accountsResponse.json();
-    
-    let pagesResponse, pagesData;
-    
-    if (accountsResponse.ok && accountsData.data && accountsData.data.length > 0) {
-      console.log("✅ Found pages via me/accounts");
-      pagesResponse = accountsResponse;
-      pagesData = accountsData;
-    } else {
-      console.log("❌ me/accounts returned 0 pages, trying me/pages...");
-      pagesResponse = await fetch(pagesUrl);
-      pagesData = await pagesResponse.json();
-    }
+    const pagesResponse = await fetch(accountsUrl);
+    const pagesData = await pagesResponse.json();
 
-    console.log("📊 Final Pages API Response:", {
-      endpoint: pagesResponse === accountsResponse ? 'me/accounts' : 'me/pages',
+    console.log("📊 me/accounts API Response:", {
       status: pagesResponse.status,
       ok: pagesResponse.ok,
       hasData: !!pagesData.data,
@@ -224,13 +205,12 @@ export async function GET(request) {
     });
 
     if (!pagesResponse.ok || !pagesData.data) {
-      console.error("❌ Failed to get Facebook pages from both endpoints:", pagesData);
-      const endpoint = pagesResponse === accountsResponse ? 'accounts' : 'pages';
+      console.error("❌ Failed to get Facebook pages:", pagesData);
       const errorMsg = pagesData.error?.message || 'Unknown error';
       const errorCode = pagesData.error?.code || 'No code';
       
       return redirectWithError(
-        `Failed to retrieve Facebook Pages - API ERROR: ${errorMsg} (Code: ${errorCode}) via ${endpoint} endpoint`,
+        `Failed to retrieve Facebook Pages - API ERROR: ${errorMsg} (Code: ${errorCode}) via accounts endpoint`,
         pagesData.error
       );
     }
@@ -302,9 +282,7 @@ export async function GET(request) {
       };
       
       // Create a simple debug string that will definitely show up
-      const endpoint = pagesResponse === accountsResponse ? 'accounts' : 'pages';
-      const apiError = pagesData.error ? `|Error:${pagesData.error.message}|Code:${pagesData.error.code}` : '';
-      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|Endpoint:${endpoint}|Time:${new Date().getHours()}:${new Date().getMinutes()}${apiError}`;
+      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|Endpoint:accounts|Time:${new Date().getHours()}:${new Date().getMinutes()}`;
       
       const params = new URLSearchParams({
         platform: "instagram",
