@@ -225,8 +225,12 @@ export async function GET(request) {
 
     if (!pagesResponse.ok || !pagesData.data) {
       console.error("❌ Failed to get Facebook pages from both endpoints:", pagesData);
+      const endpoint = pagesResponse === accountsResponse ? 'accounts' : 'pages';
+      const errorMsg = pagesData.error?.message || 'Unknown error';
+      const errorCode = pagesData.error?.code || 'No code';
+      
       return redirectWithError(
-        "Failed to retrieve Facebook Pages",
+        `Failed to retrieve Facebook Pages - API ERROR: ${errorMsg} (Code: ${errorCode}) via ${endpoint} endpoint`,
         pagesData.error
       );
     }
@@ -299,7 +303,8 @@ export async function GET(request) {
       
       // Create a simple debug string that will definitely show up
       const endpoint = pagesResponse === accountsResponse ? 'accounts' : 'pages';
-      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|Endpoint:${endpoint}|Time:${new Date().getHours()}:${new Date().getMinutes()}`;
+      const apiError = pagesData.error ? `|Error:${pagesData.error.message}|Code:${pagesData.error.code}` : '';
+      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|Endpoint:${endpoint}|Time:${new Date().getHours()}:${new Date().getMinutes()}${apiError}`;
       
       const params = new URLSearchParams({
         platform: "instagram",
