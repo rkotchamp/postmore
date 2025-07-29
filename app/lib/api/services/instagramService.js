@@ -193,8 +193,8 @@ async function refreshInstagramToken(accountData) {
     const response = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token`, {
       params: {
         grant_type: 'fb_exchange_token',
-        client_id: process.env.INSTAGRAM_APP_ID,
-        client_secret: process.env.INSTAGRAM_APP_SECRET,
+        client_id: process.env.META_APP_ID,
+        client_secret: process.env.META_APP_SECRET,
         fb_exchange_token: accountData.accessToken
       }
     });
