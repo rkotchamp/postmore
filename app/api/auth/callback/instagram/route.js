@@ -136,8 +136,16 @@ export async function GET(request) {
 
     // 4. Get User's Facebook Pages
     const pagesUrl = `https://graph.facebook.com/${graphApiVersion}/me/accounts?access_token=${longLivedToken}`;
+    console.log("Instagram Callback: Fetching Facebook Pages...");
+    
     const pagesResponse = await fetch(pagesUrl);
     const pagesData = await pagesResponse.json();
+
+    console.log("Instagram Callback: Pages API Response:", {
+      status: pagesResponse.status,
+      ok: pagesResponse.ok,
+      data: pagesData
+    });
 
     if (!pagesResponse.ok || !pagesData.data) {
       console.error("Failed to get Facebook pages:", pagesData);
@@ -148,14 +156,16 @@ export async function GET(request) {
     }
 
     const pages = pagesData.data;
-    console.log(`Instagram Callback: Found ${pages.length} Facebook Pages`);
+    console.log(`Instagram Callback: Found ${pages.length} Facebook Pages:`, 
+      pages.map(p => ({ id: p.id, name: p.name, category: p.category })));
 
     // 5. Find Instagram Business Account
     let instagramAccount = null;
     for (const page of pages) {
-      console.log(`Checking Instagram Business Account for page: ${page.name}`);
+      console.log(`Instagram Callback: Checking Instagram Business Account for page: ${page.name} (ID: ${page.id})`);
       const igAccount = await getInstagramAccount(page.id, page.access_token);
       if (igAccount) {
+        console.log(`Instagram Callback: Found Instagram Business Account!`, igAccount);
         instagramAccount = {
           ...igAccount,
           pageId: page.id,
@@ -163,6 +173,8 @@ export async function GET(request) {
           pageAccessToken: page.access_token,
         };
         break;
+      } else {
+        console.log(`Instagram Callback: No Instagram Business Account found for page: ${page.name}`);
       }
     }
 
