@@ -38,38 +38,60 @@ async function getLongLivedToken(shortLivedToken) {
  * Fetches Instagram Business Account details linked to a Facebook Page.
  */
 async function getInstagramAccount(pageId, accessToken) {
+  console.log(`  🔍 Checking Instagram connection for page ${pageId}...`);
+  
   // First, get the Instagram Business Account ID
   const url = `https://graph.facebook.com/${graphApiVersion}/${pageId}?fields=instagram_business_account&access_token=${accessToken}`;
+  console.log(`  📡 Making request to check Instagram link...`);
+  
   const response = await fetch(url);
   const data = await response.json();
 
+  console.log(`  📊 Instagram link check response:`, {
+    status: response.status,
+    ok: response.ok,
+    hasInstagramAccount: !!data.instagram_business_account?.id,
+    data: data
+  });
+
   if (!response.ok || !data.instagram_business_account?.id) {
-    console.log(
-      `No Instagram Business Account found for page ${pageId}:`,
-      data
-    );
+    console.log(`  ❌ No Instagram Business Account found for page ${pageId}`);
+    if (data.error) {
+      console.log(`  🚨 API Error:`, data.error);
+    }
     return null;
   }
 
   // Then, get the Instagram Business Account details
   const igAccountId = data.instagram_business_account.id;
+  console.log(`  ✅ Found Instagram Business Account ID: ${igAccountId}`);
+  console.log(`  📱 Fetching Instagram account details...`);
+  
   const detailsUrl = `https://graph.facebook.com/${graphApiVersion}/${igAccountId}?fields=username,profile_picture_url&access_token=${accessToken}`;
   const detailsResponse = await fetch(detailsUrl);
   const detailsData = await detailsResponse.json();
 
+  console.log(`  📋 Instagram details response:`, {
+    status: detailsResponse.status,
+    ok: detailsResponse.ok,
+    username: detailsData.username,
+    hasProfilePic: !!detailsData.profile_picture_url,
+    error: detailsData.error
+  });
+
   if (!detailsResponse.ok) {
-    console.error(
-      `Failed to get Instagram details for account ${igAccountId}:`,
-      detailsData
-    );
+    console.error(`  ❌ Failed to get Instagram details for account ${igAccountId}:`, detailsData);
     return null;
   }
 
-  return {
+  const result = {
     id: igAccountId,
     username: detailsData.username,
     profilePictureUrl: detailsData.profile_picture_url,
   };
+  
+  console.log(`  🎉 Successfully retrieved Instagram account:`, result);
+  return result;
 }
 
 /**
@@ -91,16 +113,29 @@ export async function GET(request) {
   };
 
   try {
-    // 1. Get authorization code from URL
+    // 1. Get authorization code and state from URL
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
     const error = searchParams.get("error");
     const errorReason = searchParams.get("error_reason");
+    const state = searchParams.get("state");
+
+    // Parse state for debugging info
+    let stateData = null;
+    if (state) {
+      try {
+        stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      } catch (e) {
+        console.warn("Instagram Callback: Could not parse state:", e.message);
+      }
+    }
 
     console.log("Instagram Callback: Received callback with params:", {
-      code: code ? "present" : "missing",
+      code: code ? `present (length: ${code.length})` : "missing",
       error,
       errorReason,
+      state: stateData,
+      fullUrl: request.url
     });
 
     if (error || !code) {
@@ -119,11 +154,29 @@ export async function GET(request) {
       code,
     });
 
+    console.log("🔄 Instagram Callback: Starting token exchange...");
+    console.log("📝 Token exchange request details:", {
+      url: tokenUrl,
+      clientId: clientId,
+      redirectUri: redirectUri,
+      codePresent: !!code,
+      codeLength: code?.length || 0
+    });
+
     const response = await fetch(`${tokenUrl}?${params}`);
     const data = await response.json();
 
+    console.log("✅ Token exchange response:", {
+      status: response.status,
+      ok: response.ok,
+      hasAccessToken: !!data.access_token,
+      tokenType: data.token_type,
+      expiresIn: data.expires_in,
+      error: data.error
+    });
+
     if (!response.ok || !data.access_token) {
-      console.error("Failed to exchange code for token:", data);
+      console.error("❌ Failed to exchange code for token:", data);
       return redirectWithError(
         "Failed to exchange authorization code for access token",
         data.error
@@ -136,19 +189,25 @@ export async function GET(request) {
 
     // 4. Get User's Facebook Pages
     const pagesUrl = `https://graph.facebook.com/${graphApiVersion}/me/accounts?access_token=${longLivedToken}`;
-    console.log("Instagram Callback: Fetching Facebook Pages...");
+    console.log("📄 Instagram Callback: Fetching Facebook Pages...");
+    console.log("🔗 Pages API URL:", pagesUrl.replace(longLivedToken, '[TOKEN_HIDDEN]'));
     
     const pagesResponse = await fetch(pagesUrl);
     const pagesData = await pagesResponse.json();
 
-    console.log("Instagram Callback: Pages API Response:", {
+    console.log("📊 Pages API Response Summary:", {
       status: pagesResponse.status,
       ok: pagesResponse.ok,
-      data: pagesData
+      hasData: !!pagesData.data,
+      dataType: Array.isArray(pagesData.data) ? 'array' : typeof pagesData.data,
+      dataLength: pagesData.data?.length || 0,
+      error: pagesData.error
     });
 
+    console.log("📋 Full Pages Data:", JSON.stringify(pagesData, null, 2));
+
     if (!pagesResponse.ok || !pagesData.data) {
-      console.error("Failed to get Facebook pages:", pagesData);
+      console.error("❌ Failed to get Facebook pages:", pagesData);
       return redirectWithError(
         "Failed to retrieve Facebook Pages",
         pagesData.error
@@ -156,16 +215,32 @@ export async function GET(request) {
     }
 
     const pages = pagesData.data;
-    console.log(`Instagram Callback: Found ${pages.length} Facebook Pages:`, 
-      pages.map(p => ({ id: p.id, name: p.name, category: p.category })));
+    console.log(`🎯 Found ${pages.length} Facebook Pages:`, 
+      pages.map(p => ({ 
+        id: p.id, 
+        name: p.name, 
+        category: p.category,
+        access_token: p.access_token ? 'present' : 'missing',
+        tasks: p.tasks || 'none'
+      })));
 
     // 5. Find Instagram Business Account
     let instagramAccount = null;
-    for (const page of pages) {
-      console.log(`Instagram Callback: Checking Instagram Business Account for page: ${page.name} (ID: ${page.id})`);
+    console.log(`🔍 Checking ${pages.length} pages for Instagram Business Accounts...`);
+    
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      console.log(`📱 [${i + 1}/${pages.length}] Checking page: "${page.name}" (ID: ${page.id})`);
+      console.log(`🔑 Page access token: ${page.access_token ? 'present' : 'MISSING!'}`);
+      
+      if (!page.access_token) {
+        console.log(`⚠️  Skipping page "${page.name}" - no access token available`);
+        continue;
+      }
+      
       const igAccount = await getInstagramAccount(page.id, page.access_token);
       if (igAccount) {
-        console.log(`Instagram Callback: Found Instagram Business Account!`, igAccount);
+        console.log(`✅ Found Instagram Business Account for "${page.name}":`, igAccount);
         instagramAccount = {
           ...igAccount,
           pageId: page.id,
@@ -174,8 +249,18 @@ export async function GET(request) {
         };
         break;
       } else {
-        console.log(`Instagram Callback: No Instagram Business Account found for page: ${page.name}`);
+        console.log(`❌ No Instagram Business Account found for page: "${page.name}"`);
       }
+    }
+    
+    console.log(`🎯 Instagram account search complete. Result: ${instagramAccount ? 'FOUND' : 'NOT FOUND'}`);
+    if (instagramAccount) {
+      console.log(`🎉 Final Instagram account details:`, {
+        id: instagramAccount.id,
+        username: instagramAccount.username,
+        pageId: instagramAccount.pageId,
+        pageName: instagramAccount.pageName
+      });
     }
 
     if (!instagramAccount) {

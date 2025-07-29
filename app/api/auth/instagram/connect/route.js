@@ -37,14 +37,21 @@ export async function GET(request) {
     );
   }
 
+  // Generate a state token to maintain debugging state
+  const stateData = {
+    timestamp: Date.now(),
+    debug: true,
+    source: "instagram_connect"
+  };
+  const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
+
   // Construct the Facebook Login Dialog URL
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     scope: scopes,
     response_type: "code",
-    // Optional: include state for CSRF protection if needed
-    // state: "your_random_state_string",
+    state: state, // Include state for debugging and CSRF protection
   });
 
   const authorizeUrl = `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
