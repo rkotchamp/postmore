@@ -1,19 +1,24 @@
 /**
  * Instagram API Service
- * Handles all Instagram-specific API operations
+ * Handles all Instagram-specific API operations using Facebook Graph API
  */
 
 import axios from "axios";
 
+const GRAPH_API_VERSION = process.env.FACEBOOK_GRAPH_API_VERSION || "v19.0";
+
 /**
- * Post content to Instagram
+ * Post content to Instagram Business Account
  *
- * @param {object} accountData - Instagram account data (token, user ID, etc.)
+ * @param {object} accountData - Instagram account data (token, platformAccountId, etc.)
  * @param {object} postData - Content data (caption, media, etc.)
  * @returns {Promise<object>} - Result of the Instagram API call
  */
 async function post(accountData, postData) {
-  console.log("Instagram post service called", { accountData, postData });
+  console.log("Instagram post service called", { 
+    platformAccountId: accountData.platformAccountId,
+    mediaCount: postData.mediaFiles?.length 
+  });
 
   try {
     // Validate required fields for Instagram
@@ -32,28 +37,28 @@ async function post(accountData, postData) {
       case "photo":
         result = await createSinglePhotoPost(
           accessToken,
-          accountData.userId,
+          accountData.platformAccountId,
           postData
         );
         break;
       case "carousel":
         result = await createCarouselPost(
           accessToken,
-          accountData.userId,
+          accountData.platformAccountId,
           postData
         );
         break;
       case "video":
         result = await createVideoPost(
           accessToken,
-          accountData.userId,
+          accountData.platformAccountId,
           postData
         );
         break;
       case "reels":
         result = await createReelsPost(
           accessToken,
-          accountData.userId,
+          accountData.platformAccountId,
           postData
         );
         break;
@@ -63,8 +68,8 @@ async function post(accountData, postData) {
 
     return {
       postId: result.id,
-      url: `https://www.instagram.com/p/${result.shortcode}/`,
-      status: result.status,
+      url: result.permalink_url || `https://www.instagram.com/p/${result.id}/`,
+      status: "published",
     };
   } catch (error) {
     console.error("Error in Instagram post service:", error);
@@ -181,85 +186,366 @@ function isTokenExpired(accountData) {
  * @returns {Promise<string>} - New access token
  */
 async function refreshInstagramToken(accountData) {
-  // This would be an actual call to refresh the token
-  // For now, this is a mock implementation
-  console.log("Refreshing Instagram token for account:", accountData.id);
+  console.log("Refreshing Instagram token for account:", accountData.platformAccountId);
 
-  // In a real implementation, you would:
-  // 1. Call the Instagram/Facebook API to refresh the token
-  // 2. Save the new tokens to your database
-  // 3. Return the new access token
+  try {
+    // For Facebook/Instagram tokens, we can use the long-lived token to get a new long-lived token
+    const response = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token`, {
+      params: {
+        grant_type: 'fb_exchange_token',
+        client_id: process.env.INSTAGRAM_APP_ID,
+        client_secret: process.env.INSTAGRAM_APP_SECRET,
+        fb_exchange_token: accountData.accessToken
+      }
+    });
 
-  return "mock-refreshed-token";
+    if (response.data && response.data.access_token) {
+      // In a real implementation, you would update the database with the new token
+      console.log("Successfully refreshed Instagram token");
+      return response.data.access_token;
+    } else {
+      throw new Error("Failed to refresh token: Invalid response");
+    }
+  } catch (error) {
+    console.error("Error refreshing Instagram token:", error);
+    throw new Error(`Token refresh failed: ${error.message}`);
+  }
 }
 
 /**
- * Create a single photo post on Instagram
+ * Create a single photo post on Instagram Business Account
  */
-async function createSinglePhotoPost(accessToken, userId, postData) {
-  console.log("Creating single photo post on Instagram");
+async function createSinglePhotoPost(accessToken, instagramAccountId, postData) {
+  console.log("Creating single photo post on Instagram Business Account");
 
-  // This would be an actual API call to the Instagram Graph API
-  // This is a mock implementation for demonstration
+  try {
+    const mediaFile = postData.mediaFiles[0];
+    
+    // Step 1: Create media container
+    const containerResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      {
+        image_url: mediaFile.url || mediaFile.downloadURL,
+        caption: postData.textContent || '',
+        access_token: accessToken
+      }
+    );
 
-  // Mock response for demonstration purposes
-  return {
-    id: "mock-instagram-post-id",
-    shortcode: "ABC123xyz",
-    status: "published",
-  };
+    const containerId = containerResponse.data.id;
+    console.log("Created media container:", containerId);
+
+    // Step 2: Publish the media container
+    const publishResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      {
+        creation_id: containerId,
+        access_token: accessToken
+      }
+    );
+
+    console.log("Successfully published Instagram photo post:", publishResponse.data.id);
+    
+    return {
+      id: publishResponse.data.id,
+      permalink_url: `https://www.instagram.com/p/${publishResponse.data.id}/`
+    };
+  } catch (error) {
+    console.error("Error creating Instagram photo post:", error.response?.data || error.message);
+    throw new Error(`Instagram photo post failed: ${error.response?.data?.error?.message || error.message}`);
+  }
 }
 
 /**
- * Create a carousel post on Instagram
+ * Create a carousel post on Instagram Business Account
  */
-async function createCarouselPost(accessToken, userId, postData) {
+async function createCarouselPost(accessToken, instagramAccountId, postData) {
   console.log(
     "Creating carousel post on Instagram with",
     postData.mediaFiles.length,
     "items"
   );
 
-  // Mock response for demonstration purposes
-  return {
-    id: "mock-instagram-carousel-id",
-    shortcode: "DEF456uvw",
-    status: "published",
-  };
+  try {
+    // Step 1: Create media containers for each item
+    const mediaContainers = [];
+    
+    for (const mediaFile of postData.mediaFiles) {
+      const isVideo = mediaFile.type.startsWith('video/');
+      const containerData = {
+        access_token: accessToken
+      };
+
+      if (isVideo) {
+        containerData.media_type = 'VIDEO';
+        containerData.video_url = mediaFile.url || mediaFile.downloadURL;
+      } else {
+        containerData.image_url = mediaFile.url || mediaFile.downloadURL;
+      }
+
+      const containerResponse = await axios.post(
+        `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+        containerData
+      );
+
+      mediaContainers.push(containerResponse.data.id);
+      console.log("Created media container:", containerResponse.data.id);
+    }
+
+    // Step 2: Create carousel container
+    const carouselResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      {
+        media_type: 'CAROUSEL',
+        children: mediaContainers.join(','),
+        caption: postData.textContent || '',
+        access_token: accessToken
+      }
+    );
+
+    const carouselContainerId = carouselResponse.data.id;
+    console.log("Created carousel container:", carouselContainerId);
+
+    // Step 3: Publish the carousel
+    const publishResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      {
+        creation_id: carouselContainerId,
+        access_token: accessToken
+      }
+    );
+
+    console.log("Successfully published Instagram carousel post:", publishResponse.data.id);
+    
+    return {
+      id: publishResponse.data.id,
+      permalink_url: `https://www.instagram.com/p/${publishResponse.data.id}/`
+    };
+  } catch (error) {
+    console.error("Error creating Instagram carousel post:", error.response?.data || error.message);
+    throw new Error(`Instagram carousel post failed: ${error.response?.data?.error?.message || error.message}`);
+  }
 }
 
 /**
- * Create a video post on Instagram
+ * Create a video post on Instagram Business Account
  */
-async function createVideoPost(accessToken, userId, postData) {
-  console.log("Creating video post on Instagram");
+async function createVideoPost(accessToken, instagramAccountId, postData) {
+  console.log("Creating video post on Instagram Business Account");
 
-  // Mock response for demonstration purposes
-  return {
-    id: "mock-instagram-video-id",
-    shortcode: "GHI789rst",
-    status: "published",
-  };
+  try {
+    const mediaFile = postData.mediaFiles[0];
+    
+    // Step 1: Create video media container
+    const containerResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      {
+        media_type: 'VIDEO',
+        video_url: mediaFile.url || mediaFile.downloadURL,
+        caption: postData.textContent || '',
+        access_token: accessToken
+      }
+    );
+
+    const containerId = containerResponse.data.id;
+    console.log("Created video media container:", containerId);
+
+    // Step 2: Wait for video processing (check status)
+    let processingComplete = false;
+    let attempts = 0;
+    const maxAttempts = 30; // 5 minutes max wait time
+
+    while (!processingComplete && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+      
+      try {
+        const statusResponse = await axios.get(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/${containerId}`,
+          {
+            params: {
+              fields: 'status_code',
+              access_token: accessToken
+            }
+          }
+        );
+
+        if (statusResponse.data.status_code === 'FINISHED') {
+          processingComplete = true;
+        } else if (statusResponse.data.status_code === 'ERROR') {
+          throw new Error('Video processing failed');
+        }
+      } catch (statusError) {
+        console.warn("Error checking video status:", statusError.message);
+      }
+      
+      attempts++;
+    }
+
+    if (!processingComplete) {
+      throw new Error('Video processing timeout');
+    }
+
+    // Step 3: Publish the video
+    const publishResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      {
+        creation_id: containerId,
+        access_token: accessToken
+      }
+    );
+
+    console.log("Successfully published Instagram video post:", publishResponse.data.id);
+    
+    return {
+      id: publishResponse.data.id,
+      permalink_url: `https://www.instagram.com/p/${publishResponse.data.id}/`
+    };
+  } catch (error) {
+    console.error("Error creating Instagram video post:", error.response?.data || error.message);
+    throw new Error(`Instagram video post failed: ${error.response?.data?.error?.message || error.message}`);
+  }
 }
 
 /**
- * Create a reels post on Instagram
+ * Create a reels post on Instagram Business Account
  */
-async function createReelsPost(accessToken, userId, postData) {
-  console.log("Creating reels post on Instagram");
+async function createReelsPost(accessToken, instagramAccountId, postData) {
+  console.log("Creating reels post on Instagram Business Account");
 
-  // Mock response for demonstration purposes
-  return {
-    id: "mock-instagram-reels-id",
-    shortcode: "JKL012opq",
-    status: "published",
-  };
+  try {
+    const mediaFile = postData.mediaFiles[0];
+    
+    // Step 1: Create reels media container
+    const containerResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      {
+        media_type: 'REELS',
+        video_url: mediaFile.url || mediaFile.downloadURL,
+        caption: postData.textContent || '',
+        access_token: accessToken
+      }
+    );
+
+    const containerId = containerResponse.data.id;
+    console.log("Created reels media container:", containerId);
+
+    // Step 2: Wait for video processing (check status)
+    let processingComplete = false;
+    let attempts = 0;
+    const maxAttempts = 30; // 5 minutes max wait time
+
+    while (!processingComplete && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+      
+      try {
+        const statusResponse = await axios.get(
+          `https://graph.facebook.com/${GRAPH_API_VERSION}/${containerId}`,
+          {
+            params: {
+              fields: 'status_code',
+              access_token: accessToken
+            }
+          }
+        );
+
+        if (statusResponse.data.status_code === 'FINISHED') {
+          processingComplete = true;
+        } else if (statusResponse.data.status_code === 'ERROR') {
+          throw new Error('Reels processing failed');
+        }
+      } catch (statusError) {
+        console.warn("Error checking reels status:", statusError.message);
+      }
+      
+      attempts++;
+    }
+
+    if (!processingComplete) {
+      throw new Error('Reels processing timeout');
+    }
+
+    // Step 3: Publish the reels
+    const publishResponse = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      {
+        creation_id: containerId,
+        access_token: accessToken
+      }
+    );
+
+    console.log("Successfully published Instagram reels post:", publishResponse.data.id);
+    
+    return {
+      id: publishResponse.data.id,
+      permalink_url: `https://www.instagram.com/p/${publishResponse.data.id}/`
+    };
+  } catch (error) {
+    console.error("Error creating Instagram reels post:", error.response?.data || error.message);
+    throw new Error(`Instagram reels post failed: ${error.response?.data?.error?.message || error.message}`);
+  }
 }
 
-// Additional Instagram-specific functions can be added here
+/**
+ * Get Instagram account info
+ */
+async function getAccountInfo(accessToken, instagramAccountId) {
+  try {
+    const response = await axios.get(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}`,
+      {
+        params: {
+          fields: 'id,username,profile_picture_url,followers_count,media_count',
+          access_token: accessToken
+        }
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("Error getting Instagram account info:", error.response?.data || error.message);
+    throw new Error(`Failed to get account info: ${error.response?.data?.error?.message || error.message}`);
+  }
+}
+
+/**
+ * Get Instagram media insights
+ */
+async function getMediaInsights(accessToken, mediaId) {
+  try {
+    const response = await axios.get(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${mediaId}/insights`,
+      {
+        params: {
+          metric: 'engagement,impressions,reach,saved',
+          access_token: accessToken
+        }
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("Error getting Instagram media insights:", error.response?.data || error.message);
+    throw new Error(`Failed to get media insights: ${error.response?.data?.error?.message || error.message}`);
+  }
+}
+
+/**
+ * Validate media URL accessibility
+ */
+async function validateMediaUrl(url) {
+  try {
+    const response = await axios.head(url, { timeout: 10000 });
+    return response.status === 200;
+  } catch (error) {
+    console.error("Media URL validation failed:", error.message);
+    return false;
+  }
+}
 
 const instagramService = {
   post,
+  getAccountInfo,
+  getMediaInsights,
+  validateMediaUrl,
   // Add other Instagram-specific methods as needed
 };
 

@@ -4,8 +4,8 @@ import { connectToMongoose } from "@/app/lib/db/mongoose";
 import SocialAccount from "@/app/models/SocialAccount";
 import User from "@/app/models/userSchema";
 
-const clientId = process.env.META_APP_ID;
-const clientSecret = process.env.META_APP_SECRET;
+const clientId = process.env.INSTAGRAM_APP_ID;
+const clientSecret = process.env.INSTAGRAM_APP_SECRET;
 const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
 const graphApiVersion = process.env.FACEBOOK_GRAPH_API_VERSION || "v19.0";
 
@@ -193,7 +193,7 @@ export async function GET(request) {
       userId: user._id,
       platform: "instagram",
       platformAccountId: instagramAccount.id,
-      accessToken: longLivedToken,
+      accessToken: instagramAccount.pageAccessToken, // Use page access token for API calls
       pageAccessToken: instagramAccount.pageAccessToken,
       pageId: instagramAccount.pageId,
       pageName: instagramAccount.pageName,
@@ -201,6 +201,7 @@ export async function GET(request) {
       platformUsername: instagramAccount.username,
       status: "active",
       lastRefreshed: new Date(),
+      tokenExpiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days for page tokens
     };
 
     console.log("Instagram Callback: Upserting account:", {

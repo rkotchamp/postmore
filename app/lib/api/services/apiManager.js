@@ -8,11 +8,12 @@ import blueSkyService from "./BlueSky/blueSkyService";
 import youtubeService from "./youtube/youtubeService";
 import tiktokService from "./tiktok/tiktokService";
 import linkedinService from "./linkedinService";
+import instagramService from "./instagramService";
 import { addPostToQueue } from "@/app/lib/queues/postQueue";
 
 // Platform service registry
 const platformServices = {
-  // These are simulations except for bluesky which is a real implementation
+  // These are simulations except for integrated services
   twitter: {
     post: async (account, data) => ({
       success: true,
@@ -21,14 +22,7 @@ const platformServices = {
       message: "Posted to Twitter (simulation)",
     }),
   },
-  instagram: {
-    post: async (account, data) => ({
-      success: true,
-      platformId: "instagram",
-      postId: "sample-instagram-id",
-      message: "Posted to Instagram (simulation)",
-    }),
-  },
+  instagram: instagramService, // Real Instagram service via Facebook Graph API
   facebook: {
     post: async (account, data) => ({
       success: true,
@@ -204,6 +198,36 @@ const postToPlatform = async (platform, account, data) => {
       }
     }
 
+    // If it's Instagram, ensure the account data has the expected structure
+    if (platform === "instagram") {
+      mappedAccount = extractAccountData(account);
+
+      // Validate Instagram-specific account data
+      if (!mappedAccount.accessToken) {
+        throw new Error("Missing accessToken for Instagram account");
+      }
+
+      if (!mappedAccount.platformAccountId) {
+        throw new Error("Missing platformAccountId (Instagram Business Account ID) for Instagram account");
+      }
+
+      // Transform media array to mediaFiles for Instagram service
+      if (mappedData.media && Array.isArray(mappedData.media)) {
+        mappedData.mediaFiles = mappedData.media;
+        // Keep media for backwards compatibility but Instagram service uses mediaFiles
+      }
+
+      // Transform captions for Instagram
+      if (mappedData.captions) {
+        const caption = getCaptionForPlatform(
+          mappedData.captions,
+          platform,
+          account.id
+        );
+        mappedData.textContent = caption;
+      }
+    }
+
     // If it's TikTok, ensure the account data has the expected structure
     if (platform === "tiktok") {
       mappedAccount = extractAccountData(account);
@@ -255,6 +279,23 @@ const postToPlatform = async (platform, account, data) => {
         nativeScheduling: true,
         scheduledTime: result.scheduledTime,
         youtubeData, // Add platform-specific data
+      };
+    }
+
+    // If platform is Instagram, handle the result properly
+    if (platform === "instagram" && result.postId) {
+      // For Instagram, add specific Instagram data to the result
+      const instagramData = {
+        mediaId: result.postId,
+        status: result.status || "published",
+        permalinkUrl: result.url,
+      };
+
+      return {
+        success: true,
+        postId: result.postId,
+        url: result.url,
+        instagramData, // Add platform-specific data
       };
     }
 

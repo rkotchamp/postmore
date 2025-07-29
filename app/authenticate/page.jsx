@@ -197,36 +197,60 @@ export default function Authenticate() {
     const debug = params.get("debug");
     const response = params.get("response");
 
-    if (platform === "tiktok") {
-      if (success === "true") {
-        if (debug === "true" && response) {
+    // Handle platform-specific callback parameters
+    if (platform && (success || error)) {
+      if (platform === "instagram") {
+        if (success === "true") {
+          const username = params.get("username");
           setAuthStatus({
             type: "success",
-            platform: "tiktok",
-            message: `TikTok debug response: ${response}`,
+            platform: "instagram",
+            message: username 
+              ? `Connected to Instagram account @${username} successfully!`
+              : "Connected to Instagram successfully!",
           });
-        } else {
+          // Refetch accounts to show the new Instagram account
+          refetchAccounts();
+        } else if (error) {
+          console.error("Instagram authentication error:", error, debug);
           setAuthStatus({
-            type: "success",
-            platform: "tiktok",
-            message: "Connected to TikTok successfully!",
+            type: "error",
+            platform: "instagram",
+            message: error || "Failed to connect to Instagram",
           });
         }
-      } else if (error) {
-        console.error("TikTok authentication error:", error, message);
-        setAuthStatus({
-          type: "error",
-          platform: "tiktok",
-          message: message || `Failed to connect to TikTok: ${error}`,
-        });
-      } else if (code) {
-        setAuthStatus({
-          type: "success",
-          platform: "tiktok",
-          message: "Received TikTok authorization code!",
-        });
+      } else if (platform === "tiktok") {
+        if (success === "true") {
+          if (debug === "true" && response) {
+            setAuthStatus({
+              type: "success",
+              platform: "tiktok",
+              message: `TikTok debug response: ${response}`,
+            });
+          } else {
+            setAuthStatus({
+              type: "success",
+              platform: "tiktok",
+              message: "Connected to TikTok successfully!",
+            });
+          }
+        } else if (error) {
+          console.error("TikTok authentication error:", error, message);
+          setAuthStatus({
+            type: "error",
+            platform: "tiktok",
+            message: message || `Failed to connect to TikTok: ${error}`,
+          });
+        } else if (code) {
+          setAuthStatus({
+            type: "success",
+            platform: "tiktok",
+            message: "Received TikTok authorization code!",
+          });
+        }
       }
 
+      // Clean up URL parameters after processing
       const url = new URL(window.location.href);
       url.search = "";
       window.history.replaceState({}, document.title, url.toString());

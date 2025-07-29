@@ -26,7 +26,7 @@ const scopes = [
 export async function GET(request) {
   console.log("Initiating Instagram connection flow via Facebook Login");
 
-  const appId = process.env.META_APP_ID; // Uses the App ID configured for FB Login
+  const appId = process.env.INSTAGRAM_APP_ID; // Uses the Instagram App ID from Meta Developer Console
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
 
   if (!appId || !redirectUri) {
