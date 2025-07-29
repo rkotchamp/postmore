@@ -280,10 +280,17 @@ export async function GET(request) {
         graphApiVersion: graphApiVersion
       };
       
-      return redirectWithError(
-        "No Instagram Business or Creator accounts found",
-        { pagesChecked: pages.length },
-        debugInfo
+      // Create a simple debug string that will definitely show up
+      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|Time:${new Date().getHours()}:${new Date().getMinutes()}`;
+      
+      const params = new URLSearchParams({
+        platform: "instagram",
+        error: `No Instagram Business accounts found - DEBUG: ${debugString}`,
+        debug: JSON.stringify({ pagesChecked: pages.length })
+      });
+      
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/authenticate?${params}`
       );
     }
 
