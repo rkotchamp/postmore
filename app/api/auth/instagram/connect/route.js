@@ -19,12 +19,12 @@ const scopes = [
 export async function GET(request) {
   console.log("Initiating Instagram connection flow via Facebook Login");
 
-  const appId = process.env.META_APP_ID; // Uses the main Meta App ID for Facebook/Instagram OAuth
+  const appId = process.env.INSTAGRAM_APP_ID; // Uses the Instagram-specific App ID
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
 
   if (!appId || !redirectUri) {
     console.error(
-      "Instagram Connect Error: Missing META_APP_ID or INSTAGRAM_REDIRECT_URI in environment variables."
+      "Instagram Connect Error: Missing INSTAGRAM_APP_ID or INSTAGRAM_REDIRECT_URI in environment variables."
     );
     return NextResponse.json(
       {
