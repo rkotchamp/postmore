@@ -254,6 +254,81 @@ const postToPlatform = async (platform, account, data) => {
       }
     }
 
+    // If it's LinkedIn, ensure the account data has the expected structure
+    if (platform === "linkedin") {
+      mappedAccount = {
+        id: account.id,
+        platformAccountId: account.platformAccountId || account.originalData?.platformAccountId || account.platformId,
+        accessToken: account.accessToken || account.originalData?.accessToken,
+        refreshToken: account.refreshToken || account.originalData?.refreshToken,
+        tokenExpiresAt: account.tokenExpiresAt || account.originalData?.tokenExpiresAt,
+        // Add any other fields needed by the LinkedIn service
+      };
+
+      // Validate LinkedIn-specific account data
+      if (!mappedAccount.accessToken) {
+        throw new Error("Missing accessToken for LinkedIn account");
+      }
+
+      if (!mappedAccount.platformAccountId) {
+        throw new Error("Missing platformAccountId for LinkedIn account");
+      }
+
+      // Transform media array to mediaFiles for LinkedIn service
+      if (mappedData.media && Array.isArray(mappedData.media)) {
+        mappedData.mediaFiles = mappedData.media;
+        // Keep media for backwards compatibility but LinkedIn service uses mediaFiles
+      }
+
+      // Transform captions for LinkedIn
+      if (mappedData.captions) {
+        const caption = getCaptionForPlatform(
+          mappedData.captions,
+          platform,
+          account.id
+        );
+        mappedData.textContent = caption;
+      }
+    }
+
+    // If it's YouTube, ensure the account data has the expected structure
+    if (platform === "ytShorts") {
+      mappedAccount = {
+        id: account.id,
+        platformAccountId: account.platformAccountId || account.originalData?.platformAccountId || account.platformId,
+        accessToken: account.accessToken || account.originalData?.accessToken,
+        refreshToken: account.refreshToken || account.originalData?.refreshToken,
+        tokenExpiresAt: account.tokenExpiresAt || account.originalData?.tokenExpiresAt,
+        channelId: account.channelId || account.originalData?.channelId,
+        // Add any other fields needed by the YouTube service
+      };
+
+      // Validate YouTube-specific account data
+      if (!mappedAccount.accessToken) {
+        throw new Error("Missing accessToken for YouTube account");
+      }
+
+      if (!mappedAccount.refreshToken) {
+        throw new Error("Missing refreshToken for YouTube account");
+      }
+
+      // Transform media array for YouTube service
+      if (mappedData.media && Array.isArray(mappedData.media)) {
+        // YouTube expects the media in the same format
+        mappedData.media = mappedData.media;
+      }
+
+      // Transform captions for YouTube
+      if (mappedData.captions) {
+        const caption = getCaptionForPlatform(
+          mappedData.captions,
+          platform,
+          account.id
+        );
+        mappedData.text = caption;
+      }
+    }
+
     // Call the platform-specific post method with the mapped account data
 
     const result = await service.post(mappedAccount, mappedData);
@@ -315,6 +390,23 @@ const postToPlatform = async (platform, account, data) => {
         postId: result.postId,
         url: result.url,
         tiktokData, // Add platform-specific data
+      };
+    }
+
+    // If platform is LinkedIn and we have a successful result, handle it properly
+    if (platform === "linkedin" && result.postId) {
+      // For LinkedIn, add specific LinkedIn data to the result
+      const linkedinData = {
+        shareId: result.postId,
+        status: result.status || "published",
+        permalink: result.url,
+      };
+
+      return {
+        success: true,
+        postId: result.postId,
+        url: result.url,
+        linkedinData, // Add platform-specific data
       };
     }
 

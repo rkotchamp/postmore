@@ -51,11 +51,23 @@ async function post(account, postData) {
       throw new Error(validation.reason || "Invalid YouTube post data");
     }
 
-    // Get the caption for this platform/account
-    const caption =
-      getCaptionForPlatform(postData.captions, "ytShorts", account.id) ||
-      postData.text ||
-      null;
+    // Prepare post text (same logic as BlueSky)
+    let postText = "";
+    if (postData.contentType === "text") {
+      postText = postData.text || "";
+    } else if (postData.contentType === "media") {
+      if (postData.captions?.mode === "single") {
+        postText = postData.captions.single || "";
+      } else if (postData.captions?.mode === "multiple") {
+        postText =
+          postData.captions?.multiple?.[account.id] ||
+          postData.captions?.single ||
+          "";
+      }
+    }
+    
+    // Use postText as the caption for YouTube
+    const caption = postText;
 
     // Process media for upload
     // For YouTube Shorts, we need the first video file

@@ -22,21 +22,47 @@ async function post(accountData, postData) {
     // Get a fresh access token if needed
     const accessToken = await ensureFreshToken(accountData);
 
+    // Get the appropriate caption/text content based on mode (like BlueSky)
+    let postText = "";
+    if (postData.contentType === "text") {
+      postText = postData.text || "";
+    } else if (postData.contentType === "media") {
+      if (postData.captions?.mode === "single") {
+        postText = postData.captions.single || "";
+      } else if (postData.captions?.mode === "multiple") {
+        postText =
+          postData.captions?.multiple?.[accountData.id] ||
+          postData.captions?.single ||
+          "";
+      }
+    }
+    
+    // Also check legacy textContent field for backwards compatibility
+    if (!postText && postData.textContent) {
+      postText = postData.textContent;
+    }
+
     // Determine what type of post this is
     const postType = determinePostType(postData.mediaFiles);
 
     // Create the post based on type
     let result;
 
+    // Create post data with processed text
+    const processedPostData = {
+      ...postData,
+      textContent: postText,
+    };
+
     switch (postType) {
       case "text":
-        result = await createTextPost(accessToken, accountData, postData);
+        result = await createTextPost(accessToken, accountData, processedPostData);
         break;
       case "image":
-        result = await createImagePost(accessToken, accountData, postData);
+        result = await createImagePost(accessToken, accountData, processedPostData);
         break;
       case "article":
-        result = await createArticlePost(accessToken, accountData, postData);
+        result = await createArticlePost(accessToken, accountData, processedPostData);
         break;
       default:
         throw new Error(`Unsupported LinkedIn post type: ${postType}`);
@@ -94,14 +120,32 @@ function determinePostType(mediaFiles) {
  * @throws {Error} If required fields are missing
  */
 function validateLinkedInData(postData) {
+  // Check if we have any content (text, captions, or media)
+  const hasTextContent = postData.textContent || postData.text;
+  const hasCaptions = postData.captions && (postData.captions.single || (postData.captions.multiple && Object.keys(postData.captions.multiple).length > 0));
+  const hasMedia = postData.mediaFiles && postData.mediaFiles.length > 0;
+
   // LinkedIn requires either text content or media
-  if (!postData.textContent && (!postData.mediaFiles || postData.mediaFiles.length === 0)) {
+  if (!hasTextContent && !hasCaptions && !hasMedia) {
     throw new Error("LinkedIn posts require either text content or media");
   }
 
   // LinkedIn text content limit (3,000 characters for posts)
+  // Check both textContent and caption content
   if (postData.textContent && postData.textContent.length > 3000) {
     throw new Error("LinkedIn posts cannot exceed 3,000 characters");
+  }
+
+  if (postData.captions?.single && postData.captions.single.length > 3000) {
+    throw new Error("LinkedIn posts cannot exceed 3,000 characters");
+  }
+
+  if (postData.captions?.multiple) {
+    for (const caption of Object.values(postData.captions.multiple)) {
+      if (caption && caption.length > 3000) {
+        throw new Error("LinkedIn posts cannot exceed 3,000 characters");
+      }
+    }
   }
 
   // Validate media files if present
