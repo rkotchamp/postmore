@@ -234,6 +234,8 @@ export default function Authenticate() {
             platform: "instagram",
             message: debugMessage,
           });
+          // Refetch accounts even on error to ensure TanStack Query state is updated
+          refetchAccounts();
         }
       } else if (platform === "tiktok") {
         if (success === "true") {
