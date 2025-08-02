@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 const CURRENT_SCHEMA_VERSION = "1.1.0";
 
@@ -17,8 +18,10 @@ const initialState = {
   // Consider adding a field for draftId or postId if managing multiple drafts/posts in the store
 };
 
-export const usePostStore = create((set, get) => ({
-  ...initialState,
+export const usePostStore = create(
+  persist(
+    (set, get) => ({
+      ...initialState,
 
   // --- Internal helper to update timestamp ---
   _updateTimestamp: () => ({ lastUpdatedAt: new Date() }),
@@ -314,7 +317,23 @@ export const usePostStore = create((set, get) => ({
 
     return state.singleCaption || "";
   },
-}));
+    }),
+    {
+      name: "post-store-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        selectedAccounts: state.selectedAccounts,
+        scheduleType: state.scheduleType,
+        scheduledAt: state.scheduledAt,
+        captionMode: state.captionMode,
+        singleCaption: state.singleCaption,
+        multiCaptions: state.multiCaptions,
+        // Don't persist thumbnails as they are File objects
+        // Don't persist lastUpdatedAt as it should be fresh
+      }),
+    }
+  )
+);
 
 // Selectors (exported for convenience)
 // For optimal performance in components, use usePostStore with inline, memoized selectors,
