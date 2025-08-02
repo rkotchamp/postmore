@@ -261,6 +261,10 @@ const handleAuthentication = async (agent, accountData) => {
  * @returns {Promise<object>} Result object
  */
 const post = async (accountData, postData) => {
+  console.log("🔍 BLUESKY: Service called");
+  console.log("🔍 BLUESKY: accountData:", JSON.stringify(accountData, null, 2));
+  console.log("🔍 BLUESKY: postData:", JSON.stringify(postData, null, 2));
+  
   // Initialize Bluesky agent with correct configuration
   const agent = new BskyAgent({
     service: BSKY_SERVICE_URL,
@@ -289,18 +293,27 @@ const post = async (accountData, postData) => {
 
     // 2. Prepare post text
     let postText = "";
+    console.log("🔍 BLUESKY: Processing captions, contentType:", postData.contentType);
+    
     if (postData.contentType === "text") {
       postText = postData.text || "";
+      console.log("🔍 BLUESKY: Text post, postText:", postText);
     } else if (postData.contentType === "media") {
+      console.log("🔍 BLUESKY: Media post, captions:", JSON.stringify(postData.captions, null, 2));
       if (postData.captions?.mode === "single") {
         postText = postData.captions.single || "";
+        console.log("🔍 BLUESKY: Single caption mode, postText:", postText);
       } else if (postData.captions?.mode === "multiple") {
         postText =
           postData.captions?.multiple?.[accountData.id] ||
           postData.captions?.single ||
           "";
+        console.log("🔍 BLUESKY: Multiple caption mode, accountData.id:", accountData.id);
+        console.log("🔍 BLUESKY: Multiple caption mode, postText:", postText);
       }
     }
+    
+    console.log("🔍 BLUESKY: Final postText:", postText);
 
     // 3. Process media if present
     const images = [];

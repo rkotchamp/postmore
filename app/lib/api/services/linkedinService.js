@@ -13,7 +13,9 @@ import axios from "axios";
  * @returns {Promise<object>} - Result of the LinkedIn API call
  */
 async function post(accountData, postData) {
-  console.log("LinkedIn post service called", { accountData, postData });
+  console.log("🔍 LINKEDIN: Service called");
+  console.log("🔍 LINKEDIN: accountData:", JSON.stringify(accountData, null, 2));
+  console.log("🔍 LINKEDIN: postData:", JSON.stringify(postData, null, 2));
 
   try {
     // Validate required fields for LinkedIn
@@ -24,23 +26,33 @@ async function post(accountData, postData) {
 
     // Get the appropriate caption/text content based on mode (like BlueSky)
     let postText = "";
+    console.log("🔍 LINKEDIN: Processing captions, contentType:", postData.contentType);
+    
     if (postData.contentType === "text") {
       postText = postData.text || "";
+      console.log("🔍 LINKEDIN: Text post, postText:", postText);
     } else if (postData.contentType === "media") {
+      console.log("🔍 LINKEDIN: Media post, captions:", JSON.stringify(postData.captions, null, 2));
       if (postData.captions?.mode === "single") {
         postText = postData.captions.single || "";
+        console.log("🔍 LINKEDIN: Single caption mode, postText:", postText);
       } else if (postData.captions?.mode === "multiple") {
         postText =
           postData.captions?.multiple?.[accountData.id] ||
           postData.captions?.single ||
           "";
+        console.log("🔍 LINKEDIN: Multiple caption mode, accountData.id:", accountData.id);
+        console.log("🔍 LINKEDIN: Multiple caption mode, postText:", postText);
       }
     }
     
     // Also check legacy textContent field for backwards compatibility
     if (!postText && postData.textContent) {
       postText = postData.textContent;
+      console.log("🔍 LINKEDIN: Using legacy textContent:", postText);
     }
+    
+    console.log("🔍 LINKEDIN: Final postText:", postText);
 
     // Determine what type of post this is
     const postType = determinePostType(postData.mediaFiles);

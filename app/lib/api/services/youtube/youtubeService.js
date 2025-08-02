@@ -41,6 +41,10 @@ const RETRY_CONFIG = {
  * @returns {Promise<object>} - Result of the YouTube API call
  */
 async function post(account, postData) {
+  console.log("🔍 YOUTUBE: Service called");
+  console.log("🔍 YOUTUBE: account:", JSON.stringify(account, null, 2));
+  console.log("🔍 YOUTUBE: postData:", JSON.stringify(postData, null, 2));
+  
   try {
     // Ensure we have a fresh token
     const accountData = await ensureFreshToken(account);
@@ -53,21 +57,29 @@ async function post(account, postData) {
 
     // Prepare post text (same logic as BlueSky)
     let postText = "";
+    console.log("🔍 YOUTUBE: Processing captions, contentType:", postData.contentType);
+    
     if (postData.contentType === "text") {
       postText = postData.text || "";
+      console.log("🔍 YOUTUBE: Text post, postText:", postText);
     } else if (postData.contentType === "media") {
+      console.log("🔍 YOUTUBE: Media post, captions:", JSON.stringify(postData.captions, null, 2));
       if (postData.captions?.mode === "single") {
         postText = postData.captions.single || "";
+        console.log("🔍 YOUTUBE: Single caption mode, postText:", postText);
       } else if (postData.captions?.mode === "multiple") {
         postText =
           postData.captions?.multiple?.[account.id] ||
           postData.captions?.single ||
           "";
+        console.log("🔍 YOUTUBE: Multiple caption mode, account.id:", account.id);
+        console.log("🔍 YOUTUBE: Multiple caption mode, postText:", postText);
       }
     }
     
     // Use postText as the caption for YouTube
     const caption = postText;
+    console.log("🔍 YOUTUBE: Final caption:", caption);
 
     // Process media for upload
     // For YouTube Shorts, we need the first video file

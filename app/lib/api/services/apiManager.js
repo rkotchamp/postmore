@@ -46,6 +46,10 @@ const platformServices = {
  * @returns {Promise<Object>} Result from the platform
  */
 const postToPlatform = async (platform, account, data) => {
+  console.log(`🔍 APIMANAGER: Starting ${platform} post`);
+  console.log(`🔍 APIMANAGER: Account for ${platform}:`, JSON.stringify(account, null, 2));
+  console.log(`🔍 APIMANAGER: Data for ${platform}:`, JSON.stringify(data, null, 2));
+  
   try {
     // Map the incoming data
     const mappedData = { ...data };
@@ -330,8 +334,13 @@ const postToPlatform = async (platform, account, data) => {
     }
 
     // Call the platform-specific post method with the mapped account data
+    console.log(`🔍 APIMANAGER: Calling ${platform} service with:`);
+    console.log(`🔍 APIMANAGER: mappedAccount:`, JSON.stringify(mappedAccount, null, 2));
+    console.log(`🔍 APIMANAGER: mappedData:`, JSON.stringify(mappedData, null, 2));
 
     const result = await service.post(mappedAccount, mappedData);
+    
+    console.log(`🔍 APIMANAGER: ${platform} service result:`, JSON.stringify(result, null, 2));
 
     // If platform is YouTube and we're using native scheduling, handle it properly
     if (
