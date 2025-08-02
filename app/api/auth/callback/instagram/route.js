@@ -187,7 +187,20 @@ export async function GET(request) {
     const longLivedToken = await getLongLivedToken(data.access_token);
     console.log("Instagram Callback: Successfully obtained long-lived token");
 
-    // 4. Get User's Facebook Pages using me/accounts endpoint
+    // 4. First, let's check what permissions our token actually has
+    console.log("🔐 Instagram Callback: Checking token permissions...");
+    const permissionsUrl = `https://graph.facebook.com/${graphApiVersion}/me/permissions?access_token=${longLivedToken}`;
+    const permissionsResponse = await fetch(permissionsUrl);
+    const permissionsData = await permissionsResponse.json();
+    
+    console.log("📋 Token permissions:", {
+      status: permissionsResponse.status,
+      ok: permissionsResponse.ok,
+      permissions: permissionsData.data?.map(p => ({ permission: p.permission, status: p.status })),
+      error: permissionsData.error
+    });
+
+    // 5. Get User's Facebook Pages using me/accounts endpoint
     console.log("📄 Instagram Callback: Fetching Facebook Pages...");
     
     const accountsUrl = `https://graph.facebook.com/${graphApiVersion}/me/accounts?access_token=${longLivedToken}`;
@@ -201,6 +214,7 @@ export async function GET(request) {
       ok: pagesResponse.ok,
       hasData: !!pagesData.data,
       dataLength: pagesData.data?.length || 0,
+      fullResponse: pagesData,
       error: pagesData.error
     });
 
@@ -266,6 +280,7 @@ export async function GET(request) {
 
     if (!instagramAccount) {
       // Add comprehensive debug info for production debugging
+      const grantedPermissions = permissionsData.data?.filter(p => p.status === 'granted').map(p => p.permission) || [];
       const debugInfo = {
         pagesChecked: pages.length,
         pagesFound: pages.map(p => ({
@@ -277,17 +292,24 @@ export async function GET(request) {
         })),
         tokenValid: !!longLivedToken,
         tokenLength: longLivedToken?.length || 0,
+        grantedPermissions: grantedPermissions,
         timestamp: new Date().toISOString(),
         graphApiVersion: graphApiVersion
       };
       
       // Create a simple debug string that will definitely show up
-      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|Endpoint:accounts|Time:${new Date().getHours()}:${new Date().getMinutes()}`;
+      const hasPagesPerm = grantedPermissions.includes('pages_show_list');
+      const debugString = `Pages:${pages.length}|Token:${!!longLivedToken}|API:${graphApiVersion}|PagesShowList:${hasPagesPerm}|Perms:${grantedPermissions.join(',')}|AppType:${permissionsData.data?.[0]?.permission || 'none'}|Time:${new Date().getHours()}:${new Date().getMinutes()}`;
       
       const params = new URLSearchParams({
         platform: "instagram",
         error: `No Instagram Business accounts found - DEBUG: ${debugString}`,
-        debug: JSON.stringify({ pagesChecked: pages.length })
+        debug: JSON.stringify({ 
+          pagesChecked: pages.length, 
+          permissions: grantedPermissions,
+          rawPagesResponse: pagesData,
+          tokenInfo: { hasToken: !!longLivedToken, tokenStart: longLivedToken?.substring(0, 10) }
+        })
       });
       
       return NextResponse.redirect(
