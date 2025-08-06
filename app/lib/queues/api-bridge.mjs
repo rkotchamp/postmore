@@ -399,56 +399,480 @@ async function postToBlueSky(account, postData) {
 }
 
 /**
- * Post to LinkedIn - Direct implementation for worker
- * @param {object} account - LinkedIn account data with tokens
- * @param {object} postData - The post content and media
- * @returns {Promise<object>} Result of the LinkedIn post operation
+ * Register a video upload with LinkedIn - duplicated from main service
  */
-async function postToLinkedIn(account, postData) {
-  console.log("Worker: Posting to LinkedIn");
+async function registerVideoUpload(accessToken, personId, fileSizeBytes) {
+  const registerData = {
+    initializeUploadRequest: {
+      owner: `urn:li:person:${personId}`,
+      fileSizeBytes: fileSizeBytes,
+      uploadCaptions: false,
+      uploadThumbnail: false
+    }
+  };
 
   try {
-    // Extract account information
-    const { accessToken, platformAccountId } = account;
-    
-    if (!accessToken) {
-      throw new Error("No access token available for LinkedIn account");
+    const response = await fetch("https://api.linkedin.com/rest/videos?action=initializeUpload", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "LinkedIn-Version": "202501",
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+      body: JSON.stringify(registerData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`LinkedIn video registration error: ${response.status} - ${errorData.message || response.statusText}`);
     }
 
-    // Prepare LinkedIn post data
-    const linkedInPostData = {
-      author: `urn:li:person:${platformAccountId}`,
-      lifecycleState: "PUBLISHED",
-      specificContent: {
-        "com.linkedin.ugc.ShareContent": {
-          shareCommentary: {
-            text: postData.text || "",
-          },
-          media: [],
+    return await response.json();
+  } catch (error) {
+    console.error("Worker: LinkedIn video registration failed:", error);
+    throw new Error(`LinkedIn video registration failed: ${error.message}`);
+  }
+}
+
+/**
+ * Upload video in chunks to LinkedIn - simplified version for worker
+ */
+async function uploadVideoChunks(uploadInstructions, videoBuffer, fileSizeBytes) {
+  try {
+    console.log("Worker: Starting chunked upload, instructions:", uploadInstructions.length);
+
+    // Upload in parts (4MB chunks) - following same pattern as main service
+    const chunkSize = 4 * 1024 * 1024; // 4MB
+    const uploadedParts = [];
+    
+    for (let i = 0; i < uploadInstructions.length; i++) {
+      const instruction = uploadInstructions[i];
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, fileSizeBytes);
+      const chunk = videoBuffer.slice(start, end);
+      
+      console.log(`Worker: Uploading part ${i + 1}/${uploadInstructions.length}, bytes ${start}-${end}`);
+      console.log(`Worker: Instruction for part ${i + 1}:`, JSON.stringify(instruction, null, 2));
+      
+      const uploadResponse = await fetch(instruction.uploadUrl, {
+        method: "PUT",
+        body: chunk,
+        headers: {
+          "Content-Type": "application/octet-stream",
         },
-      },
-      visibility: {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
-      },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Video part upload failed: ${uploadResponse.status}`);
+      }
+
+      // LinkedIn requires us to use the ETag as the part ID for signed uploads
+      const partId = uploadResponse.headers.get("etag");
+      console.log(`Worker: Part ${i + 1} uploaded, partId:`, partId, "etag:", uploadResponse.headers.get("etag"));
+      
+      uploadedParts.push({
+        uploadPartId: partId,
+        etag: uploadResponse.headers.get("etag")
+      });
+    }
+
+    console.log("Worker: Final uploadedParts:", JSON.stringify(uploadedParts, null, 2));
+
+    // Return part IDs in the format expected by finalization
+    return uploadedParts.map(part => part.uploadPartId);
+  } catch (error) {
+    console.error("Worker: LinkedIn video upload failed:", error);
+    throw new Error(`LinkedIn video upload failed: ${error.message}`);
+  }
+}
+
+/**
+ * Finalize video upload with LinkedIn
+ */
+async function finalizeVideoUpload(accessToken, videoUrn, uploadToken, partIds) {
+  try {
+    const finalizeData = {
+      finalizeUploadRequest: {
+        video: videoUrn,
+        uploadToken: uploadToken,
+        uploadedPartIds: partIds
+      }
     };
 
-    // Post to LinkedIn API
-    const response = await fetch("https://api.linkedin.com/v2/ugcPosts", {
+    const response = await fetch("https://api.linkedin.com/rest/videos?action=finalizeUpload", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "LinkedIn-Version": "202501",
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+      body: JSON.stringify(finalizeData),
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => 'No response body');
+      console.error(`Worker: LinkedIn finalization failed - Status: ${response.status}, Response: ${responseText}`);
+      throw new Error(`LinkedIn video finalization error: ${response.status} - ${response.statusText} - ${responseText}`);
+    }
+
+    const responseText = await response.text();
+    console.log("Worker: LinkedIn finalization response text:", responseText);
+    
+    if (!responseText.trim()) {
+      console.log("Worker: LinkedIn finalization returned empty response (this is actually success for finalization)");
+      return { success: true };
+    }
+    
+    try {
+      return JSON.parse(responseText);
+    } catch (parseError) {
+      console.log("Worker: LinkedIn finalization response is not JSON, treating as success");
+      return { success: true };
+    }
+  } catch (error) {
+    console.error("Worker: LinkedIn video finalization failed:", error);
+    throw new Error(`LinkedIn video finalization failed: ${error.message}`);
+  }
+}
+
+/**
+ * Register an image upload with LinkedIn - duplicated from main service
+ */
+async function registerImageUpload(accessToken, personId) {
+  const registerData = {
+    recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+    owner: `urn:li:person:${personId}`,
+    serviceRelationships: [
+      {
+        relationshipType: "OWNER",
+        identifier: "urn:li:userGeneratedContent"
+      }
+    ]
+  };
+
+  try {
+    const response = await fetch("https://api.linkedin.com/v2/assets?action=registerUpload", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         "X-Restli-Protocol-Version": "2.0.0",
       },
-      body: JSON.stringify(linkedInPostData),
+      body: JSON.stringify(registerData),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`LinkedIn API error: ${response.status} - ${errorData.message || response.statusText}`);
+      throw new Error(`LinkedIn image registration error: ${response.status} - ${errorData.message || response.statusText}`);
     }
 
-    const responseData = await response.json();
+    return await response.json();
+  } catch (error) {
+    console.error("Worker: LinkedIn image registration failed:", error);
+    throw new Error(`LinkedIn image registration failed: ${error.message}`);
+  }
+}
+
+/**
+ * Upload image to LinkedIn - duplicated from main service
+ */
+async function uploadImage(uploadMechanism, imageFile) {
+  const uploadUrl = uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
+
+  try {
+    // Get image data from URL since we don't have buffer
+    let imageBuffer;
+
+    if (imageFile.buffer) {
+      // If we have a buffer, use it directly
+      imageBuffer = imageFile.buffer;
+    } else if (imageFile.url) {
+      console.log("Worker: Downloading image from URL:", imageFile.url);
+      const response = await fetch(imageFile.url);
+      if (!response.ok) {
+        throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      imageBuffer = Buffer.from(arrayBuffer);
+    } else {
+      throw new Error("No image data or URL available");
+    }
+
+    await fetch(uploadUrl, {
+      method: "PUT",
+      body: imageBuffer,
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+    });
+
+    console.log("Worker: Image uploaded successfully");
+  } catch (error) {
+    console.error("Worker: LinkedIn image upload failed:", error);
+    throw new Error(`LinkedIn image upload failed: ${error.message}`);
+  }
+}
+
+/**
+ * Post to LinkedIn - Duplicated working logic from main service
+ */
+async function postToLinkedIn(account, postData) {
+  console.log("Worker: Posting to LinkedIn using duplicated working logic");
+
+  try {
+    // Extract account information - use originalData if available
+    const accountData = account.originalData || account;
+    const { accessToken, platformAccountId } = accountData;
+    
+    if (!accessToken) {
+      throw new Error("No access token available for LinkedIn account");
+    }
+
+    // Get post text from various sources (same logic as main service)
+    let postText = "";
+    if (postData.text) {
+      postText = postData.text;
+    } else if (postData.textContent) {
+      postText = postData.textContent;
+    } else if (postData.captions?.mode === "single") {
+      postText = postData.captions.single || "";
+    } else if (postData.captions?.mode === "multiple") {
+      postText = postData.captions?.multiple?.[accountData.id] || postData.captions?.single || "";
+    }
+
+    console.log("Worker: LinkedIn post text:", postText);
+
+    // Check media type
+    const hasMedia = postData.media && postData.media.length > 0;
+    let mediaType = "text";
+    let shareMediaCategory = "NONE";
+    let media = [];
+    
+    if (hasMedia) {
+      const mediaItem = postData.media[0];
+      if (mediaItem.type?.startsWith('video/')) {
+        mediaType = "video";
+      } else if (mediaItem.type?.startsWith('image/')) {
+        mediaType = "image";
+        shareMediaCategory = "IMAGE";
+      }
+    }
+
+    console.log(`Worker: LinkedIn post type: ${mediaType}`);
+
+    if (mediaType === "video") {
+      // Handle video upload workflow
+      const videoFile = postData.media[0];
+      console.log("Worker: Processing LinkedIn video upload");
+      shareMediaCategory = "VIDEO";
+      
+      try {
+        // Step 1: Get video data (following same pattern as main service)
+        console.log("Worker: Step 1 - Getting video data");
+        let videoBuffer;
+        let fileSizeBytes;
+        
+        if (videoFile.buffer) {
+          console.log("Worker: Using existing buffer");
+          videoBuffer = videoFile.buffer;
+          fileSizeBytes = videoBuffer.length;
+        } else if (videoFile.data) {
+          console.log("Worker: Using existing data");
+          videoBuffer = Buffer.isBuffer(videoFile.data) ? videoFile.data : Buffer.from(videoFile.data);
+          fileSizeBytes = videoBuffer.length;
+        } else if (videoFile.url) {
+          console.log("Worker: Downloading from Firebase URL:", videoFile.url);
+          // Use fetch instead of axios for worker environment
+          const response = await fetch(videoFile.url, {
+            method: 'GET'
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
+          }
+          const arrayBuffer = await response.arrayBuffer();
+          videoBuffer = Buffer.from(arrayBuffer);
+          fileSizeBytes = videoBuffer.length;
+        } else {
+          throw new Error("No video data or URL available");
+        }
+        
+        console.log("Worker: Video data ready, size:", fileSizeBytes);
+
+        // Step 2: Register video upload with LinkedIn
+        console.log("Worker: Step 2 - Registering video upload with LinkedIn");
+        const registerResponse = await registerVideoUpload(accessToken, platformAccountId, fileSizeBytes);
+        console.log("Worker: Video registration response:", registerResponse);
+        
+        // Extract upload data
+        const uploadData = registerResponse.value;
+        const videoUrn = uploadData.video;
+        const uploadToken = uploadData.uploadToken;
+        const uploadInstructions = uploadData.uploadInstructions;
+        
+        // Step 3: Upload video in chunks (following same pattern as main service)
+        console.log("Worker: Step 3 - Uploading video chunks");
+        const partIds = await uploadVideoChunks(uploadInstructions, videoBuffer, fileSizeBytes);
+        console.log("Worker: Video chunks uploaded, part IDs:", partIds);
+        
+        // Step 3: Finalize video upload
+        console.log("Worker: Step 3 - Finalizing video upload");
+        const finalizeResponse = await finalizeVideoUpload(accessToken, videoUrn, uploadToken, partIds);
+        console.log("Worker: Video upload finalized");
+        
+        // Add video to media array
+        media = [{
+          status: "READY",
+          description: {
+            text: "Video Post"
+          },
+          media: videoUrn,
+          title: {
+            text: "Video Post"
+          }
+        }];
+        
+        console.log("Worker: LinkedIn video upload completed successfully");
+      } catch (videoError) {
+        console.error("Worker: LinkedIn video upload failed:", videoError);
+        throw new Error(`LinkedIn video upload failed: ${videoError.message}`);
+      }
+    }
+
+    if (mediaType === "image") {
+      // Handle image upload
+      const imageFile = postData.media[0];
+      console.log("Worker: Processing LinkedIn image upload");
+      console.log("Worker: Image file data:", {
+        url: imageFile.url,
+        type: imageFile.type,
+        hasBuffer: !!imageFile.buffer
+      });
+      
+      try {
+        // Register image upload
+        console.log("Worker: Step 1 - Registering image upload");
+        const registerResponse = await registerImageUpload(accessToken, platformAccountId);
+        console.log("Worker: Image registration successful");
+        
+        // Upload the image
+        console.log("Worker: Step 2 - Uploading image");
+        await uploadImage(registerResponse.value.uploadMechanism, imageFile);
+        console.log("Worker: Image upload successful");
+        
+        // Add image to media array
+        media = [{
+          status: "READY",
+          description: {
+            text: "Image Post"
+          },
+          media: registerResponse.value.asset,
+          title: {
+            text: "Image Post"
+          }
+        }];
+        
+        console.log("Worker: LinkedIn image upload completed successfully");
+      } catch (imageError) {
+        console.error("Worker: LinkedIn image upload failed:", imageError);
+        throw new Error(`LinkedIn image upload failed: ${imageError.message}`);
+      }
+    }
+
+    // Choose API endpoint based on media type
+    let apiEndpoint, postBody, headers;
+
+    if (mediaType === "video") {
+      // For video posts, use the newer Posts API (like immediate posting)
+      apiEndpoint = "https://api.linkedin.com/rest/posts";
+      
+      postBody = {
+        author: `urn:li:person:${platformAccountId}`,
+        commentary: postText,
+        visibility: "PUBLIC",
+        distribution: {
+          feedDistribution: "MAIN_FEED",
+          targetEntities: [],
+          thirdPartyDistributionChannels: []
+        },
+        content: {
+          media: {
+            title: "Video Post",
+            id: media[0].media // This is the video URN
+          }
+        },
+        lifecycleState: "PUBLISHED",
+        isReshareDisabledByAuthor: false
+      };
+
+      headers = {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "LinkedIn-Version": "202501",
+        "X-Restli-Protocol-Version": "2.0.0",
+      };
+    } else {
+      // For text and image posts, use UGC API
+      apiEndpoint = "https://api.linkedin.com/v2/ugcPosts";
+      
+      postBody = {
+        author: `urn:li:person:${platformAccountId}`,
+        lifecycleState: "PUBLISHED",
+        specificContent: {
+          "com.linkedin.ugc.ShareContent": {
+            shareCommentary: {
+              text: postText,
+            },
+            shareMediaCategory: shareMediaCategory,
+            media: media,
+          },
+        },
+        visibility: {
+          "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+        },
+      };
+
+      headers = {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+      };
+    }
+
+    console.log(`Worker: LinkedIn posting to ${apiEndpoint}`);
+    console.log("Worker: LinkedIn post body:", JSON.stringify(postBody, null, 2));
+
+    // Post to LinkedIn API
+    const response = await fetch(apiEndpoint, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(postBody),
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => 'No response body');
+      console.error(`Worker: LinkedIn post failed - Status: ${response.status}, Response: ${responseText}`);
+      throw new Error(`LinkedIn API error: ${response.status} - ${response.statusText} - ${responseText}`);
+    }
+
+    const responseText = await response.text();
+    console.log("Worker: LinkedIn post response text:", responseText);
+    
+    let responseData = {};
+    const timestamp = Date.now();
+    
+    if (responseText.trim()) {
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.log("Worker: LinkedIn post response is not JSON, treating as success");
+        responseData = { id: `success-${timestamp}` };
+      }
+    } else {
+      console.log("Worker: LinkedIn post returned empty response, treating as success");
+      responseData = { id: `success-${timestamp}` };
+    }
     
     console.log("Worker: LinkedIn post successful");
     
@@ -456,7 +880,9 @@ async function postToLinkedIn(account, postData) {
       success: true,
       platform: "linkedin",
       postId: responseData.id,
-      postUrl: `https://www.linkedin.com/feed/update/urn:li:share:${responseData.id}`,
+      postUrl: responseData.id && !responseData.id.startsWith('success-')
+        ? `https://www.linkedin.com/posts/${platformAccountId}_${responseData.id}`
+        : null,
     };
   } catch (error) {
     console.error("Worker: LinkedIn posting error:", error);

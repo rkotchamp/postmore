@@ -6,6 +6,7 @@
 import { Queue } from "bullmq";
 import path from "path";
 import { fileURLToPath } from "url";
+import mongoose from "mongoose";
 import { connectToDatabase, postToPlatform } from "./api-bridge.mjs";
 
 // Get directory path
@@ -124,7 +125,7 @@ export async function addPostToQueue(postData, scheduledAt) {
  * @returns {Promise<object>} - The result of posting
  */
 export async function processPostJob(jobData) {
-  const { platform, accountData, content } = jobData;
+  const { platform, accountData, content, userId } = jobData;
 
   console.log(
     `Processing post job for platform: ${platform}, account: ${
@@ -141,9 +142,124 @@ export async function processPostJob(jobData) {
 
     console.log(`Post processed successfully for ${platform}:`, result);
 
+    // Update the database if we have a postId and the post was successful
+    if (content.postId && result.success) {
+      try {
+        // Import Post schema - need to recreate it since we can't import from CommonJS
+        const PostSchema = new mongoose.Schema({
+          status: {
+            type: String,
+            enum: ["pending", "scheduled", "published", "failed", "draft"],
+            default: "pending",
+          },
+          results: [{
+            platform: String,
+            accountId: String,
+            success: Boolean,
+            postId: String,
+            url: String,
+            error: String,
+            timestamp: {
+              type: Date,
+              default: Date.now,
+            },
+          }],
+          updatedAt: {
+            type: Date,
+            default: Date.now,
+          }
+        }, { strict: false }); // Allow other fields
+
+        const Post = mongoose.models.Post || mongoose.model('Post', PostSchema);
+        
+        // Find the post document and update it
+        const updateData = {
+          status: 'published',
+          updatedAt: new Date(),
+          $push: {
+            results: {
+              platform: platform,
+              accountId: accountData.id || accountData._id,
+              success: result.success,
+              postId: result.postId,
+              url: result.postUrl || result.postUri,
+              timestamp: new Date(),
+              error: result.error || null
+            }
+          }
+        };
+        
+        const updatedPost = await Post.findByIdAndUpdate(
+          content.postId,
+          updateData,
+          { new: true }
+        );
+        
+        if (updatedPost) {
+          console.log(`Worker: Updated post ${content.postId} status to 'published'`);
+        } else {
+          console.log(`Worker: Could not find post with ID ${content.postId}`);
+        }
+      } catch (dbError) {
+        console.error(`Worker: Failed to update post status in database:`, dbError);
+        // Don't throw - the post was successful, just database update failed
+      }
+    }
+
     return result;
   } catch (error) {
     console.error(`Error processing post for ${platform}:`, error);
+    
+    // Update the database to mark as failed if we have a postId
+    if (content.postId) {
+      try {
+        const PostSchema = new mongoose.Schema({
+          status: {
+            type: String,
+            enum: ["pending", "scheduled", "published", "failed", "draft"],
+            default: "pending",
+          },
+          results: [{
+            platform: String,
+            accountId: String,
+            success: Boolean,
+            postId: String,
+            url: String,
+            error: String,
+            timestamp: {
+              type: Date,
+              default: Date.now,
+            },
+          }],
+          updatedAt: {
+            type: Date,
+            default: Date.now,
+          }
+        }, { strict: false });
+
+        const Post = mongoose.models.Post || mongoose.model('Post', PostSchema);
+        
+        const updateData = {
+          status: 'failed',
+          updatedAt: new Date(),
+          $push: {
+            results: {
+              platform: platform,
+              accountId: accountData.id || accountData._id,
+              success: false,
+              error: error.message,
+              timestamp: new Date()
+            }
+          }
+        };
+        
+        await Post.findByIdAndUpdate(content.postId, updateData);
+        console.log(`Worker: Updated post ${content.postId} status to 'failed'`);
+      } catch (dbError) {
+        console.error(`Worker: Failed to update failed post status:`, dbError);
+      }
+    }
+    
     throw error;
   }
 }

@@ -19,6 +19,8 @@ import { useMediaMutations } from "@/app/hooks/useMediaMutations";
 import { useMediaItems } from "@/app/hooks/useMediaQueries";
 import { useUIStateStore } from "@/app/lib/store/uiStateStore";
 import { usePostStore } from "@/app/lib/store/postStore";
+import { checkPlatformCompatibility, filterCompatibleAccounts } from "@/app/lib/utils/platformCompatibility";
+import CompatibilityWarningModal from "@/app/components/ui/CompatibilityWarningModal";
 import { toast } from "sonner";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import { useRouter } from "next/navigation";
@@ -48,6 +50,10 @@ export function DashboardContent() {
 
   // Component loading state
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  
+  // Compatibility modal state
+  const [showCompatibilityModal, setShowCompatibilityModal] = useState(false);
+  const [compatibilityResult, setCompatibilityResult] = useState(null);
 
   // --- UI Zustand State ---
   const currentStep = useUIStateStore((state) => state.currentStep);
@@ -136,9 +142,19 @@ export function DashboardContent() {
   const handleSubmit = () => {
     if (!canProceed()) {
       console.error("Cannot submit, current step is not complete.");
-      // Consider using a toast notification library instead of alert
-      alert("Please complete the current step before submitting.");
+      toast.error("Please complete the current step before submitting.");
       return;
+    }
+
+    // Check platform compatibility for media posts
+    if (postType === "media" && sessionMediaItems.length > 0) {
+      const compatibility = checkPlatformCompatibility(sessionMediaItems, selectedAccounts);
+      
+      if (!compatibility.isCompatible) {
+        setCompatibilityResult(compatibility);
+        setShowCompatibilityModal(true);
+        return;
+      }
     }
 
     // Ensure latest text is persisted if it's a text post
@@ -149,9 +165,7 @@ export function DashboardContent() {
         },
         onError: (error) => {
           console.error("Failed to persist text before submission:", error);
-          alert(
-            "Failed to save post content right before submission. Please try again."
-          );
+          toast.error("Failed to save post content. Please try again.");
         },
       });
     } else {
@@ -166,6 +180,48 @@ export function DashboardContent() {
     isUploading: isUploadingToFirebase,
     uploadResults,
   } = useFirebaseStorage();
+
+  // Handle compatibility modal actions
+  const handleCompatibilityCancel = () => {
+    setShowCompatibilityModal(false);
+    setCompatibilityResult(null);
+    
+    // Reset states to allow user to start over
+    resetPostConfig();
+    resetUIState();
+    
+    // Clear media if it was a media post
+    if (postType === "media" && hasSessionMedia) {
+      clearMedia.mutate();
+    }
+    
+    // Clear text if it was a text post
+    if (postType === "text") {
+      updateTextContent.mutate("");
+    }
+  };
+
+  const handleCompatibilityContinue = () => {
+    setShowCompatibilityModal(false);
+    
+    if (compatibilityResult) {
+      // Filter out incompatible accounts and proceed
+      const compatibleAccounts = filterCompatibleAccounts(selectedAccounts, compatibilityResult.incompatibleItems);
+      
+      if (compatibleAccounts.length === 0) {
+        toast.error("No compatible platforms found for your content.");
+        setCompatibilityResult(null);
+        return;
+      }
+      
+      // Show warning about which platforms will be skipped
+      const skippedPlatforms = Array.from(compatibilityResult.affectedPlatforms);
+      toast.warning(`Skipping ${skippedPlatforms.join(', ')} due to incompatible content.`);
+    }
+    
+    setCompatibilityResult(null);
+    handlePostSubmission();
+  };
 
   const handlePostSubmission = () => {
     // Show loading state right away
@@ -664,6 +720,15 @@ export function DashboardContent() {
         {/* Right side: Preview Panel - Conditionally render based on derived state */}
         {renderPreview()}
       </div>
+      
+      {/* Compatibility Warning Modal */}
+      <CompatibilityWarningModal
+        isOpen={showCompatibilityModal}
+        onClose={handleCompatibilityCancel}
+        onContinue={handleCompatibilityContinue}
+        onCancel={handleCompatibilityCancel}
+        compatibilityResult={compatibilityResult}
+      />
     </div>
   );
 }

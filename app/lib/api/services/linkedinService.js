@@ -73,6 +73,9 @@ async function post(accountData, postData) {
       case "image":
         result = await createImagePost(accessToken, accountData, processedPostData);
         break;
+      case "video":
+        result = await createVideoPost(accessToken, accountData, processedPostData);
+        break;
       case "article":
         result = await createArticlePost(accessToken, accountData, processedPostData);
         break;
@@ -111,9 +114,9 @@ function determinePostType(mediaFiles) {
       return "image";
     }
     
-    // LinkedIn doesn't support direct video uploads via API for most users
+    // LinkedIn supports video uploads via Videos API
     if (file.type.startsWith("video/")) {
-      throw new Error("Video uploads are not supported for LinkedIn posts via API");
+      return "video";
     }
   }
 
@@ -163,9 +166,20 @@ function validateLinkedInData(postData) {
   // Validate media files if present
   if (postData.mediaFiles && postData.mediaFiles.length > 0) {
     for (const file of postData.mediaFiles) {
-      if (!file.type || !file.type.startsWith("image/")) {
-        throw new Error(`Unsupported file type for LinkedIn: ${file.type}. Only images are supported.`);
+      if (!file.type) {
+        throw new Error(`LinkedIn: File type is required for ${file.originalName || 'uploaded file'}`);
       }
+      
+      // LinkedIn supports images and videos
+      if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+        // Video size validation (LinkedIn limit: 500MB)
+        if (file.type.startsWith("video/") && file.size && file.size > 500 * 1024 * 1024) {
+          throw new Error(`LinkedIn: Video file too large. Maximum size is 500MB.`);
+        }
+        continue;
+      }
+      
+      throw new Error(`Unsupported file type for LinkedIn: ${file.type}. Only images and videos are supported.`);
     }
   }
 }
@@ -255,6 +269,7 @@ async function createTextPost(accessToken, accountData, postData) {
         shareCommentary: {
           text: postData.textContent,
         },
+        shareMediaCategory: "NONE",
         media: [],
       },
     },
@@ -308,6 +323,7 @@ async function createImagePost(accessToken, accountData, postData) {
         shareCommentary: {
           text: postData.textContent || "",
         },
+        shareMediaCategory: "IMAGE",
         media: [
           {
             status: "READY",
@@ -403,7 +419,21 @@ async function uploadImage(uploadMechanism, imageFile) {
   const uploadUrl = uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
   
   try {
-    await axios.put(uploadUrl, imageFile.buffer, {
+    // Get image data from URL since we don't have buffer
+    let imageBuffer;
+    
+    if (imageFile.buffer) {
+      console.log("🔍 LINKEDIN: Using existing buffer");
+      imageBuffer = imageFile.buffer;
+    } else if (imageFile.url) {
+      console.log("🔍 LINKEDIN: Downloading image from URL:", imageFile.url);
+      const response = await axios.get(imageFile.url, { responseType: 'arraybuffer' });
+      imageBuffer = Buffer.from(response.data);
+    } else {
+      throw new Error("No image data or URL available");
+    }
+    
+    await axios.put(uploadUrl, imageBuffer, {
       headers: {
         "Content-Type": "application/octet-stream",
       },
@@ -411,6 +441,213 @@ async function uploadImage(uploadMechanism, imageFile) {
   } catch (error) {
     console.error("LinkedIn image upload failed:", error);
     throw new Error(`LinkedIn image upload failed: ${error.message}`);
+  }
+}
+
+/**
+ * Create a video post on LinkedIn using Videos API
+ */
+async function createVideoPost(accessToken, accountData, postData) {
+  console.log("🔍 LINKEDIN: Creating video post");
+  
+  const videoFile = postData.mediaFiles[0];
+  console.log("🔍 LINKEDIN: Video file full structure:", JSON.stringify(videoFile, null, 2));
+  console.log("🔍 LINKEDIN: Video file keys:", Object.keys(videoFile));
+  console.log("🔍 LINKEDIN: Has buffer?", !!videoFile.buffer);
+  console.log("🔍 LINKEDIN: Has file?", !!videoFile.file);
+  console.log("🔍 LINKEDIN: Has blob?", !!videoFile.blob);
+  console.log("🔍 LINKEDIN: Has data?", !!videoFile.data);
+
+  try {
+    // Step 1: Get video data (check for existing buffer first, then download if needed)
+    let videoBuffer;
+    let fileSizeBytes;
+    
+    if (videoFile.buffer) {
+      console.log("🔍 LINKEDIN: Using existing buffer");
+      videoBuffer = videoFile.buffer;
+      fileSizeBytes = videoBuffer.length;
+    } else if (videoFile.data) {
+      console.log("🔍 LINKEDIN: Using existing data");
+      videoBuffer = Buffer.isBuffer(videoFile.data) ? videoFile.data : Buffer.from(videoFile.data);
+      fileSizeBytes = videoBuffer.length;
+    } else if (videoFile.url) {
+      console.log("🔍 LINKEDIN: Downloading from URL:", videoFile.url);
+      const videoResponse = await axios.get(videoFile.url, { 
+        responseType: 'arraybuffer',
+        timeout: 60000 // 60 second timeout for large videos
+      });
+      videoBuffer = Buffer.from(videoResponse.data);
+      fileSizeBytes = videoBuffer.length;
+    } else {
+      throw new Error("No video data or URL available");
+    }
+    
+    console.log("🔍 LINKEDIN: Video data ready, size:", fileSizeBytes);
+
+    // Step 2: Initialize video upload
+    console.log("🔍 LINKEDIN: Initializing video upload...");
+    let initResponse;
+    try {
+      initResponse = await axios.post(
+        'https://api.linkedin.com/rest/videos?action=initializeUpload',
+        {
+          initializeUploadRequest: {
+            owner: `urn:li:person:${accountData.platformAccountId}`,
+            fileSizeBytes: fileSizeBytes,
+            uploadCaptions: false,
+            uploadThumbnail: false
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'LinkedIn-Version': '202501',
+            'X-Restli-Protocol-Version': '2.0.0'
+          }
+        }
+      );
+    } catch (error) {
+      console.error("🔍 LINKEDIN: Video initialization failed:");
+      console.error("🔍 LINKEDIN: Init error status:", error.response?.status);
+      console.error("🔍 LINKEDIN: Init error data:", JSON.stringify(error.response?.data, null, 2));
+      throw new Error(`LinkedIn video initialization failed: ${error.response?.data?.message || error.message}`);
+    }
+
+    const { value: uploadData } = initResponse.data;
+    const videoUrn = uploadData.video;
+    const uploadToken = uploadData.uploadToken;
+    const uploadInstructions = uploadData.uploadInstructions;
+    
+    console.log("🔍 LINKEDIN: Video upload initialized, URN:", videoUrn);
+    console.log("🔍 LINKEDIN: Upload instructions:", JSON.stringify(uploadInstructions, null, 2));
+
+    // Step 3: Upload video in parts (4MB chunks)
+    const chunkSize = 4 * 1024 * 1024; // 4MB
+    const uploadedParts = [];
+    
+    for (let i = 0; i < uploadInstructions.length; i++) {
+      const instruction = uploadInstructions[i];
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, fileSizeBytes);
+      const chunk = videoBuffer.slice(start, end);
+      
+      console.log(`🔍 LINKEDIN: Uploading part ${i + 1}/${uploadInstructions.length}, bytes ${start}-${end}`);
+      console.log(`🔍 LINKEDIN: Instruction for part ${i + 1}:`, JSON.stringify(instruction, null, 2));
+      
+      const uploadResponse = await axios.put(instruction.uploadUrl, chunk, {
+        headers: {
+          'Content-Type': 'application/octet-stream'
+        }
+      });
+      
+      // LinkedIn requires us to use the ETag as the part ID for signed uploads
+      const partId = uploadResponse.headers.etag;
+      console.log(`🔍 LINKEDIN: Part ${i + 1} uploaded, partId:`, partId, "etag:", uploadResponse.headers.etag);
+      
+      uploadedParts.push({
+        uploadPartId: partId,
+        etag: uploadResponse.headers.etag
+      });
+    }
+    
+    console.log("🔍 LINKEDIN: Final uploadedParts:", JSON.stringify(uploadedParts, null, 2));
+
+    console.log("🔍 LINKEDIN: All parts uploaded, finalizing...");
+
+    // Step 4: Finalize upload
+    try {
+      await axios.post(
+        'https://api.linkedin.com/rest/videos?action=finalizeUpload',
+        {
+          finalizeUploadRequest: {
+            video: videoUrn,
+            uploadToken: uploadToken,
+            uploadedPartIds: uploadedParts.map(part => part.uploadPartId)
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'LinkedIn-Version': '202501',
+            'X-Restli-Protocol-Version': '2.0.0'
+          }
+        }
+      );
+    } catch (error) {
+      console.error("🔍 LINKEDIN: Video finalization failed:");
+      console.error("🔍 LINKEDIN: Finalize error status:", error.response?.status);
+      console.error("🔍 LINKEDIN: Finalize error data:", JSON.stringify(error.response?.data, null, 2));
+      throw new Error(`LinkedIn video finalization failed: ${error.response?.data?.message || error.message}`);
+    }
+
+    console.log("🔍 LINKEDIN: Video upload finalized");
+
+    // Step 5: Create post with video URN using newer Posts API for consistency
+    const postBody = {
+      author: `urn:li:person:${accountData.platformAccountId}`,
+      commentary: postData.textContent || "",
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: []
+      },
+      content: {
+        media: {
+          title: videoFile.originalName || "Video",
+          id: videoUrn
+        }
+      },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    };
+
+    console.log("🔍 LINKEDIN: Creating post with video URN:", videoUrn);
+    console.log("🔍 LINKEDIN: Post body:", JSON.stringify(postBody, null, 2));
+
+    const postResponse = await axios.post(
+      'https://api.linkedin.com/rest/posts',
+      postBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'LinkedIn-Version': '202501',
+          'X-Restli-Protocol-Version': '2.0.0'
+        }
+      }
+    );
+
+    console.log("🔍 LINKEDIN: Video post created successfully");
+
+    return {
+      id: postResponse.data.id,
+      permalink: `https://www.linkedin.com/posts/${accountData.platformAccountId}_${postResponse.data.id}`
+    };
+
+  } catch (error) {
+    console.error("🔍 LINKEDIN: Video post creation failed:");
+    console.error("🔍 LINKEDIN: Error status:", error.response?.status);
+    console.error("🔍 LINKEDIN: Error headers:", error.response?.headers);
+    console.error("🔍 LINKEDIN: Error data:", JSON.stringify(error.response?.data, null, 2));
+    console.error("🔍 LINKEDIN: Error message:", error.message);
+    
+    // Create detailed error message
+    let errorMessage = `LinkedIn video post failed: ${error.message}`;
+    if (error.response?.data) {
+      if (error.response.data.message) {
+        errorMessage = `LinkedIn video post failed: ${error.response.data.message}`;
+      } else if (error.response.data.error_description) {
+        errorMessage = `LinkedIn video post failed: ${error.response.data.error_description}`;
+      } else if (error.response.data.errorDetailType) {
+        errorMessage = `LinkedIn video post failed: ${error.response.data.errorDetailType}`;
+      }
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 
