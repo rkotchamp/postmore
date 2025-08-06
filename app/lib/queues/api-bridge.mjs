@@ -542,14 +542,16 @@ async function finalizeVideoUpload(accessToken, videoUrn, uploadToken, partIds) 
  */
 async function registerImageUpload(accessToken, personId) {
   const registerData = {
-    recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
-    owner: `urn:li:person:${personId}`,
-    serviceRelationships: [
-      {
-        relationshipType: "OWNER",
-        identifier: "urn:li:userGeneratedContent"
-      }
-    ]
+    registerUploadRequest: {
+      recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+      owner: `urn:li:person:${personId}`,
+      serviceRelationships: [
+        {
+          relationshipType: "OWNER",
+          identifier: "urn:li:userGeneratedContent"
+        }
+      ]
+    }
   };
 
   try {
@@ -558,7 +560,6 @@ async function registerImageUpload(accessToken, personId) {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
-        "X-Restli-Protocol-Version": "2.0.0",
       },
       body: JSON.stringify(registerData),
     });
