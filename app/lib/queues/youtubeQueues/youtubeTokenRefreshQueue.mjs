@@ -36,12 +36,9 @@ try {
         }
       }
     }
-    console.log("Environment variables loaded from .env file");
-  } else {
-    console.log(".env file not found, using existing environment variables");
   }
 } catch (error) {
-  console.error("Error loading .env file:", error);
+  // Error loading .env file
 }
 
 // Get SocialAccount model after connection is established
@@ -49,7 +46,6 @@ const getSocialAccountModel = () => {
   try {
     return mongoose.model("SocialAccount");
   } catch (error) {
-    console.error("Error getting SocialAccount model:", error);
     throw new Error("Failed to get SocialAccount model");
   }
 };
@@ -61,8 +57,6 @@ const tokenRefreshLocks = new Map();
 const youtubeService = {
   refreshTokens: async (accountId) => {
     try {
-      console.log(`YouTube: Refreshing tokens for account ${accountId}`);
-
       // Ensure database connection
       await connectToDatabase();
       const SocialAccount = getSocialAccountModel();
@@ -74,9 +68,6 @@ const youtubeService = {
       });
 
       if (!account) {
-        console.error(
-          `YouTube: Account ${accountId} not found for token refresh`
-        );
         return {
           success: false,
           message: "Account not found",
@@ -84,15 +75,8 @@ const youtubeService = {
         };
       }
 
-      console.log(
-        `YouTube: Found account for refresh: ${
-          account.platformUsername || account.name
-        }`
-      );
-
       // Check if refresh token exists
       if (!account.refreshToken) {
-        console.error(`YouTube: Account ${accountId} has no refresh token`);
         return {
           success: false,
           message:
@@ -108,10 +92,6 @@ const youtubeService = {
           const result = await tokenRefreshLocks.get(lockId);
           return result;
         } catch (error) {
-          console.error(
-            `YouTube: Existing refresh failed for ${account.name}`,
-            error
-          );
           // Continue with new refresh attempt
         }
       }
@@ -159,7 +139,7 @@ const youtubeService = {
         const updatedAccount = await SocialAccount.findOneAndUpdate(
           {
             _id: accountId,
-            platform: "ytshorts",
+            platform: "ytShorts",
           },
           {
             $set: {
@@ -173,7 +153,6 @@ const youtubeService = {
         );
 
         if (!updatedAccount) {
-          console.error("YouTube: Database update failed for token refresh");
           throw new Error("Failed to update account in database");
         }
 
@@ -188,14 +167,12 @@ const youtubeService = {
         resolveRefreshLock(result);
         return result;
       } catch (error) {
-        console.error("YouTube: Token refresh failed:", error);
-
         // Update account status to error
         try {
           await SocialAccount.findOneAndUpdate(
             {
               _id: accountId,
-              platform: "ytshorts",
+              platform: "ytShorts",
             },
             {
               $set: {
@@ -205,7 +182,7 @@ const youtubeService = {
             }
           );
         } catch (dbError) {
-          console.error("YouTube: Error updating account status:", dbError);
+          // Error updating account status
         }
 
         const errorResult = {
@@ -229,7 +206,6 @@ const youtubeService = {
         }, 5000);
       }
     } catch (error) {
-      console.error("YouTube: Token refresh error:", error);
       return {
         success: false,
         message: `Failed to refresh tokens: ${error.message}`,
@@ -268,9 +244,7 @@ export function initYoutubeTokenRefreshQueue() {
           removeOnFail: 1000,
         },
       });
-      console.log("YouTube token refresh queue initialized");
     } catch (error) {
-      console.error("Failed to initialize YouTube token refresh queue:", error);
       throw error;
     }
   }
@@ -314,12 +288,10 @@ export async function scheduleRegularYoutubeTokenRefreshes() {
       }
     );
 
-    console.log(
-      `Scheduled regular YouTube token refreshes with job ID ${job.id}`
-    );
+    // Scheduled regular YouTube token refreshes
     return job.id;
   } catch (error) {
-    console.error("Failed to schedule YouTube token refresh job:", error);
+    // Failed to schedule YouTube token refresh job
     throw error;
   }
 }
@@ -337,10 +309,10 @@ export async function refreshAllYoutubeTokens() {
       }
     );
 
-    console.log(`Added job to refresh all YouTube tokens with ID ${job.id}`);
+    // Added job to refresh all YouTube tokens
     return job.id;
   } catch (error) {
-    console.error("Failed to add YouTube token refresh job:", error);
+    // Failed to add YouTube token refresh job
     throw error;
   }
 }
@@ -358,22 +330,17 @@ export async function refreshYoutubeAccountTokens(accountId) {
       }
     );
 
-    console.log(
-      `Added job to refresh tokens for YouTube account ${accountId} with job ID ${job.id}`
-    );
+    // Added job to refresh tokens for YouTube account
     return job.id;
   } catch (error) {
-    console.error(
-      `Failed to add YouTube token refresh job for account ${accountId}:`,
-      error
-    );
+    // Failed to add YouTube token refresh job for account
     throw error;
   }
 }
 
 // Process job to refresh all YouTube tokens
 export async function processRefreshAllYoutubeTokensJob(jobData) {
-  console.log("Processing job to refresh all YouTube tokens");
+  // Processing job to refresh all YouTube tokens
 
   try {
     await connectToDatabase();
@@ -381,11 +348,11 @@ export async function processRefreshAllYoutubeTokensJob(jobData) {
 
     // Get all active YouTube accounts
     const accounts = await SocialAccount.find({
-      platform: "ytshorts",
+      platform: "ytShorts",
       status: { $ne: "disconnected" },
     });
 
-    console.log(`Found ${accounts.length} YouTube accounts to refresh`);
+    // Found YouTube accounts to refresh
 
     const results = {
       total: accounts.length,
@@ -397,10 +364,10 @@ export async function processRefreshAllYoutubeTokensJob(jobData) {
     // Process each account
     for (const account of accounts) {
       try {
-        console.log(`Refreshing tokens for YouTube account ${account._id}`);
+        // Refreshing tokens for YouTube account
 
         if (!account.refreshToken) {
-          console.log(`Account ${account._id} has no refresh token, skipping`);
+          // Account has no refresh token, skipping
           results.accounts.push({
             accountId: account._id,
             name: account.name,
@@ -431,10 +398,7 @@ export async function processRefreshAllYoutubeTokensJob(jobData) {
           });
         }
       } catch (error) {
-        console.error(
-          `Error refreshing tokens for YouTube account ${account._id}:`,
-          error
-        );
+        // Error refreshing tokens for YouTube account
         results.failed++;
         results.accounts.push({
           accountId: account._id,
@@ -445,12 +409,10 @@ export async function processRefreshAllYoutubeTokensJob(jobData) {
       }
     }
 
-    console.log(
-      `Completed YouTube token refresh. Success: ${results.success}, Failed: ${results.failed}`
-    );
+    // Completed YouTube token refresh
     return results;
   } catch (error) {
-    console.error("Error processing refresh all YouTube tokens job:", error);
+    // Error processing refresh all YouTube tokens job
     throw error;
   }
 }
@@ -463,26 +425,20 @@ export async function processRefreshYoutubeAccountTokensJob(jobData) {
     throw new Error("Missing account ID for YouTube token refresh");
   }
 
-  console.log(
-    `Processing job to refresh tokens for YouTube account ${accountId}`
-  );
+  // Processing job to refresh tokens for YouTube account
 
   try {
     await connectToDatabase();
     const refreshResult = await youtubeService.refreshTokens(accountId);
 
     if (refreshResult.success) {
-      console.log(
-        `Successfully refreshed tokens for YouTube account ${accountId}`
-      );
+      // Successfully refreshed tokens for YouTube account
       return {
         accountId,
         success: true,
       };
     } else {
-      console.error(
-        `Failed to refresh tokens for YouTube account ${accountId}: ${refreshResult.message}`
-      );
+      // Failed to refresh tokens for YouTube account
       return {
         accountId,
         success: false,
@@ -490,7 +446,7 @@ export async function processRefreshYoutubeAccountTokensJob(jobData) {
       };
     }
   } catch (error) {
-    console.error(`Error processing YouTube account token refresh job:`, error);
+    // Error processing YouTube account token refresh job
     throw error;
   }
 }
@@ -510,8 +466,7 @@ if (
   typeof process !== "undefined" &&
   process.argv[1] === fileURLToPath(import.meta.url)
 ) {
-  console.log("YouTube token refresh queue script running in standalone mode");
-  console.log("Initializing YouTube token refresh queue...");
+  // YouTube token refresh queue script running in standalone mode
 
   (async () => {
     try {
@@ -520,22 +475,15 @@ if (
 
       // Schedule regular refreshes
       const jobId = await scheduleRegularYoutubeTokenRefreshes();
-      console.log(
-        `Scheduled regular YouTube token refreshes with job ID ${jobId}`
-      );
+      // Scheduled regular YouTube token refreshes
 
       // Trigger an immediate refresh of all tokens
       const immediateJobId = await refreshAllYoutubeTokens();
-      console.log(
-        `Triggered immediate YouTube token refresh with job ID ${immediateJobId}`
-      );
+      // Triggered immediate YouTube token refresh
 
-      console.log("YouTube token refresh operations completed successfully");
+      // YouTube token refresh operations completed successfully
     } catch (error) {
-      console.error(
-        "Error in YouTube token refresh standalone operation:",
-        error
-      );
+      // Error in YouTube token refresh standalone operation
     }
   })();
 }

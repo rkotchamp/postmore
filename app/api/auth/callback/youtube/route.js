@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
+import { google } from "googleapis";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import connectToMongoose from "@/app/lib/db/mongoose";
@@ -109,17 +110,43 @@ export async function GET(request) {
     }
 
     const googleUserId = userInfo.sub; // Google's unique user ID
-    const displayName = userInfo.name || session.user.name || "YouTube User"; // Use Google name, fallback to session name
     const profileImage = userInfo.picture || session.user.image; // Use Google picture, fallback to session image
+
+    // 4. Get YouTube Channel Information using the readonly scope
+    console.log("YouTube Callback: Fetching YouTube channel info...");
+    let displayName = userInfo.name || session.user.name || "YouTube User"; // Fallback to Google name
+    
+    try {
+      const youtube = google.youtube({ version: 'v3', auth: oAuth2Client });
+      
+      // Get the user's YouTube channels
+      const channelsResponse = await youtube.channels.list({
+        part: 'snippet',
+        mine: true
+      });
+
+      if (channelsResponse.data.items && channelsResponse.data.items.length > 0) {
+        // Use the first channel's title as the display name
+        const channel = channelsResponse.data.items[0];
+        displayName = channel.snippet.title;
+        console.log("YouTube Callback: Channel name fetched:", displayName);
+      } else {
+        console.warn("YouTube Callback: No channels found for user, using Google account name");
+      }
+    } catch (channelError) {
+      console.warn("YouTube Callback: Failed to fetch channel info, using Google account name:", channelError.message);
+      // Continue with Google account name as fallback
+    }
+
     console.log("YouTube Callback: User Info Fetched:", {
       googleUserId,
       displayName,
     });
 
-    // 4. Connect to Database
+    // 5. Connect to Database
     await connectToMongoose();
 
-    // 5. Prepare Data for DB Update
+    // 6. Prepare Data for DB Update
     const accountData = {
       userId: userId,
       platform: "ytShorts", // Ensure this matches the platform key used elsewhere
@@ -142,7 +169,7 @@ export async function GET(request) {
       googleUserId
     );
 
-    // 6. Upsert SocialAccount in Database
+    // 7. Upsert SocialAccount in Database
     const updateResult = await SocialAccount.updateOne(
       { userId: userId, platform: "ytShorts", platformAccountId: googleUserId },
       { $set: accountData },

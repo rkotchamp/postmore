@@ -299,11 +299,15 @@ const postToPlatform = async (platform, account, data) => {
     if (platform === "ytShorts") {
       mappedAccount = {
         id: account.id,
+        _id: account._id || account.originalData?._id, // Include MongoDB ObjectId for database updates
         platformAccountId: account.platformAccountId || account.originalData?.platformAccountId || account.platformId,
         accessToken: account.accessToken || account.originalData?.accessToken,
         refreshToken: account.refreshToken || account.originalData?.refreshToken,
+        tokenExpiry: account.tokenExpiry || account.originalData?.tokenExpiry, // Correct field name
         tokenExpiresAt: account.tokenExpiresAt || account.originalData?.tokenExpiresAt,
         channelId: account.channelId || account.originalData?.channelId,
+        // Add the original data reference for token updates
+        originalData: account.originalData,
         // Add any other fields needed by the YouTube service
       };
 

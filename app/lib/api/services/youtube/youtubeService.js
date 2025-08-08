@@ -11,6 +11,10 @@ import os from "os";
 import stream from "stream";
 import { promisify } from "util";
 import { connectToDatabase } from "../../../db/mongodb.js";
+import { 
+  refreshYoutubeAccountTokens, 
+  processRefreshYoutubeAccountTokensJob 
+} from "../../../queues/youtubeQueues/youtubeTokenRefreshQueue.mjs";
 
 // Constants for YouTube API
 const YOUTUBE_API_VERSION = "v3";
@@ -41,13 +45,9 @@ const RETRY_CONFIG = {
  * @returns {Promise<object>} - Result of the YouTube API call
  */
 async function post(account, postData) {
-  console.log("🔍 YOUTUBE: Service called");
-  console.log("🔍 YOUTUBE: account:", JSON.stringify(account, null, 2));
-  console.log("🔍 YOUTUBE: postData:", JSON.stringify(postData, null, 2));
-  
   try {
-    // Ensure we have a fresh token
-    const accountData = await ensureFreshToken(account);
+    // For immediate posts, use your existing YouTube queue system directly
+    const accountData = await ensureFreshTokenUsingExistingQueue(account);
 
     // Validate required fields for YouTube
     const validation = validateYouTubeData(postData);
@@ -57,29 +57,22 @@ async function post(account, postData) {
 
     // Prepare post text (same logic as BlueSky)
     let postText = "";
-    console.log("🔍 YOUTUBE: Processing captions, contentType:", postData.contentType);
     
     if (postData.contentType === "text") {
       postText = postData.text || "";
-      console.log("🔍 YOUTUBE: Text post, postText:", postText);
     } else if (postData.contentType === "media") {
-      console.log("🔍 YOUTUBE: Media post, captions:", JSON.stringify(postData.captions, null, 2));
       if (postData.captions?.mode === "single") {
         postText = postData.captions.single || "";
-        console.log("🔍 YOUTUBE: Single caption mode, postText:", postText);
       } else if (postData.captions?.mode === "multiple") {
         postText =
           postData.captions?.multiple?.[account.id] ||
           postData.captions?.single ||
           "";
-        console.log("🔍 YOUTUBE: Multiple caption mode, account.id:", account.id);
-        console.log("🔍 YOUTUBE: Multiple caption mode, postText:", postText);
       }
     }
     
     // Use postText as the caption for YouTube
     const caption = postText;
-    console.log("🔍 YOUTUBE: Final caption:", caption);
 
     // Process media for upload
     // For YouTube Shorts, we need the first video file
@@ -359,115 +352,70 @@ function extractAccountData(account) {
 }
 
 /**
- * Ensure we have a fresh, valid access token for the YouTube account
+ * Ensure we have a fresh, valid access token using your existing YouTube queue infrastructure
  */
-async function ensureFreshToken(account) {
-  // Extract the actual account data
+async function ensureFreshTokenUsingExistingQueue(account) {
   const accountData = extractAccountData(account);
-
+  
   if (!accountData.accessToken) {
     throw new Error("No access token available for this YouTube account");
   }
 
-  // Check if token is expired and refresh if needed
+  // Check if token needs refresh
   const now = new Date();
   const tokenExpiry = new Date(accountData.tokenExpiry);
-
-  // If token expires within the next 5 minutes, refresh it
   const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
-  if (tokenExpiry.getTime() - now.getTime() < bufferTime) {
+  const timeUntilExpiry = tokenExpiry.getTime() - now.getTime();
+  
+  if (timeUntilExpiry < bufferTime) {
     try {
-      const refreshedToken = await refreshYouTubeToken(accountData);
-      if (refreshedToken) {
-        // Update the account data with the new token
-        accountData.accessToken = refreshedToken.access_token;
-        accountData.tokenExpiry = new Date(
-          Date.now() + refreshedToken.expires_in * 1000
-        );
-
-        // Update the database with the new token
-        await updateAccountTokenInDatabase(accountData._id, {
-          accessToken: refreshedToken.access_token,
-          tokenExpiry: accountData.tokenExpiry,
-        });
+      // Use your existing refreshYoutubeAccountTokens function directly
+      const jobId = await refreshYoutubeAccountTokens(accountData._id);
+      
+      // Since this is for immediate posting, we need to wait for the refresh to complete
+      // Use the processRefreshYoutubeAccountTokensJob directly for synchronous refresh
+      const refreshResult = await processRefreshYoutubeAccountTokensJob({
+        accountId: accountData._id
+      });
+      
+      if (refreshResult.success) {
+        // Re-fetch the updated account data from database
+        const db = await connectToDatabase();
+        let queryId = accountData._id;
+        if (typeof accountData._id === "string" && accountData._id.match(/^[0-9a-fA-F]{24}$/)) {
+          const { ObjectId } = require('mongodb');
+          queryId = new ObjectId(accountData._id);
+        }
+        
+        const updatedAccount = await db.collection("socialaccounts").findOne({ _id: queryId });
+        
+        if (updatedAccount) {
+          // Update the account data with fresh tokens
+          accountData.accessToken = updatedAccount.accessToken;
+          accountData.tokenExpiry = updatedAccount.tokenExpiry;
+          
+          // Also update the original account object if it has originalData
+          if (account.originalData) {
+            account.originalData.accessToken = updatedAccount.accessToken;
+            account.originalData.tokenExpiry = updatedAccount.tokenExpiry;
+          }
+        } else {
+          throw new Error("Could not fetch updated account data after token refresh");
+        }
+      } else {
+        throw new Error(`Token refresh failed: ${refreshResult.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error("Failed to refresh YouTube token:", error);
-
-      // If refresh fails but we still have an existing token, try to use it
-      if (accountData.accessToken && error.message.includes("reconnected")) {
-        // Don't throw error, let the upload attempt proceed with existing token
-      } else {
-        throw new Error(`Token refresh failed: ${error.message}`);
+      // If the queue-based refresh fails, provide helpful error message
+      if (error.message.includes("invalid_grant") || error.message.includes("refresh token expired")) {
+        throw new Error("YouTube account needs to be reconnected - refresh token expired. Please reconnect your YouTube account.");
       }
+      
+      throw new Error(`Token refresh failed: ${error.message}`);
     }
   }
-
+  
   return accountData;
-}
-
-/**
- * Refresh YouTube access token using refresh token
- */
-async function refreshYouTubeToken(accountData) {
-  try {
-    // Create OAuth2 client
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.YOUTUBE_REDIRECT_URI
-    );
-
-    // Set credentials using refresh token
-    oauth2Client.setCredentials({
-      refresh_token: accountData.refreshToken,
-    });
-
-    // Get a new access token
-    const { token, res } = await oauth2Client.getAccessToken();
-
-    if (!token) {
-      throw new Error("Failed to refresh token");
-    }
-
-    return {
-      access_token: token,
-      expires_in: res.data.expires_in || 3600, // Default to 1 hour
-    };
-  } catch (error) {
-    console.error("Error refreshing YouTube token:", error);
-
-    // Handle specific error cases
-    if (error.message.includes("invalid_grant")) {
-      console.error(
-        "YouTube refresh token is invalid or expired. User needs to reconnect their account."
-      );
-
-      // Update account status to show it needs reconnection
-      try {
-        const db = await connectToDatabase();
-        await db.collection("socialaccounts").updateOne(
-          { _id: accountData._id },
-          {
-            $set: {
-              status: "error",
-              errorMessage:
-                "Refresh token expired. Please reconnect your YouTube account.",
-              updatedAt: new Date(),
-            },
-          }
-        );
-      } catch (dbError) {
-        console.error("Error updating account status:", dbError);
-      }
-
-      throw new Error(
-        "YouTube account needs to be reconnected - refresh token expired"
-      );
-    }
-
-    throw new Error(`Failed to refresh YouTube token: ${error.message}`);
-  }
 }
 
 /**
@@ -702,9 +650,10 @@ async function uploadVideoToYouTube(
             errorCode = YOUTUBE_ERROR_CODES.QUOTA_EXCEEDED;
           }
         } else if (status === 401) {
-          // Auth errors might be retryable after token refresh
-
-          shouldRetry = true;
+          // Auth errors - token is invalid/expired
+          // For 401 errors, don't retry as the token needs to be refreshed
+          // The queue-based token refresh should have handled this already
+          shouldRetry = false;
           errorCode = YOUTUBE_ERROR_CODES.INVALID_TOKEN;
         }
       }
@@ -746,30 +695,6 @@ async function uploadVideoToYouTube(
   throw lastError;
 }
 
-/**
- * Update account token in database
- */
-async function updateAccountTokenInDatabase(accountId, tokenData) {
-  try {
-    const db = await connectToDatabase();
-
-    const result = await db.collection("socialaccounts").updateOne(
-      { _id: accountId },
-      {
-        $set: {
-          accessToken: tokenData.accessToken,
-          tokenExpiry: tokenData.tokenExpiry,
-          updatedAt: new Date(),
-        },
-      }
-    );
-
-    return result.modifiedCount > 0;
-  } catch (error) {
-    console.error("Error updating account token in database:", error);
-    return false;
-  }
-}
 
 // Export the YouTube service
 export default {
@@ -777,5 +702,4 @@ export default {
   // Export for testing
   extractAccountData,
   validateYouTubeShortsVideo,
-  refreshYouTubeToken,
 };
