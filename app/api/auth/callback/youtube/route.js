@@ -110,37 +110,51 @@ export async function GET(request) {
     }
 
     const googleUserId = userInfo.sub; // Google's unique user ID
-    const profileImage = userInfo.picture || session.user.image; // Use Google picture, fallback to session image
-
+    
     // 4. Get YouTube Channel Information using the readonly scope
     console.log("YouTube Callback: Fetching YouTube channel info...");
     let displayName = userInfo.name || session.user.name || "YouTube User"; // Fallback to Google name
+    let profileImage = userInfo.picture || session.user.image; // Fallback to Google picture
     
     try {
       const youtube = google.youtube({ version: 'v3', auth: oAuth2Client });
       
-      // Get the user's YouTube channels
+      // Get the user's YouTube channels with snippet data
       const channelsResponse = await youtube.channels.list({
         part: 'snippet',
         mine: true
       });
 
       if (channelsResponse.data.items && channelsResponse.data.items.length > 0) {
-        // Use the first channel's title as the display name
+        // Use the first channel's data
         const channel = channelsResponse.data.items[0];
         displayName = channel.snippet.title;
-        console.log("YouTube Callback: Channel name fetched:", displayName);
+        
+        // Get channel profile image (use highest quality available)
+        if (channel.snippet.thumbnails) {
+          // YouTube provides different sizes: default, medium, high
+          profileImage = channel.snippet.thumbnails.high?.url || 
+                        channel.snippet.thumbnails.medium?.url || 
+                        channel.snippet.thumbnails.default?.url ||
+                        profileImage; // Keep Google fallback if no thumbnails
+        }
+        
+        console.log("YouTube Callback: Channel info fetched:", {
+          name: displayName,
+          profileImage: profileImage
+        });
       } else {
-        console.warn("YouTube Callback: No channels found for user, using Google account name");
+        console.warn("YouTube Callback: No channels found for user, using Google account data");
       }
     } catch (channelError) {
-      console.warn("YouTube Callback: Failed to fetch channel info, using Google account name:", channelError.message);
-      // Continue with Google account name as fallback
+      console.warn("YouTube Callback: Failed to fetch channel info, using Google account data:", channelError.message);
+      // Continue with Google account data as fallback
     }
 
     console.log("YouTube Callback: User Info Fetched:", {
       googleUserId,
       displayName,
+      profileImage,
     });
 
     // 5. Connect to Database
