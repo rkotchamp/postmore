@@ -21,6 +21,8 @@ import { useUIStateStore } from "@/app/lib/store/uiStateStore";
 import { usePostStore } from "@/app/lib/store/postStore";
 import { checkPlatformCompatibility, filterCompatibleAccounts } from "@/app/lib/utils/platformCompatibility";
 import CompatibilityWarningModal from "@/app/components/ui/CompatibilityWarningModal";
+import { PostSuccessModal } from "@/app/components/ui/PostSuccessModal";
+import { PostSubmissionModal } from "@/app/components/ui/PostSubmissionModal";
 import { toast } from "sonner";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import { useRouter } from "next/navigation";
@@ -45,6 +47,7 @@ const MemoizedPreview = memo(() => <Preview />);
 const MemoizedTextPreview = memo(() => <TextPreview />);
 
 export function DashboardContent() {
+  
   // Test toast function
   const router = useRouter();
 
@@ -54,6 +57,10 @@ export function DashboardContent() {
   // Compatibility modal state
   const [showCompatibilityModal, setShowCompatibilityModal] = useState(false);
   const [compatibilityResult, setCompatibilityResult] = useState(null);
+
+  // Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successPostType, setSuccessPostType] = useState(null); // "scheduled" or "immediate"
 
   // --- UI Zustand State ---
   const currentStep = useUIStateStore((state) => state.currentStep);
@@ -65,6 +72,12 @@ export function DashboardContent() {
   );
   const resetUIState = useUIStateStore((state) => state.resetUIState);
   const isSubmitting = useUIStateStore((state) => state.isSubmitting);
+  const submissionStage = useUIStateStore((state) => state.submissionStage);
+  const setSubmissionStage = useUIStateStore((state) => state.setSubmissionStage);
+  const forceUpdateCounter = useUIStateStore((state) => state.forceUpdateCounter); // Force re-renders
+  // Simple local state for progress modal
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressStep, setProgressStep] = useState(1);
   // ----------------------
 
   // --- Post Config Zustand State & Actions ---
@@ -140,9 +153,13 @@ export function DashboardContent() {
 
   // --- Submission --- (Use state from both stores, TanStack)
   const handleSubmit = () => {
+    // Start progress modal immediately at the beginning
+    setShowProgressModal(true);
+    setProgressStep(1);
+    
     if (!canProceed()) {
-      console.error("Cannot submit, current step is not complete.");
       toast.error("Please complete the current step before submitting.");
+      setShowProgressModal(false);
       return;
     }
 
@@ -164,7 +181,6 @@ export function DashboardContent() {
           handlePostSubmission();
         },
         onError: (error) => {
-          console.error("Failed to persist text before submission:", error);
           toast.error("Failed to save post content. Please try again.");
         },
       });
@@ -223,9 +239,48 @@ export function DashboardContent() {
     handlePostSubmission();
   };
 
+  // Success modal handlers
+  const handleSeePost = () => {
+    setShowSuccessModal(false);
+    // Route based on post type
+    if (successPostType === "scheduled") {
+      router.push("/scheduled-posts");
+    } else {
+      router.push("/all-posts");
+    }
+    
+    // Reset states after navigation
+    handleResetStates();
+  };
+
+  const handleDone = () => {
+    setShowSuccessModal(false);
+    // Reset all states and clear inputs
+    handleResetStates();
+  };
+
+  // Helper function to reset all states and clear inputs
+  const handleResetStates = () => {
+    // Reset core post configuration
+    resetPostConfig();
+    // Reset UI state (step, temporary text, etc.)
+    resetUIState();
+
+    // Clear media from server/cache if it was a media post
+    if (postType === "media" && hasSessionMedia) {
+      clearMedia.mutate();
+    }
+
+    // Clear text from server/cache if it was a text post
+    if (postType === "text") {
+      updateTextContent.mutate("");
+    }
+
+    // Reset success modal state
+    setSuccessPostType(null);
+  };
+
   const handlePostSubmission = () => {
-    // Show loading state right away
-    useUIStateStore.getState().setIsSubmitting(true);
 
     // For all media posts, upload to Firebase first to satisfy database schema
     // BUT also keep the file objects for BlueSky direct upload
@@ -241,9 +296,14 @@ export function DashboardContent() {
         // Extract File objects from items that need to be uploaded
         const filesToUpload = itemsWithoutUrls.map((item) => item.file);
 
-        // Upload files to Firebase Storage
+        // Step 2: Uploading
+        setProgressStep(2);
+        
         uploadPostMedia(filesToUpload)
           .then((uploadResults) => {
+            // Step 3: Publishing to platforms
+            setProgressStep(3);
+            
             // Create a map of updated media items with the new URLs AND the file objects
             const updatedMediaItems = sessionMediaItems.map((item) => {
               // Start with current item (may already have URL)
@@ -286,16 +346,18 @@ export function DashboardContent() {
             submitPost(updatedMediaItems);
           })
           .catch((error) => {
-            console.error("Failed to upload media to Firebase:", error);
             toast.error("Media upload failed", {
               description:
                 "We couldn't upload your media files. Please try again.",
               duration: 5000,
             });
-            useUIStateStore.getState().setIsSubmitting(false);
+            // Hide progress modal on error
+            setShowProgressModal(false);
+            setProgressStep(1);
           });
       } else {
         // All items have URLs but make sure we still add file objects for BlueSky
+        setProgressStep(3);
         const enrichedMediaItems = sessionMediaItems.map((item) => ({
           ...item,
           file: item.file,
@@ -308,7 +370,8 @@ export function DashboardContent() {
         submitPost(enrichedMediaItems);
       }
     } else {
-      // Text post or no media, proceed directly
+      // Text post or no media, proceed directly to step 3
+      setProgressStep(3);
       submitPost([]);
     }
   };
@@ -444,47 +507,39 @@ export function DashboardContent() {
             return response.json();
           })
           .then((data) => {
-            // Show success toast/notification
-            toast.success(
-              `Post ${
-                scheduleType === "scheduled" ? "scheduled" : "published"
-              } successfully!`,
-              {
-                description:
-                  scheduleType === "scheduled"
-                    ? `Your post will be published at ${new Date(
-                        scheduledAt
-                      ).toLocaleString()}`
-                    : "Your post has been published to the selected platforms.",
-              }
-            );
-
-            // First navigate to scheduled-posts page
-            router.push("/scheduled-posts");
-
-            // Then reset states after a slight delay to ensure navigation has started
-            setTimeout(() => {
-              // --- Reset States --- //
-              // Reset core post configuration
-              resetPostConfig();
-              // Reset UI state (step, temporary text, etc.)
-              resetUIState();
-
-              // Clear media from server/cache if it was a media post
-              if (postType === "media" && hasSessionMedia) {
-                clearMedia.mutate();
-              }
-
-              // Clear text from server/cache if it was a text post
-              if (postType === "text") {
-                updateTextContent.mutate("");
-              }
-              // ------------------- //
-            }, 100);
+            // Check if the API response indicates actual success
+            const isActualSuccess = data.success && data.post && data.results;
+            const allPlatformsSucceeded = data.results ? data.results.every(result => result.success) : false;
+            
+            
+            if (isActualSuccess && allPlatformsSucceeded) {
+              setSuccessPostType(scheduleType === "scheduled" ? "scheduled" : "immediate");
+              setShowSuccessModal(true);
+              
+              // Unmount progress modal after success modal appears
+              setTimeout(() => {
+                setShowProgressModal(false);
+                setProgressStep(1);
+              }, 100);
+            } else {
+              const failedPlatforms = data.results ? 
+                data.results.filter(r => !r.success).map(r => r.platform) : [];
+              
+              toast.error("Post failed on some platforms", {
+                description: failedPlatforms.length > 0 
+                  ? `Failed on: ${failedPlatforms.join(', ')}`
+                  : "Check your post status for details",
+                duration: 7000,
+              });
+              
+              // Unmount progress modal after error toast appears
+              setTimeout(() => {
+                setShowProgressModal(false);
+                setProgressStep(1);
+              }, 100);
+            }
           })
           .catch((error) => {
-            console.error("Error submitting post:", error);
-
             // Show a more detailed error toast for debugging
             toast.error("Failed to submit post", {
               description: `Error: ${error.message || "Unknown error"}. ${
@@ -492,15 +547,18 @@ export function DashboardContent() {
               }`,
               duration: 5000,
             });
+            
+            // Unmount progress modal after error toast appears
+            setTimeout(() => {
+              setShowProgressModal(false);
+              setProgressStep(1);
+            }, 100);
           })
           .finally(() => {
-            // Hide loading state
-            useUIStateStore.getState().setIsSubmitting(false);
+            // Progress modal will be hidden by success/error handlers after results are shown
           });
       })
       .catch((error) => {
-        console.error("Error submitting post:", error);
-
         // Show a more detailed error toast for debugging
         toast.error("Failed to submit post", {
           description: `Error: ${error.message || "Unknown error"}. ${
@@ -510,8 +568,9 @@ export function DashboardContent() {
         });
       })
       .finally(() => {
-        // Hide loading state
-        useUIStateStore.getState().setIsSubmitting(false);
+        // Ensure progress modal is hidden on error
+        setShowProgressModal(false);
+        setProgressStep(1);
       });
   };
 
@@ -555,9 +614,28 @@ export function DashboardContent() {
     }
   };
 
-  // Get button text (Uses Post store state)
+  // Get button text (Uses Post store state and submission stage)
   const getSubmitButtonText = () => {
-    return scheduleType === "scheduled" ? "Schedule Post" : "Post Now";
+    // Always get fresh state directly from store to avoid React hook staleness
+    const freshState = useUIStateStore.getState();
+    const currentStage = freshState.submissionStage;
+    const freshIsSubmitting = freshState.isSubmitting;
+    
+    const buttonText = (() => {
+      if (freshIsSubmitting) {
+        if (currentStage === "uploading") {
+          return "Uploading...";
+        } else if (currentStage === "posting") {
+          return scheduleType === "scheduled" ? "Scheduling..." : "Posting...";
+        }
+        // Fallback for any other loading state
+        return scheduleType === "scheduled" ? "Scheduling..." : "Posting...";
+      }
+      return scheduleType === "scheduled" ? "Schedule Post" : "Post Now";
+    })();
+    
+    
+    return buttonText;
   };
 
   // Loading state is now handled by shouldShowSkeleton in the component render
@@ -678,7 +756,7 @@ export function DashboardContent() {
               // Final Submit Button (Uses Post store state for text)
               <Button
                 onClick={handleSubmit}
-                disabled={!canProceed() || isSubmitting} // Add isSubmitting here
+                disabled={!canProceed() || isSubmitting || forceUpdateCounter < 0} // Add forceUpdateCounter dependency
                 className="flex items-center gap-2 py-3 px-4 sm:px-6 md:py-4 md:px-8 text-sm sm:text-base w-full sm:w-auto order-1 sm:order-2"
                 size="lg"
               >
@@ -702,9 +780,7 @@ export function DashboardContent() {
                         ></path>
                       </svg>
                     </span>
-                    {scheduleType === "scheduled"
-                      ? "Scheduling..."
-                      : "Posting..."}
+                    {getSubmitButtonText()}
                   </>
                 ) : (
                   <>
@@ -728,6 +804,22 @@ export function DashboardContent() {
         onContinue={handleCompatibilityContinue}
         onCancel={handleCompatibilityCancel}
         compatibilityResult={compatibilityResult}
+      />
+
+      {/* Progress Modal */}
+      <PostSubmissionModal
+        isOpen={showProgressModal}
+        step={progressStep}
+      />
+
+      {/* Post Success Modal */}
+      <PostSuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        onSeePost={handleSeePost}
+        onDone={handleDone}
+        postType={successPostType}
+        scheduledAt={scheduledAt}
       />
     </div>
   );

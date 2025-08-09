@@ -31,8 +31,8 @@ export async function GET(request) {
       query.status = "scheduled";
       query["schedule.type"] = "scheduled";
     } else if (excludeScheduled === "true") {
-      // Exclude scheduled posts - get all other statuses
-      query.status = { $ne: "scheduled" };
+      // Exclude scheduled and pending posts - get only published and failed statuses
+      query.status = { $nin: ["scheduled", "pending"] };
     }
 
     // Fetch posts for the logged-in user

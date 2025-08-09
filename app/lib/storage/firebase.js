@@ -49,7 +49,7 @@ export const uploadFile = async (file, folder, customFileName = null) => {
           // Optional: Track upload progress
           const progress =
             (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload is ${progress}% done`);
+          // Progress tracking without logging for better performance
         },
         (error) => {
           // Handle upload errors
@@ -174,7 +174,7 @@ export const uploadProfilePicture = async (file, userId) => {
           // Optional: Track upload progress
           const progress =
             (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log(`Upload is ${progress}% done`);
+          // Progress tracking without logging for better performance
         },
         (error) => {
           // Handle upload errors
