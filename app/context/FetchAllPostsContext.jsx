@@ -43,9 +43,8 @@ const useFetchAllPosts = () => {
         ? new Date(post.schedule.at)
         : new Date(post.createdAt);
 
-    // Extract media URL more reliably
-    const mediaUrl =
-      post.media && post.media.length > 0 ? post.media[0].url : null;
+    // Preserve media array structure instead of extracting just URL
+    const mediaArray = post.media || [];
 
     // Format date for display
     const formatDate = (date) => {
@@ -117,7 +116,7 @@ const useFetchAllPosts = () => {
       id: post._id,
       contentType: post.contentType,
       text: post.text,
-      media: mediaUrl,
+      media: mediaArray, // Preserve full media array structure
       caption: post.captions?.single || post.text || "",
       captions: post.captions,
       scheduledDate: formatDate(scheduledAt),

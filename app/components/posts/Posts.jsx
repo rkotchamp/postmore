@@ -39,6 +39,7 @@ import { useState, useEffect } from "react";
 import { VideoPreview } from "./VideoPreview";
 import { ImagePreview } from "./ImagePreview";
 import { toast } from "sonner";
+import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 
 // Dummy data for demonstration
 const dummyPosts = [
@@ -143,28 +144,40 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
   const [currentCaptionIndex, setCurrentCaptionIndex] = useState(0);
   const [captionAccountIds, setCaptionAccountIds] = useState([]);
 
-  // Make sure we handle both socialAccounts and accounts fields for compatibility
-  const accountsArray =
-    post.socialAccounts ||
-    post.accounts ||
-    post.selectedAccounts ||
-    post.originalPost?.accounts ||
-    post.originalPost?.socialAccounts ||
-    post.originalPost?.selectedAccounts ||
-    [];
+  // Get all social accounts from context
+  const { accounts: allSocialAccounts } = useFetchAllAccountsContext();
 
-  // Debug: Log the post structure to see what accounts data we have
-  console.log("🔍 Post object:", post);
-  console.log("🔍 Available account fields:", {
-    socialAccounts: post.socialAccounts,
-    accounts: post.accounts,
-    selectedAccounts: post.selectedAccounts,
-    originalPostAccounts: post.originalPost?.accounts,
-    originalPostSocialAccounts: post.originalPost?.socialAccounts,
-    originalPostSelectedAccounts: post.originalPost?.selectedAccounts,
-    accountsArray: accountsArray,
-    accountsArrayLength: accountsArray.length,
-  });
+  // Get the basic account references from the post
+  const postAccountRefs = post.accounts || post.socialAccounts || post.selectedAccounts || 
+    post.originalPost?.accounts || post.originalPost?.socialAccounts || 
+    post.originalPost?.selectedAccounts || [];
+
+  // Match the account IDs with full account data from the accounts context
+  const accountsArray = postAccountRefs.map(accountRef => {
+    // Find the full account data by matching the ID
+    const fullAccountData = allSocialAccounts.find(account => 
+      account._id === accountRef.id || account.id === accountRef.id
+    );
+    
+    
+    if (fullAccountData) {
+      // Merge the post reference data with full account data
+      return {
+        ...accountRef,
+        ...fullAccountData,
+        // Ensure we keep the reference data as well
+        id: accountRef.id,
+        name: accountRef.name || fullAccountData.displayName,
+        email: accountRef.email,
+        type: accountRef.type || fullAccountData.platform
+      };
+    }
+    
+    // If no full account data found, return the basic reference
+    return accountRef;
+  }).filter(Boolean); // Remove any null/undefined entries
+
+
 
   // Extract caption data and account IDs on component mount
   useEffect(() => {
@@ -236,7 +249,6 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
     if (post.originalPost?.media && Array.isArray(post.originalPost.media)) {
       const mediaItem = post.originalPost.media[0];
       resultUrl = mediaItem?.url || null;
-      console.log("[DEBUG] URL from originalPost.media:", resultUrl);
     }
 
     // Handle case where post.media is directly an array of objects
@@ -250,7 +262,6 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
       // Check if media item is an object with url property (Firebase structure)
       if (mediaItem && typeof mediaItem === "object" && mediaItem.url) {
         resultUrl = mediaItem.url;
-        console.log("[DEBUG] URL from post.media array:", resultUrl);
       }
     }
 
@@ -273,7 +284,6 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
       post.originalPost.media[0]
     ) {
       mediaType = post.originalPost.media[0].type || "unknown";
-      console.log("[DEBUG] Media type from originalPost:", mediaType);
     }
 
     // Then check media array directly
@@ -285,7 +295,6 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
     ) {
       if (post.media[0].type) {
         mediaType = post.media[0].type;
-        console.log("[DEBUG] Media type from post.media array:", mediaType);
       }
     }
 
@@ -295,19 +304,14 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
       if (mediaUrl) {
         if (mediaUrl.match(/\.(mp4|mov|webm|avi)($|\?)/i)) {
           mediaType = "video";
-          console.log("[DEBUG] Media type detected from extension: video");
         } else if (mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)($|\?)/i)) {
           mediaType = "image";
-          console.log("[DEBUG] Media type detected from extension: image");
         }
       }
     }
 
-    const finalType =
-      mediaType ||
+    return mediaType ||
       (post.contentType === "media" ? "unknown" : post.contentType);
-    console.log("[DEBUG] Final media type:", finalType);
-    return finalType;
   };
 
   // Function to get all image URLs for carousel
@@ -358,14 +362,20 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
 
     // Try to get media from the post.media array (Firebase format)
     if (post.media && Array.isArray(post.media) && post.media.length > 0) {
-      // Check if there are multiple images
+      // Helper function to detect if URL is an image
+      const isImageUrl = (url) => {
+        if (!url || typeof url !== 'string') return false;
+        return url.match(/\.(jpg|jpeg|png|gif|webp)($|\?)/i);
+      };
+
+      // Check if there are multiple images using both type field and URL detection
       allImages = post.media
         .filter(
           (item) =>
             item &&
             typeof item === "object" &&
-            item.type === "image" &&
-            item.url
+            item.url &&
+            (item.type === "image" || isImageUrl(item.url))
         )
         .map((item) => item.url);
 
@@ -401,14 +411,20 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
       Array.isArray(post.originalPost.media) &&
       post.originalPost.media.length > 0
     ) {
-      // Check if there are multiple images in original post
+      // Helper function to detect if URL is an image (reusable)
+      const isImageUrl = (url) => {
+        if (!url || typeof url !== 'string') return false;
+        return url.match(/\.(jpg|jpeg|png|gif|webp)($|\?)/i);
+      };
+
+      // Check if there are multiple images in original post using both type field and URL detection
       allImages = post.originalPost.media
         .filter(
           (item) =>
             item &&
             typeof item === "object" &&
-            item.type === "image" &&
-            item.url
+            item.url &&
+            (item.type === "image" || isImageUrl(item.url))
         )
         .map((item) => item.url);
 
@@ -459,14 +475,20 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
 
     // For image content (single or carousel)
     if (mediaType === "image") {
-      // If it's a single image
-      if (typeof mediaUrl === "string") {
+      // Helper function to detect if URL is an image
+      const isImageUrl = (url) => {
+        if (!url || typeof url !== 'string') return false;
+        return url.match(/\.(jpg|jpeg|png|gif|webp)($|\?)/i);
+      };
+
+      // If it's a single image, double-check it's actually an image URL
+      if (typeof mediaUrl === "string" && isImageUrl(mediaUrl)) {
         return <ImagePreview images={mediaUrl} />;
       }
 
       // If we have multiple images in the media array
       const imageUrls = (post.media || [])
-        .filter((item) => item.type === "image" && item.url)
+        .filter((item) => item.url && (item.type === "image" || isImageUrl(item.url)))
         .map((item) => item.url);
 
       if (imageUrls.length > 0) {
@@ -594,12 +616,23 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
         <div className="mb-2">{renderCaption()}</div>
 
         {/* Status Indicator */}
-        {post.statusIndicator && (
+        {(post.statusIndicator || post.status) && (
           <div className="mb-2">
             <span
-              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${post.statusIndicator.bgColor} ${post.statusIndicator.textColor} ${post.statusIndicator.borderColor} border`}
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                post.statusIndicator 
+                  ? `${post.statusIndicator.bgColor} ${post.statusIndicator.textColor} ${post.statusIndicator.borderColor} border`
+                  : post.status === 'scheduled' 
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 border' 
+                    : post.status === 'published'
+                      ? 'bg-green-50 text-green-700 border-green-200 border'
+                      : 'bg-gray-50 text-gray-700 border-gray-200 border'
+              }`}
             >
-              {post.statusIndicator.label}
+              {post.statusIndicator?.label || 
+               (post.status === 'scheduled' ? 'Scheduled' : 
+                post.status === 'published' ? 'Published' : 
+                post.status?.charAt(0).toUpperCase() + post.status?.slice(1) || 'Unknown')}
             </span>
           </div>
         )}

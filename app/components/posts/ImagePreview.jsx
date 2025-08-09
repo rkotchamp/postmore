@@ -16,16 +16,34 @@ export const ImagePreview = ({ images }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovering, setIsHovering] = useState(false);
 
+  // Helper function to check if URL is a video
+  const isVideoUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    return url.match(/\.(mp4|mov|webm|avi)($|\?)/i);
+  };
+
+  // Filter out video URLs - ImagePreview should only handle images
+  const actualImages = imageArray.filter(url => url && !isVideoUrl(url));
+
+  // If no valid images, show message
+  if (actualImages.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-muted">
+        <p className="text-muted-foreground">No images available</p>
+      </div>
+    );
+  }
+
   // No need for carousel controls if only one image
-  const showControls = imageArray.length > 1;
+  const showControls = actualImages.length > 1;
 
   const goToNext = () => {
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % imageArray.length);
+    setCurrentIndex((prevIndex) => (prevIndex + 1) % actualImages.length);
   };
 
   const goToPrevious = () => {
     setCurrentIndex(
-      (prevIndex) => (prevIndex - 1 + imageArray.length) % imageArray.length
+      (prevIndex) => (prevIndex - 1 + actualImages.length) % actualImages.length
     );
   };
 
@@ -37,10 +55,10 @@ export const ImagePreview = ({ images }) => {
     >
       {/* Current image */}
       <div className="w-full h-full bg-muted">
-        {imageArray[currentIndex] ? (
+        {actualImages[currentIndex] ? (
           <div className="relative w-full h-full">
             <Image
-              src={imageArray[currentIndex]}
+              src={actualImages[currentIndex]}
               alt={`Image ${currentIndex + 1}`}
               fill
               className="object-cover"
@@ -77,7 +95,7 @@ export const ImagePreview = ({ images }) => {
       {/* Dots indicator - only show for multiple images */}
       {showControls && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center space-x-1">
-          {imageArray.map((_, index) => (
+          {actualImages.map((_, index) => (
             <button
               key={index}
               className={`h-2 w-2 rounded-full ${

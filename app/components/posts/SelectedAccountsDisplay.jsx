@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Avatar,
   AvatarFallback,
@@ -59,9 +60,17 @@ const platformConfig = {
   linkedin: { icon: Linkedin, name: "LinkedIn" },
 };
 
+// Get platform display name
+const getPlatformName = (platform) => {
+  const normalizedPlatform = platform?.toLowerCase();
+  return platformConfig[normalizedPlatform]?.name || platform;
+};
+
 const PlatformIcon = ({ platform, className }) => {
   const iconProps = { className: className || "h-5 w-5 text-muted-foreground" };
-  switch (platform) {
+  const normalizedPlatform = platform?.toLowerCase();
+  
+  switch (normalizedPlatform) {
     case "instagram":
       return <Instagram {...iconProps} />;
     case "twitter":
@@ -78,7 +87,8 @@ const PlatformIcon = ({ platform, className }) => {
           @
         </div>
       );
-    case "ytShorts":
+    case "ytshorts":
+    case "youtube":
       return <Youtube {...iconProps} />;
     case "tiktok":
       return <TikTokIcon {...iconProps} />;
@@ -92,16 +102,148 @@ const PlatformIcon = ({ platform, className }) => {
 };
 // --- End Icon Components ---
 
+// Enhanced Popover Component with Portal and Arrow
+const AccountPopover = ({ platform, accounts, isOpen, onClose, triggerRef }) => {
+  const popoverRef = useRef(null);
+  const [position, setPosition] = useState({ top: 0, left: 0, arrowLeft: 0 });
+
+  // Calculate popover position
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const triggerRect = triggerRef.current.getBoundingClientRect();
+      
+      
+      // For fixed positioning, use getBoundingClientRect directly (no scroll offset needed)
+      let top = triggerRect.bottom + 8; // 8px gap below trigger
+      let left = triggerRect.left;
+      
+      // Calculate arrow position (center of trigger)
+      let arrowLeft = triggerRect.width / 2;
+      
+      // Adjust for viewport boundaries when we create the popover element
+      setTimeout(() => {
+        if (popoverRef.current) {
+          const popoverRect = popoverRef.current.getBoundingClientRect();
+          
+          // Adjust horizontal position if popover would go off screen
+          if (triggerRect.left + popoverRect.width > window.innerWidth - 16) {
+            // Position to the left of trigger
+            left = triggerRect.right - popoverRect.width;
+            arrowLeft = popoverRect.width - (triggerRect.width / 2);
+          }
+          
+          // Ensure minimum left position
+          if (left < 16) {
+            const adjustment = 16 - left;
+            left = 16;
+            arrowLeft = Math.max(12, arrowLeft - adjustment);
+          }
+          
+          // Adjust vertical position if needed (above trigger if no space below)
+          if (triggerRect.bottom + popoverRect.height > window.innerHeight - 16) {
+            top = triggerRect.top - popoverRect.height - 8;
+          }
+          
+          setPosition({ top, left, arrowLeft });
+        }
+      }, 0);
+    }
+  }, [isOpen, triggerRef, platform]);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target) &&
+          triggerRef.current && !triggerRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen, onClose, triggerRef]);
+
+  // Close on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      window.addEventListener('scroll', handleScroll, true);
+      return () => window.removeEventListener('scroll', handleScroll, true);
+    }
+  }, [isOpen, onClose]);
+
+  if (!isOpen || typeof document === 'undefined') return null;
+
+  const platformName = getPlatformName(platform);
+
+  const popoverContent = (
+    <div
+      ref={popoverRef}
+      className="fixed z-[9999] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-3 min-w-[220px] max-w-[280px]"
+      style={{
+        top: position.top,
+        left: position.left,
+      }}
+    >
+      {/* Arrow pointing to trigger */}
+      <div
+        className="absolute -top-2 w-4 h-4 bg-white dark:bg-gray-800 border-l border-t border-gray-200 dark:border-gray-700 rotate-45"
+        style={{
+          left: Math.max(12, Math.min(position.arrowLeft - 8, 220 - 20)), // Constrain arrow position
+        }}
+      />
+      
+      {/* Content */}
+      <div className="relative">
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+          Posted to {platformName} accounts
+        </div>
+        <div className="space-y-2.5">
+          {accounts.map((account, index) => {
+            const avatarSrc = account.profileImage || account.avatar || account.imageUrl;
+            const name = account.displayName || account.name || account.username || "User";
+            
+            return (
+              <div key={account._id || account.id || index} className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <PlatformIcon platform={platform} className="h-4 w-4" />
+                </div>
+                <Avatar className="h-7 w-7 flex-shrink-0">
+                  <AvatarImage src={avatarSrc} alt={name} />
+                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                    {name ? name.charAt(0).toUpperCase() : "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-gray-700 dark:text-gray-300 truncate min-w-0">
+                  {name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(popoverContent, document.body);
+};
+
 export function SelectedAccountsDisplay({ accounts }) {
-  // Debug: Log what accounts data we're receiving
-  console.log("🎯 SelectedAccountsDisplay received accounts:", accounts);
-  console.log("🎯 Accounts type:", typeof accounts);
-  console.log("🎯 Is array:", Array.isArray(accounts));
-  console.log("🎯 Accounts length:", accounts?.length);
+  const [activePopover, setActivePopover] = useState(null);
+  const triggerRefs = useRef({});
+  
+  // Generate a unique ID for this component instance to avoid ref collisions
+  const componentId = useRef(Math.random().toString(36).substring(2, 15));
 
   // Early return if no accounts provided
   if (!accounts || !Array.isArray(accounts) || accounts.length === 0) {
-    console.log("❌ SelectedAccountsDisplay: No accounts to display");
     return (
       <div className="text-xs text-muted-foreground">No accounts selected</div>
     );
@@ -109,7 +251,8 @@ export function SelectedAccountsDisplay({ accounts }) {
 
   // Group accounts by platform
   const groupedByPlatform = accounts.reduce((acc, account) => {
-    const platform = account.platform || "other";
+    // Handle both populated social account data and basic account data
+    const platform = (account.platform || account.type || "other").toLowerCase();
     if (!acc[platform]) {
       acc[platform] = [];
     }
@@ -117,13 +260,13 @@ export function SelectedAccountsDisplay({ accounts }) {
     return acc;
   }, {});
 
-  // Define the desired order of platforms
+  // Define the desired order of platforms (normalized to lowercase)
   const platformOrder = [
     "instagram",
     "twitter",
     "facebook",
     "threads",
-    "ytShorts",
+    "ytshorts",
     "youtube",
     "tiktok",
     "bluesky",
@@ -132,55 +275,97 @@ export function SelectedAccountsDisplay({ accounts }) {
 
   // Sort the platforms based on the defined order
   const sortedPlatforms = Object.keys(groupedByPlatform).sort((a, b) => {
-    const indexA = platformOrder.indexOf(a);
-    const indexB = platformOrder.indexOf(b);
+    const indexA = platformOrder.indexOf(a.toLowerCase());
+    const indexB = platformOrder.indexOf(b.toLowerCase());
     // Handle platforms not in the order list (put them at the end)
     if (indexA === -1) return 1;
     if (indexB === -1) return -1;
     return indexA - indexB;
   });
 
+  const handlePlatformClick = (platform, refKey) => {
+    setActivePopover(activePopover === platform ? null : platform);
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {sortedPlatforms.map((platform) => (
-        <div key={platform} className="flex items-center space-x-2">
-          {/* Platform Icon - Circular background similar to image */}
-          <div className="h-7 w-7 rounded-full bg-muted/60 flex items-center justify-center">
-            <PlatformIcon
+      {sortedPlatforms.map((platform) => {
+        const platformAccounts = groupedByPlatform[platform];
+        const maxVisible = 3; // Show max 3 avatars before +N
+        const visibleAccounts = platformAccounts.slice(0, maxVisible);
+        const remainingCount = platformAccounts.length - maxVisible;
+
+        // Create unique ref key for this platform in this component instance
+        const refKey = `${componentId.current}-${platform}`;
+        if (!triggerRefs.current[refKey]) {
+          triggerRefs.current[refKey] = React.createRef();
+        }
+
+        return (
+          <div key={platform} className="flex items-center space-x-2">
+            {/* Platform Icon - Circular background with click handler */}
+            <div 
+              ref={triggerRefs.current[refKey]}
+              onClick={() => handlePlatformClick(platform, refKey)}
+              className="h-7 w-7 rounded-full bg-muted/60 flex items-center justify-center cursor-pointer hover:bg-muted/80 transition-colors"
+            >
+              <PlatformIcon
+                platform={platform}
+                className="h-4 w-4 text-foreground"
+              />
+            </div>
+
+            {/* Stacked Avatars with click handler */}
+            <div 
+              className="flex items-center -space-x-2 cursor-pointer"
+              onClick={() => handlePlatformClick(platform, refKey)}
+            >
+              {visibleAccounts.map((account, index) => {
+                // Handle different avatar field names
+                const avatarSrc =
+                  account.profileImage || account.avatar || account.imageUrl;
+                // Handle different name field names
+                const name =
+                  account.displayName ||
+                  account.name ||
+                  account.username ||
+                  "User";
+
+                return (
+                  <Avatar
+                    key={account._id || account.id || index}
+                    className="h-7 w-7 border-2 border-background hover:scale-105 transition-transform"
+                    title={name}
+                  >
+                    <AvatarImage src={avatarSrc} alt={name} />
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                      {name ? name.charAt(0).toUpperCase() : "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                );
+              })}
+
+              {/* Show +N if there are more accounts */}
+              {remainingCount > 0 && (
+                <div className="h-7 w-7 rounded-full bg-muted border-2 border-background flex items-center justify-center hover:scale-105 transition-transform">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    +{remainingCount}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Popover */}
+            <AccountPopover
               platform={platform}
-              className="h-4 w-4 text-foreground"
+              accounts={platformAccounts}
+              isOpen={activePopover === platform}
+              onClose={() => setActivePopover(null)}
+              triggerRef={triggerRefs.current[refKey]}
             />
           </div>
-
-          {/* Stacked Avatars */}
-          <div className="flex items-center -space-x-2">
-            {groupedByPlatform[platform].map((account, index) => {
-              // Handle different avatar field names
-              const avatarSrc =
-                account.profileImage || account.avatar || account.imageUrl;
-              // Handle different name field names
-              const name =
-                account.displayName ||
-                account.name ||
-                account.username ||
-                "User";
-
-              return (
-                <Avatar
-                  key={account._id || account.id || index}
-                  className="h-7 w-7 border-2 border-background"
-                  title={name}
-                >
-                  <AvatarImage src={avatarSrc} alt={name} />
-                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                    {name ? name.charAt(0).toUpperCase() : "?"}
-                  </AvatarFallback>
-                </Avatar>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

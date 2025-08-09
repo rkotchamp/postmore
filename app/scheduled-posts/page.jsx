@@ -40,7 +40,17 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
   // Get up to 4 images for the preview
   const postImages = posts
     .filter((post) => post.media)
-    .map((post) => post.media)
+    .map((post) => {
+      // Handle both array and string media formats
+      if (Array.isArray(post.media) && post.media.length > 0) {
+        // If media is an array, get the first item's URL
+        const firstMedia = post.media[0];
+        return (firstMedia && typeof firstMedia === 'object') ? firstMedia.url : firstMedia;
+      }
+      // If media is a string URL
+      return typeof post.media === 'string' ? post.media : null;
+    })
+    .filter(Boolean) // Remove null/undefined/empty values
     .slice(0, 4);
 
   // Add placeholders if we have fewer than 4 images
@@ -59,7 +69,7 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
       >
         {postImages.map((image, index) => (
           <div key={index} className="relative w-full h-full bg-muted/50">
-            {image ? (
+            {image && typeof image === 'string' && image.trim() !== '' ? (
               <Image
                 src={image}
                 alt="Post preview"
@@ -121,39 +131,8 @@ export default function ScheduledPosts() {
   const error = postsError || accountsError;
   const isGrouped = settings.scheduledPostsView === "grouped";
 
-  // Enhance posts with complete account data
-  const enhancedPosts = scheduledPosts.map((post) => {
-    // Map account references to full account objects
-    const enhancedAccounts = post.socialAccounts.map((accountRef) => {
-      // Try to find the full account info from the accounts context
-      const fullAccount = accounts.find((acc) => acc._id === accountRef.id);
-
-      // If we found a match, enhance the account data
-      if (fullAccount) {
-        return {
-          ...accountRef,
-          // Override with more accurate data from the full account
-          avatar:
-            fullAccount.profileImage ||
-            fullAccount.metadata?.profileImage ||
-            accountRef.avatar,
-          name:
-            fullAccount.platformUsername ||
-            fullAccount.displayName ||
-            accountRef.name,
-          platform: fullAccount.platform || accountRef.platform,
-        };
-      }
-
-      // If no match found, return the original reference
-      return accountRef;
-    });
-
-    return {
-      ...post,
-      socialAccounts: enhancedAccounts,
-    };
-  });
+  // Use the posts as they are - the Post component handles account matching
+  const enhancedPosts = scheduledPosts;
 
   const groupedPosts = groupPostsByDate(enhancedPosts);
 

@@ -70,18 +70,13 @@ const useFetchPosts = () => {
         }
       }
 
-      // Format accounts for display, using the account references as they are
-      const formattedAccounts = (post.accounts || []).map((account) => ({
-        id: account.id || account._id || "unknown", // Use account.id as primary identifier (references social accounts collection)
-        name: account.name || account.username || "Account",
-        email: account.email || "",
-        platform: (account.type || account.platform || "other").toLowerCase(),
-        // We don't set avatar here since we'll get it from the FetchAllAccountsContext later
-      }));
+      // Just pass through the accounts as they are, let the Post component handle matching
+      const accountsData = post.accounts || [];
 
       // Create the formatted post object
       return {
         id: post._id,
+        status: post.status || "scheduled", // Add status field for the badge
         contentType:
           post.contentType ||
           (post.media && post.media.length > 0 ? "media" : "text"),
@@ -98,7 +93,8 @@ const useFetchPosts = () => {
           day: "numeric",
           year: "numeric",
         }),
-        socialAccounts: formattedAccounts,
+        socialAccounts: accountsData,
+        accounts: accountsData, // Also set accounts for consistency
         createdAt: post.createdAt ? new Date(post.createdAt) : null,
         updatedAt: post.updatedAt ? new Date(post.updatedAt) : null,
         originalPost: post, // Keep original data for reference if needed
@@ -168,17 +164,12 @@ export function useScheduledPosts() {
         ? post.thumbnail[0].url
         : null;
 
-    // Format social accounts
-    const formattedAccounts =
-      post.socialAccounts?.map((account) => ({
-        id: account._id || account.id,
-        name: account.platformUsername || account.name,
-        platform: account.platform,
-        avatar: account.profileImage || account.avatar,
-      })) || [];
+    // Just pass through the accounts as they are, let the Post component handle matching
+    const accountsData = post.accounts || post.socialAccounts || [];
 
     return {
       id: post._id,
+      status: post.status || "scheduled", // Add status field for the badge
       contentType:
         post.contentType ||
         (post.media && post.media.length > 0 ? "media" : "text"),
@@ -195,7 +186,8 @@ export function useScheduledPosts() {
         day: "numeric",
         year: "numeric",
       }),
-      socialAccounts: formattedAccounts,
+      socialAccounts: accountsData,
+      accounts: accountsData, // Also set accounts for consistency
       createdAt: post.createdAt ? new Date(post.createdAt) : null,
       updatedAt: post.updatedAt ? new Date(post.updatedAt) : null,
       originalPost: post,

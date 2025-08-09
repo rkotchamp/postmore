@@ -14,16 +14,11 @@ const scopes = [
  * Generates the Google Authorization URL and returns it.
  */
 export async function GET(request) {
-  console.log("Initiating YouTube connection flow");
-
   const redirectUri = process.env.YOUTUBE_REDIRECT_URI;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!redirectUri || !clientId || !clientSecret) {
-    console.error(
-      "YouTube Connect Error: Missing Google OAuth environment variables (ID, SECRET, or YOUTUBE_REDIRECT_URI)."
-    );
     return NextResponse.json(
       {
         message:
@@ -46,12 +41,9 @@ export async function GET(request) {
       // state: "some_random_string"
     });
 
-    console.log("Generated YouTube Auth URL:", authorizeUrl);
-
     // Return the URL to the frontend
     return NextResponse.json({ authorizeUrl: authorizeUrl }, { status: 200 });
   } catch (error) {
-    console.error("YouTube Connect Error: Failed to generate auth URL:", error);
     return NextResponse.json(
       {
         message: "Failed to initiate YouTube connection.",

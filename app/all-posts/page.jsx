@@ -63,7 +63,17 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
   // Get up to 4 images for the preview
   const postImages = posts
     .filter((post) => post.media)
-    .map((post) => post.media)
+    .map((post) => {
+      // Handle both array and string media formats
+      if (Array.isArray(post.media) && post.media.length > 0) {
+        // If media is an array, get the first item's URL
+        const firstMedia = post.media[0];
+        return (firstMedia && typeof firstMedia === 'object') ? firstMedia.url : firstMedia;
+      }
+      // If media is a string URL
+      return typeof post.media === 'string' ? post.media : null;
+    })
+    .filter(Boolean) // Remove null/undefined/empty values
     .slice(0, 4);
 
   // Add placeholders if we have fewer than 4 images
@@ -82,7 +92,7 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
       >
         {postImages.map((image, index) => (
           <div key={index} className="relative w-full h-full bg-muted/50">
-            {image ? (
+            {image && typeof image === 'string' && image.trim() !== '' ? (
               <Image
                 src={image}
                 alt="Post preview"
