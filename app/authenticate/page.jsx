@@ -414,7 +414,7 @@ export default function Authenticate() {
         client_key: process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID,
         redirect_uri: clientRedirectUri,
         response_type: "code",
-        scope: "user.info.basic,video.upload,video.publish",
+        scope: "user.info.basic,user.info.profile,video.upload,video.publish",
         state: stateToken,
         code_challenge: codeChallenge,
         code_challenge_method: "S256",
