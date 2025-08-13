@@ -426,7 +426,7 @@ export default function Authenticate() {
 
       const authUrl = `${baseUrl}?${searchParams.toString()}`;
 
-      console.log("TikTok OAuth URL with PKCE:", authUrl);
+      // Redirect to TikTok OAuth (sensitive params removed from logs for security)
       window.location.href = authUrl;
     } catch (error) {
       console.error("Error initiating TikTok authentication:", error);
