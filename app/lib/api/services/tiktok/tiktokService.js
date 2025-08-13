@@ -38,7 +38,8 @@ async function getCreatorInfo(accessToken) {
   // Check if we're in sandbox mode
   const isSandbox =
     process.env.TIKTOK_SANDBOX_MODE === "true" ||
-    process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
+    process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl") ||
+    process.env.NODE_ENV === "development";
 
   console.log("TikTok sandbox mode detected:", isSandbox);
 
@@ -195,7 +196,8 @@ async function post(accountData, postData) {
     // 4. Initialize and publish content
     const isSandboxMode =
       process.env.TIKTOK_SANDBOX_MODE === "true" ||
-      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
+      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl") ||
+      process.env.NODE_ENV === "development";
 
     console.log("========== TikTok Attempting Real Post ==========");
     if (isSandboxMode) {
@@ -384,7 +386,8 @@ async function initializeAndPublishContent(
 
     const isSandboxMode =
       process.env.TIKTOK_SANDBOX_MODE === "true" ||
-      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
+      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl") ||
+      process.env.NODE_ENV === "development";
 
     if (isSandboxMode) {
       console.error("🚨 SANDBOX MODE ERROR: This is likely expected");

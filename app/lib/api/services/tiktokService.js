@@ -167,7 +167,8 @@ async function post(accountData, postData) {
     // Check if we're in sandbox mode
     const isSandbox =
       process.env.TIKTOK_SANDBOX_MODE === "true" ||
-      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
+      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl") ||
+      process.env.NODE_ENV === "development";
 
     if (isSandbox) {
       console.log("🧪 TikTok SANDBOX MODE: Simulating post creation");
