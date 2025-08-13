@@ -379,14 +379,45 @@ export default function Authenticate() {
         );
       }
 
+      // Generate PKCE parameters for TikTok OAuth
+      const generateCodeVerifier = () => {
+        const array = new Uint8Array(32);
+        crypto.getRandomValues(array);
+        return btoa(String.fromCharCode.apply(null, array))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, '');
+      };
+
+      const generateCodeChallenge = async (verifier) => {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(verifier);
+        const hashedValue = await crypto.subtle.digest('SHA-256', data);
+        // TikTok requires hex encoding, not base64url like other providers
+        return Array.from(new Uint8Array(hashedValue))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+      };
+
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+      // Store code verifier for the callback
+      localStorage.setItem("tiktok_code_verifier", codeVerifier);
+
       const baseUrl = "https://www.tiktok.com/v2/auth/authorize/";
+
+      // Use client-side callback handler to access localStorage
+      const clientRedirectUri = `${window.location.origin}/authenticate/tiktok-callback`;
 
       const params = {
         client_key: process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID,
-        redirect_uri: process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI,
+        redirect_uri: clientRedirectUri,
         response_type: "code",
         scope: "user.info.basic,video.list,video.publish",
         state: stateToken,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
         prompt: "select_account",
         force_authentication: "true",
       };
@@ -395,6 +426,7 @@ export default function Authenticate() {
 
       const authUrl = `${baseUrl}?${searchParams.toString()}`;
 
+      console.log("TikTok OAuth URL with PKCE:", authUrl);
       window.location.href = authUrl;
     } catch (error) {
       console.error("Error initiating TikTok authentication:", error);
