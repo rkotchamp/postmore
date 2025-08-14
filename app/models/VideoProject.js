@@ -31,11 +31,13 @@ const VideoProjectSchema = new mongoose.Schema(
     originalVideo: {
       filename: String,
       path: String,
+      url: String, // Firebase storage URL for uploaded videos
       duration: Number, // Duration in seconds
       size: Number, // File size in bytes
       format: String, // mp4, mov, avi, etc.
       resolution: String, // 1920x1080, 1280x720, etc.
-      thumbnail: String, // Path to generated thumbnail
+      thumbnail: String, // Path to generated thumbnail (local)
+      thumbnailUrl: String, // Firebase storage URL for thumbnail
     },
 
     // Transcription data from Whisper or uploaded SRT

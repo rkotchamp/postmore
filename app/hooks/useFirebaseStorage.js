@@ -4,6 +4,7 @@ import {
   uploadMultipleFiles,
   uploadPostMedia,
   uploadProfilePicture,
+  uploadClipperThumbnail,
   deleteFile,
   deleteMultipleFiles,
 } from "../lib/storage/firebase";
@@ -150,6 +151,30 @@ const useFirebaseStorage = () => {
   }, []);
 
   /**
+   * Upload clipper studio thumbnail
+   * @param {File} file - Thumbnail image file
+   * @param {string} projectId - Project ID
+   * @returns {Promise<object>} Upload result object
+   */
+  const handleUploadClipperThumbnail = useCallback(async (file, projectId) => {
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+      setError(null);
+
+      const result = await uploadClipperThumbnail(file, projectId);
+      setUploadResults([result]);
+      setUploadProgress(100);
+      return result;
+    } catch (err) {
+      setError(err.message || "Error uploading clipper thumbnail");
+      throw err;
+    } finally {
+      setIsUploading(false);
+    }
+  }, []);
+
+  /**
    * Delete multiple files from Firebase Storage
    * @param {Array<string>} paths - Array of file paths to delete
    * @returns {Promise<object>} Result of deletion operation
@@ -176,6 +201,7 @@ const useFirebaseStorage = () => {
     uploadMultipleFiles: handleUploadMultipleFiles,
     uploadPostMedia: handleUploadPostMedia,
     uploadProfilePicture: handleUploadProfilePicture,
+    uploadClipperThumbnail: handleUploadClipperThumbnail,
     deleteFile: handleDeleteFile,
     deleteMultipleFiles: handleDeleteMultipleFiles,
     resetUploadState,

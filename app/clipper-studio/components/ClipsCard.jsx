@@ -8,6 +8,7 @@ import {
   X,
   Filter,
   MoreHorizontal,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -114,6 +115,15 @@ export default function ClipsGallery({
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBack}
+            className="border-border text-foreground hover:bg-muted/50 bg-transparent"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Studio
+          </Button>
           <h2 className="text-xl font-semibold text-foreground">
             Original clips ({clips.length})
           </h2>

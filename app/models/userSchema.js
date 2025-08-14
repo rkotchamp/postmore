@@ -114,6 +114,27 @@ const userSchema = new mongoose.Schema({
       enum: ["grid", "grouped"],
       default: "grid", // Default to grid view (individual posts)
     },
+    clipper: {
+      defaultTemplate: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Template",
+        default: null, // null = use system default template
+      },
+      autoGeneration: {
+        type: Boolean,
+        default: false, // Manual clip selection by default
+      },
+      exportFormat: {
+        type: String,
+        enum: ["mp4", "mov"],
+        default: "mp4",
+      },
+      exportQuality: {
+        type: String,
+        enum: ["720p", "1080p"],
+        default: "1080p",
+      },
+    },
   },
   createdAt: {
     type: Date,

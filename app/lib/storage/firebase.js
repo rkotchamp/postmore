@@ -140,6 +140,69 @@ export const uploadVideoThumbnail = async (thumbnailFile, videoId) => {
 };
 
 /**
+ * Upload ClipperStudio project thumbnail
+ * @param {File} thumbnailFile - The thumbnail image file
+ * @param {string} projectId - ID of the project this thumbnail belongs to
+ * @returns {Promise<object>} - Thumbnail metadata including download URL
+ */
+export const uploadClipperThumbnail = async (thumbnailFile, projectId) => {
+  try {
+    // Validate that it's an image
+    if (!thumbnailFile.type.startsWith("image/")) {
+      throw new Error("Thumbnail must be an image file");
+    }
+
+    // Generate UUID for the file
+    const uuid = uuidv4();
+    const fileExtension = thumbnailFile.name.split(".").pop();
+    const fileName = `clipper_${projectId}_${uuid}.${fileExtension}`;
+
+    // Create storage path in clipperThumbnails folder
+    const storagePath = `clipperThumbnails/${fileName}`;
+
+    // Create a storage reference
+    const storageRef = ref(storage, storagePath);
+
+    // Upload the file
+    const uploadTask = uploadBytesResumable(storageRef, thumbnailFile);
+
+    // Return a promise that resolves with the download URL when upload completes
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Optional: Track upload progress
+          const progress =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          // Progress tracking without logging for better performance
+        },
+        (error) => {
+          // Handle upload errors
+          reject(error);
+        },
+        async () => {
+          // Upload completed successfully, get download URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve({
+            url: downloadURL,
+            path: storagePath,
+            size: thumbnailFile.size,
+            type: thumbnailFile.type,
+            name: fileName,
+            originalName: thumbnailFile.name,
+            uuid: uuid,
+            projectId: projectId,
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.error("Error uploading clipper thumbnail:", error);
+    throw error;
+  }
+};
+
+/**
  * Upload profile picture
  * @param {File} file - Image file
  * @param {string} userId - User ID
