@@ -3,8 +3,6 @@ import { spawn } from 'child_process';
 import { uploadClipperThumbnail } from '@/app/lib/storage/firebase';
 
 export async function POST(request) {
-  console.log('🔍 [METADATA] Starting video metadata extraction...');
-  
   try {
     const { url } = await request.json();
     
@@ -12,15 +10,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
     
-    console.log(`📹 [METADATA] Extracting from: ${url}`);
-    
-    // Use yt-dlp to extract metadata and thumbnail
     const metadata = await extractVideoMetadata(url);
-    
-    console.log('✅ [METADATA] Extraction completed successfully');
-    console.log(`📊 [METADATA] Title: ${metadata.title}`);
-    console.log(`🖼️ [METADATA] Thumbnail: ${metadata.thumbnail ? 'Found' : 'Not found'}`);
-    console.log(`⏱️ [METADATA] Duration: ${metadata.duration}s`);
     
     return NextResponse.json({
       success: true,
@@ -28,7 +18,7 @@ export async function POST(request) {
     });
     
   } catch (error) {
-    console.error('❌ [METADATA] Extraction failed:', error.message);
+    console.error('Metadata extraction failed:', error.message);
     
     return NextResponse.json({
       success: false,
@@ -39,21 +29,24 @@ export async function POST(request) {
 
 async function extractVideoMetadata(url) {
   return new Promise((resolve, reject) => {
-    console.log('🚀 [YT-DLP] Starting yt-dlp extraction...');
-    
-    // yt-dlp command to extract metadata and thumbnail info
+    const platform = detectPlatform(url);
     const args = [
-      '--dump-json',        // Output metadata as JSON
-      '--no-download',      // Don't download the video
-      '--no-warnings',      // Suppress warnings
-      '--write-thumbnail',  // Extract thumbnail info
-      '--skip-download',    // Skip actual video download
-      '--extractor-retries', '3',  // Retry failed extractions
-      '--socket-timeout', '30',    // 30 second timeout
-      url
+      '--dump-json',
+      '--no-download',
+      '--no-warnings',
+      '--extractor-retries', '5',
+      '--socket-timeout', '45',
     ];
+
+    if (platform === 'rumble') {
+      args.push('--ignore-errors');
+      args.push('--no-check-certificate');
+    } else {
+      args.push('--write-thumbnail');
+      args.push('--skip-download');
+    }
     
-    console.log(`💻 [YT-DLP] Command: yt-dlp ${args.join(' ')}`);
+    args.push(url);
     
     const ytdlp = spawn('yt-dlp', args);
     
@@ -66,23 +59,16 @@ async function extractVideoMetadata(url) {
     
     ytdlp.stderr.on('data', (data) => {
       stderr += data.toString();
-      console.log(`📝 [YT-DLP] Info: ${data.toString().trim()}`);
     });
     
     ytdlp.on('close', async (code) => {
-      console.log(`🏁 [YT-DLP] Process exited with code: ${code}`);
-      
       if (code !== 0) {
-        console.error(`❌ [YT-DLP] Error output: ${stderr}`);
         reject(new Error(`yt-dlp failed with code ${code}: ${stderr}`));
         return;
       }
       
       try {
-        // Parse the JSON output
         const metadata = JSON.parse(stdout.trim());
-        
-        // Extract relevant information with async thumbnail processing
         const thumbnail = await getBestThumbnailWithFrames(metadata, url);
         
         const result = {
@@ -105,18 +91,14 @@ async function extractVideoMetadata(url) {
           is_live: metadata.is_live || metadata.live_status === 'is_live' || false
         };
         
-        console.log(`✨ [YT-DLP] Successfully extracted metadata for: ${result.title}`);
         resolve(result);
         
       } catch (parseError) {
-        console.error('❌ [YT-DLP] JSON parsing failed:', parseError.message);
-        console.error('📄 [YT-DLP] Raw output:', stdout);
         reject(new Error(`Failed to parse yt-dlp output: ${parseError.message}`));
       }
     });
     
     ytdlp.on('error', (error) => {
-      console.error('❌ [YT-DLP] Process error:', error.message);
       reject(new Error(`yt-dlp process failed: ${error.message}`));
     });
   });
@@ -143,17 +125,12 @@ function getBestThumbnail(metadata, url) {
   const platform = detectPlatform(url);
   const thumbnails = metadata.thumbnails || [];
   
-  console.log(`🖼️ [THUMBNAIL] Processing ${thumbnails.length} thumbnails for ${platform}`);
-  
-  // If no thumbnails array, return the main thumbnail field
   if (thumbnails.length === 0) {
     return metadata.thumbnail;
   }
   
-  // Platform-specific thumbnail selection
   switch (platform) {
     case 'youtube':
-      // YouTube: prefer maxresdefault, then hqdefault
       const ytPreferred = thumbnails.find(t => 
         t.id === 'maxresdefault' || t.url?.includes('maxresdefault')
       ) || thumbnails.find(t => 
@@ -163,40 +140,42 @@ function getBestThumbnail(metadata, url) {
       break;
       
     case 'twitch':
-      // Twitch: prefer highest resolution thumbnail
       const twitchSorted = thumbnails
         .filter(t => t.url && t.width && t.height)
         .sort((a, b) => (b.width * b.height) - (a.width * a.height));
       if (twitchSorted.length > 0) {
-        console.log(`🎮 [TWITCH] Using thumbnail: ${twitchSorted[0].width}x${twitchSorted[0].height}`);
         return twitchSorted[0].url;
       }
       break;
       
     case 'kick':
-      // Kick: prefer highest quality available
       const kickSorted = thumbnails
         .filter(t => t.url && t.width && t.height)
         .sort((a, b) => (b.width * b.height) - (a.width * a.height));
       if (kickSorted.length > 0) {
-        console.log(`⚽ [KICK] Using thumbnail: ${kickSorted[0].width}x${kickSorted[0].height}`);
         return kickSorted[0].url;
       }
       break;
       
     case 'rumble':
-      // Rumble: prefer highest resolution
-      const rumbleSorted = thumbnails
-        .filter(t => t.url && t.width && t.height)
-        .sort((a, b) => (b.width * b.height) - (a.width * a.height));
-      if (rumbleSorted.length > 0) {
-        console.log(`📺 [RUMBLE] Using thumbnail: ${rumbleSorted[0].width}x${rumbleSorted[0].height}`);
-        return rumbleSorted[0].url;
+      const rumbleStrategies = [
+        () => thumbnails
+          .filter(t => t.url && t.width && t.height && t.width >= 480)
+          .sort((a, b) => (b.width * b.height) - (a.width * a.height))[0],
+        () => thumbnails.find(t => t.url && t.width && t.height),
+        () => thumbnails.find(t => t.url),
+        () => metadata.thumbnail ? { url: metadata.thumbnail } : null
+      ];
+      
+      for (const strategy of rumbleStrategies) {
+        const result = strategy();
+        if (result?.url) {
+          return result.url;
+        }
       }
       break;
       
     default:
-      // Generic: highest resolution available
       const genericSorted = thumbnails
         .filter(t => t.url && t.width && t.height)
         .sort((a, b) => (b.width * b.height) - (a.width * a.height));
@@ -205,14 +184,11 @@ function getBestThumbnail(metadata, url) {
       }
   }
   
-  // Fallback: first available thumbnail with URL
   const fallback = thumbnails.find(t => t.url);
   if (fallback) {
-    console.log(`🔄 [FALLBACK] Using fallback thumbnail for ${platform}`);
     return fallback.url;
   }
   
-  // Final fallback: metadata.thumbnail
   return metadata.thumbnail;
 }
 
@@ -221,17 +197,21 @@ function getBestThumbnail(metadata, url) {
  */
 async function extractVideoFrame(url) {
   return new Promise((resolve, reject) => {
-    console.log('🎬 [FRAME] Extracting video frame for thumbnail...');
-    
     const outputPath = `/tmp/thumbnail_${Date.now()}.jpg`;
+    const platform = detectPlatform(url);
     
-    // Use yt-dlp with ffmpeg to extract a frame at 10% duration
-    const args = [
-      '--no-download',
-      '--get-url',
-      '--format', 'best[height<=720]', // Limit quality for faster processing
-      url
-    ];
+    const args = ['--no-download', '--get-url'];
+    
+    if (platform === 'rumble') {
+      args.push('--format', 'best[height<=480]/best');
+      args.push('--ignore-errors');
+      args.push('--no-check-certificate');
+      args.push('--extractor-retries', '3');
+    } else {
+      args.push('--format', 'best[height<=720]');
+    }
+    
+    args.push(url);
     
     const process = spawn('yt-dlp', args);
     let videoUrl = '';
@@ -248,9 +228,7 @@ async function extractVideoFrame(url) {
     process.on('close', (code) => {
       if (code === 0 && videoUrl.trim()) {
         const directVideoUrl = videoUrl.trim().split('\n')[0];
-        console.log('📺 [FRAME] Got direct video URL, extracting frame...');
         
-        // Now use ffmpeg to extract frame from direct URL
         extractFrameWithFFmpeg(directVideoUrl, outputPath)
           .then(resolve)
           .catch(reject);
@@ -270,16 +248,13 @@ async function extractVideoFrame(url) {
  */
 function extractFrameWithFFmpeg(videoUrl, outputPath) {
   return new Promise((resolve, reject) => {
-    console.log('🎞️ [FFMPEG] Extracting frame at 10% duration...');
-    
-    // FFmpeg command to extract frame at 10% of video duration
     const args = [
       '-i', videoUrl,
-      '-vf', 'select=gte(n\\,1)', // Skip first frame, get second frame
+      '-vf', 'select=gte(n\\,1)',
       '-vframes', '1',
       '-f', 'image2',
-      '-q:v', '2', // High quality
-      '-y', // Overwrite output file
+      '-q:v', '2',
+      '-y',
       outputPath
     ];
     
@@ -293,16 +268,13 @@ function extractFrameWithFFmpeg(videoUrl, outputPath) {
     ffmpeg.on('close', (code) => {
       if (code === 0) {
         try {
-          // Convert extracted frame to base64 data URL for immediate preview
           const fs = require('fs');
           const frameBuffer = fs.readFileSync(outputPath);
           const base64Frame = frameBuffer.toString('base64');
           const dataUrl = `data:image/jpeg;base64,${base64Frame}`;
           
-          // Clean up temp file
           fs.unlinkSync(outputPath);
           
-          console.log('✅ [FFMPEG] Successfully extracted video frame');
           resolve(dataUrl);
         } catch (fileError) {
           reject(new Error(`File processing failed: ${fileError.message}`));
@@ -339,7 +311,6 @@ function parseDuration(durationStr) {
  * Get thumbnail for live streams or videos without thumbnails
  */
 function getLiveThumbnail(metadata, platform, thumbnails) {
-  // Try to find avatar or channel thumbnail
   const avatar = thumbnails.find(t => 
     t.id?.includes('avatar') || 
     t.url?.includes('avatar') ||
@@ -348,7 +319,6 @@ function getLiveThumbnail(metadata, platform, thumbnails) {
   );
   
   if (avatar) {
-    console.log(`👤 [LIVE] Using channel avatar for ${platform}`);
     return avatar.url;
   }
   
@@ -386,23 +356,18 @@ function generateLivePlaceholder(platform, metadata) {
  */
 async function storeFrameInFirebase(frameBuffer, originalUrl) {
   try {
-    // Create a File-like object from buffer for upload
     const timestamp = Date.now();
     const urlHash = Buffer.from(originalUrl).toString('base64').slice(0, 16);
     const fileName = `extracted_frame_${urlHash}_${timestamp}.jpg`;
     
-    // Create blob from buffer
     const blob = new Blob([frameBuffer], { type: 'image/jpeg' });
     const file = new File([blob], fileName, { type: 'image/jpeg' });
     
-    console.log('📤 [FIREBASE] Uploading extracted frame...');
     const result = await uploadClipperThumbnail(file, `frame_${timestamp}`);
     
-    console.log('✅ [FIREBASE] Frame uploaded successfully');
     return result.url;
     
   } catch (error) {
-    console.error('❌ [FIREBASE] Failed to upload frame:', error);
     throw error;
   }
 }
@@ -414,33 +379,24 @@ async function getBestThumbnailWithFrames(metadata, url) {
   const platform = detectPlatform(url);
   const thumbnail = getBestThumbnail(metadata, url);
   
-  // For platforms that often have thumbnail issues, prefer frame extraction
   const preferFrameExtraction = ['twitch', 'kick', 'rumble'].includes(platform);
   
-  // For live streams, use live indicators
   const isLive = metadata.is_live || metadata.live_status === 'is_live';
   if (isLive) {
-    console.log('🔴 [LIVE] Returning live stream indicator');
-    return thumbnail; // Will be live indicator from getBestThumbnail
+    return thumbnail;
   }
   
-  // If we prefer frame extraction or thumbnail is problematic, extract frame
   if (preferFrameExtraction || !thumbnail || thumbnail.includes('placeholder') || thumbnail.includes('data:image/svg')) {
-    console.log(`🎬 [PREFERENCE] Extracting frame for ${platform} (prefer: ${preferFrameExtraction})`);
-    
     try {
       const frameUrl = await extractVideoFrame(url);
       
       if (frameUrl) {
-        console.log('✅ [FRAME] Using extracted video frame as thumbnail');
         return frameUrl;
       }
     } catch (error) {
-      console.warn('⚠️ [FRAME] Frame extraction failed, falling back to thumbnail:', error.message);
+      // Fall back to original thumbnail
     }
   }
   
-  // Return original thumbnail if frame extraction failed
-  console.log('🔄 [ORIGINAL] Using original thumbnail');
   return thumbnail;
 }

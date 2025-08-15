@@ -337,6 +337,9 @@ export default function ClipperStudio() {
       
       console.log('🎉 [CLIPPER] Processing started successfully');
       
+      // Start actual video processing with SmolVLM2
+      startVideoProcessing(result.project.id, url || uploadedFile);
+      
     } catch (error) {
       console.error('❌ [CLIPPER] Failed to start processing:', error);
       // Show error to user but don't prevent them from trying again
@@ -777,4 +780,62 @@ export default function ClipperStudio() {
       )}
     </div>
   );
+
+  // Function to start actual video processing with SmolVLM2
+  async function startVideoProcessing(projectId, videoSource) {
+    console.log(`🚀 [PROCESSING] Starting SmolVLM2 analysis for project: ${projectId}`);
+    
+    try {
+      // Update progress to show processing started
+      updateProjectProgress(projectId, 10);
+      
+      // Call our SmolVLM2 clip detection API
+      const response = await fetch('/api/video-processing/detect-clips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: typeof videoSource === 'string' ? videoSource : null,
+          file: typeof videoSource !== 'string' ? videoSource : null,
+          options: {
+            numFrames: 8,
+            minEngagementScore: 25,
+            maxClips: 5,
+            clipDuration: 30
+          }
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Clip detection failed: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log(`✅ [PROCESSING] Found ${result.clips.length} clips for project ${projectId}`);
+        
+        // Update progress to completion
+        updateProjectProgress(projectId, 100);
+        
+        // TODO: Store clips in database (next task)
+        // TODO: Update project status to 'completed' (next task)
+        
+      } else {
+        throw new Error(result.error || 'Clip detection failed');
+      }
+      
+    } catch (error) {
+      console.error(`❌ [PROCESSING] Failed to process project ${projectId}:`, error);
+      
+      // Update project to show error state
+      updateProjectProgress(projectId, 0, 'error');
+    }
+  }
+  
+  // Helper function to update project progress
+  function updateProjectProgress(projectId, progress, status = 'processing') {
+    updateProject(projectId, { progress, status });
+  }
 }

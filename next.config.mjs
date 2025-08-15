@@ -22,7 +22,7 @@ const nextConfig = {
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.stripe.com;
       style-src 'self' 'unsafe-inline';
-      img-src 'self' blob: data: https://cdn.bsky.app https://*.twitter.com https://*.twimg.com https://*.instagram.com https://*.fbcdn.net https://*.facebook.com https://*.tiktokcdn.com https://*.tiktokcdn-eu.com https://*.cdninstagram.com https://*.firebasestorage.googleapis.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.googleusercontent.com https://images.ctfassets.net https://*.ctfassets.net https://media.licdn.com https://yt3.ggpht.com https://i.ytimg.com https://*.ggpht.com;
+      img-src 'self' blob: data: https://cdn.bsky.app https://*.twitter.com https://*.twimg.com https://*.instagram.com https://*.fbcdn.net https://*.facebook.com https://*.tiktokcdn.com https://*.tiktokcdn-eu.com https://*.cdninstagram.com https://*.firebasestorage.googleapis.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.googleusercontent.com https://images.ctfassets.net https://*.ctfassets.net https://media.licdn.com https://yt3.ggpht.com https://i.ytimg.com https://*.ggpht.com https://*.rumble.com https://1a-1791.com https://*.kick.com;
       font-src 'self';
       object-src 'none';
       base-uri 'self';
