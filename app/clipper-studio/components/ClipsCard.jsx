@@ -107,22 +107,12 @@ export default function ClipsGallery({
     for (let i = 0; i < clipsToDownload.length; i++) {
       const clip = clipsToDownload[i];
       if (clip.videoUrl) {
-        try {
-          // Create download link for each clip
-          const link = document.createElement('a');
-          link.href = clip.videoUrl;
-          link.download = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
-          link.style.display = 'none';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-
-          // Small delay between downloads to avoid overwhelming the browser
-          if (i < clipsToDownload.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } catch (error) {
-          console.error(`❌ [BULK-DOWNLOAD] Failed to download clip: ${clip.title}`, error);
+        // Simple fallback - open each video in new tab
+        window.open(clip.videoUrl, '_blank');
+        
+        // Small delay between downloads to avoid overwhelming the browser
+        if (i < clipsToDownload.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 800));
         }
       }
     }
@@ -131,7 +121,7 @@ export default function ClipsGallery({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-8">
+    <div className="w-full max-w-7xl mx-auto px-4 py-8 animate-fadeIn">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -201,11 +191,11 @@ export default function ClipsGallery({
         </div>
       </div>
 
-      {/* Clips Grid - Responsive layout based on aspect ratio */}
-      <div className={`grid gap-4 mb-8 ${
+      {/* Clips Grid - More breathing space for larger cards */}
+      <div className={`grid gap-6 mb-8 ${
         aspectRatio === "vertical" 
-          ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7" 
-          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" 
+          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
       }`}>
         {clips.map((clip) => (
           <ClipCard

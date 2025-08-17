@@ -65,7 +65,56 @@
     20%, 40%, 60%, 80% { transform: translateX(4px); }
   }
   
+  @keyframes scan-vertical {
+    0% { 
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% { 
+      transform: translateY(calc(100vh + 100%));
+      opacity: 0;
+    }
+  }
+  
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+  
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
   .animate-shake {
     animation: shake 0.5s ease-in-out;
+  }
+  
+  .animate-scan-vertical {
+    animation: scan-vertical 3s linear infinite;
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s ease-in-out infinite;
+  }
+  
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
   }
 }

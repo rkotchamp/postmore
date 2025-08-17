@@ -9,6 +9,7 @@ import { Input } from "@/app/components/ui/input";
 import { Card } from "@/app/components/ui/card";
 import ProcessingView from "./VideoDownloader";
 import ClipsGallery from "./ClipsCard";
+import SkeletonClipsGallery from "./SkeletonClipsGallery";
 import DeleteDialog from "@/app/components/ui/delete-dialog";
 import { getThumbnail } from "../../lib/video-processing/utils/thumbnailExtractor";
 import { useClipperStudioStore } from "../../lib/store/clipperStudioStore";
@@ -603,7 +604,22 @@ export default function ClipperStudio() {
 
   // Show clips gallery if processing is complete
   if (showClipsGallery && currentProjectId) {
-    const currentProjectClips = allProjectClips[currentProjectId]?.clips || [];
+    const currentProjectData = allProjectClips[currentProjectId];
+    const currentProjectClips = currentProjectData?.clips || [];
+    const isStillProcessing = currentProjectData?.processedClips === 0 && currentProjectData?.totalClips > 0;
+    const expectedClipCount = currentProjectData?.totalClips || 8; // Default to 8 if unknown
+    
+    // Show skeleton loading if clips are loading or still processing
+    if (isLoadingClips || isStillProcessing) {
+      return (
+        <SkeletonClipsGallery
+          expectedClipCount={expectedClipCount}
+          onBack={handleReturnToStudio}
+          aspectRatio="vertical"
+          isProcessing={isStillProcessing}
+        />
+      );
+    }
     
     return (
       <ClipsGallery
