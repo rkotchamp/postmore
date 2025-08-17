@@ -67,6 +67,19 @@ class HuggingFaceWhisperService {
       }
 
       // Call the /predict endpoint with audio_file parameter
+      console.log('🎙️ [WHISPER] Attempting transcription with Gradio...');
+      console.log('🎙️ [WHISPER] Audio file path:', audioFile);
+      console.log('🎙️ [WHISPER] Space name:', this.spaceName);
+      
+      // Try to get the API info first to see available endpoints
+      try {
+        const apiInfo = await this.gradioClient.view_api();
+        console.log('🎙️ [WHISPER] Available API endpoints:', Object.keys(apiInfo.named_endpoints || {}));
+        console.log('🎙️ [WHISPER] Available functions:', apiInfo.named_endpoints);
+      } catch (infoError) {
+        console.warn('⚠️ [WHISPER] Could not get API info:', infoError.message);
+      }
+      
       const result = await this.gradioClient.predict("/predict", {
         audio_file: audioFile
       });
@@ -167,4 +180,22 @@ class HuggingFaceWhisperService {
   }
 }
 
-module.exports = HuggingFaceWhisperService;
+// Create singleton instance
+const whisperService = new HuggingFaceWhisperService();
+
+// Export named functions for easy usage
+export const transcribeAudio = async (audioData, options = {}) => {
+  return await whisperService.transcribe(audioData, options);
+};
+
+export const transcribeAudioFromFile = async (filePath, options = {}) => {
+  return await whisperService.transcribeFromFile(filePath, options);
+};
+
+export const checkWhisperHealth = async () => {
+  return await whisperService.healthCheck();
+};
+
+// Also export the class for advanced usage
+export default whisperService;
+export { HuggingFaceWhisperService };

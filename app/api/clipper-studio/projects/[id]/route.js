@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import connectToMongoose from "@/app/lib/db/mongoose";
 import VideoProject from "@/app/models/VideoProject";
+import VideoClip from "@/app/models/VideoClip";
 import { deleteFile } from "@/app/lib/storage/firebase";
 
 /**
@@ -173,15 +174,23 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    // Step 1: Find and collect all related clips
+    const clips = await VideoClip.find({
+      projectId: id,
+      userId: session.user.id
+    });
+
+    console.log(`📋 [CLEANUP] Found ${clips.length} clips to delete for project ${id}`);
+
     // Collect Firebase file paths to delete
     const filesToDelete = [];
     
-    // Add thumbnail URL if it exists and is a Firebase URL
+    // Add project thumbnail URL if it exists and is a Firebase URL
     const thumbnailUrl = project.originalVideo?.thumbnailUrl;
     if (thumbnailUrl && thumbnailUrl.includes('firebasestorage.googleapis.com')) {
       const thumbnailPath = extractFirebasePathFromUrl(thumbnailUrl);
       if (thumbnailPath) {
-        filesToDelete.push(thumbnailPath);
+        filesToDelete.push({ path: thumbnailPath, type: 'project-thumbnail' });
       }
     }
 
@@ -190,20 +199,36 @@ export async function DELETE(request, { params }) {
     if (videoUrl && videoUrl.includes('firebasestorage.googleapis.com')) {
       const videoPath = extractFirebasePathFromUrl(videoUrl);
       if (videoPath) {
-        filesToDelete.push(videoPath);
+        filesToDelete.push({ path: videoPath, type: 'project-video' });
       }
     }
 
-    // Delete files from Firebase Storage
+    // Add all clip video files from Firebase
+    clips.forEach((clip, index) => {
+      const clipVideoUrl = clip.generatedVideo?.url;
+      if (clipVideoUrl && clipVideoUrl.includes('firebasestorage.googleapis.com')) {
+        const clipPath = extractFirebasePathFromUrl(clipVideoUrl);
+        if (clipPath) {
+          filesToDelete.push({ 
+            path: clipPath, 
+            type: 'clip-video',
+            clipId: clip._id,
+            title: clip.title 
+          });
+        }
+      }
+    });
+
+    // Step 2: Delete files from Firebase Storage
     if (filesToDelete.length > 0) {
       console.log(`🧹 [CLEANUP] Deleting ${filesToDelete.length} files from Firebase...`);
       
-      const deletePromises = filesToDelete.map(async (path) => {
+      const deletePromises = filesToDelete.map(async (fileInfo) => {
         try {
-          await deleteFile(path);
-          console.log(`✅ [CLEANUP] Deleted file: ${path}`);
+          await deleteFile(fileInfo.path);
+          console.log(`✅ [CLEANUP] Deleted ${fileInfo.type}: ${fileInfo.path}`);
         } catch (fileError) {
-          console.warn(`⚠️ [CLEANUP] Failed to delete file ${path}:`, fileError.message);
+          console.warn(`⚠️ [CLEANUP] Failed to delete ${fileInfo.type} ${fileInfo.path}:`, fileError.message);
           // Continue with other deletions even if one fails
         }
       });
@@ -211,14 +236,29 @@ export async function DELETE(request, { params }) {
       await Promise.allSettled(deletePromises);
     }
 
-    // Now delete the project from database
+    // Step 3: Delete all clips from database
+    if (clips.length > 0) {
+      const deletedClips = await VideoClip.deleteMany({
+        projectId: id,
+        userId: session.user.id
+      });
+      console.log(`🗑️ [DATABASE] Deleted ${deletedClips.deletedCount} clips from database`);
+    }
+
+    // Step 4: Delete the project from database
     await VideoProject.findByIdAndDelete(id);
 
-    console.log(`✅ [PROJECT] Deleted project and associated files: ${id}`);
+    console.log(`✅ [PROJECT] Complete deletion finished for project: ${id}`);
+    console.log(`🎯 [SUMMARY] Deleted: 1 project, ${clips.length} clips, ${filesToDelete.length} Firebase files`);
 
     return NextResponse.json({
       success: true,
-      message: "Project and associated files deleted successfully"
+      message: "Project, clips, and all associated files deleted successfully",
+      deletionSummary: {
+        project: 1,
+        clips: clips.length,
+        firebaseFiles: filesToDelete.length
+      }
     });
 
   } catch (error) {

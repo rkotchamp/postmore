@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Upload, Link, Play } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/app/components/ui/button";
@@ -8,11 +9,22 @@ import { Input } from "@/app/components/ui/input";
 import { Card } from "@/app/components/ui/card";
 import ProcessingView from "./VideoDownloader";
 import ClipsGallery from "./ClipsCard";
+import DeleteDialog from "@/app/components/ui/delete-dialog";
 import { getThumbnail } from "../../lib/video-processing/utils/thumbnailExtractor";
 import { useClipperStudioStore } from "../../lib/store/clipperStudioStore";
 import { useClipperMutations } from "../../hooks/useClipperMutations";
+import { useMultipleProjectClips } from "../hooks/useProjectClips";
 
 export default function ClipperStudio() {
+  const queryClient = useQueryClient();
+  
+  // Delete dialog state
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    projectId: null,
+    projectTitle: null
+  });
+  
   // Use Zustand store instead of local state
   const {
     url,
@@ -25,6 +37,7 @@ export default function ClipperStudio() {
     previewMetadata,
     activeProjects,
     showClipsGallery,
+    currentProjectId,
     setUrl,
     setUploadedFile,
     setHasVideo,
@@ -34,6 +47,7 @@ export default function ClipperStudio() {
     setPreviewThumbnail,
     setPreviewMetadata,
     setShowClipsGallery,
+    setCurrentProjectId,
     addProject,
     updateProject,
     clearPreview,
@@ -55,6 +69,16 @@ export default function ClipperStudio() {
     deleteProject,
     saveProject
   } = useClipperMutations();
+
+  // Get all project IDs for fetching clips
+  const projectIds = activeProjects.map(project => project.id).filter(Boolean);
+  
+  // Fetch clips for all projects
+  const { 
+    data: allProjectClips = {}, 
+    isLoading: isLoadingClips,
+    error: clipsError 
+  } = useMultipleProjectClips(projectIds, projectIds.length > 0);
 
   const handleVideoUrlSubmit = async (e) => {
     e.preventDefault();
@@ -385,9 +409,85 @@ export default function ClipperStudio() {
   };
 
   const handleProcessingViewClick = (projectId) => {
+    // Validate projectId before proceeding
+    if (!projectId) {
+      console.error('❌ [GALLERY] ProjectId is undefined or null');
+      return;
+    }
+    
     const project = activeProjects.find(p => p.id === projectId);
+    const projectClips = allProjectClips[projectId] || { clips: [], totalClips: 0, processedClips: 0 };
+    
+    console.log(`🎯 [GALLERY] Processing view click for project: ${projectId}`);
+    console.log(`📊 [GALLERY] Project found:`, !!project);
+    console.log(`📊 [GALLERY] Project status:`, project?.status);
+    console.log(`📊 [GALLERY] Processed clips:`, projectClips.processedClips);
+    
     if (project && project.status === "completed") {
-      setShowClipsGallery(true);
+      // Only allow clicking if clips have been fully processed
+      const hasProcessedClips = projectClips.processedClips > 0;
+      
+      if (hasProcessedClips) {
+        console.log(`✅ [GALLERY] Opening gallery for project: ${projectId}`);
+        setCurrentProjectId(projectId);
+        setShowClipsGallery(true);
+      } else {
+        console.log(`⚠️ [GALLERY] No processed clips available for project: ${projectId}`);
+      }
+      // If not processed, do nothing - processing happens automatically in background
+    } else {
+      console.log(`⚠️ [GALLERY] Project not ready for gallery view: ${project?.status || 'not found'}`);
+    }
+  };
+
+  const handleProcessClips = async (projectId) => {
+    try {
+      console.log('🎬 [PROCESS] Starting background clip processing for project:', projectId);
+      
+      // Keep processing state and update progress
+      updateProjectProgress(projectId, 60);
+      
+      const response = await fetch(`/api/clipper-studio/projects/${projectId}/process-clips`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Clip processing failed: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log(`✅ [PROCESS] Successfully processed ${result.processedClips}/${result.totalClips} clips`);
+        
+        // Mark as completed with 100% progress
+        updateProject(projectId, { 
+          status: 'completed',
+          progress: 100 
+        });
+        
+        // Trigger clips data refresh to update UI badges
+        console.log(`🔄 [PROCESS] Refreshing clips data for UI update...`);
+        queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
+        
+        // Don't auto-open gallery - let user click when ready
+        
+      } else {
+        throw new Error(result.error || 'Clip processing failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ [PROCESS] Clip processing failed:', error);
+      
+      // Update project with error state
+      updateProject(projectId, { 
+        status: 'failed',
+        progress: 0,
+        error: error.message 
+      });
     }
   };
 
@@ -398,42 +498,63 @@ export default function ClipperStudio() {
 
   const handleReturnToStudio = () => {
     setShowClipsGallery(false);
+    setCurrentProjectId(null);
   };
 
-  const handleDeleteProject = async (projectId) => {
+  const handleDeleteProject = (projectId) => {
+    // Find project to get title for dialog
+    const project = activeProjects.find(p => p.id === projectId);
+    if (!project) {
+      console.warn('⚠️ [DELETE] Project not found in local state:', projectId);
+      return;
+    }
+
+    // Open delete confirmation dialog
+    setDeleteDialog({
+      isOpen: true,
+      projectId: projectId,
+      projectTitle: project.title || 'Untitled Project'
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    const { projectId } = deleteDialog;
+    
     try {
       console.log('🗑️ [DELETE] Deleting project:', projectId);
-      
-      // Check if project exists in local state
-      const project = activeProjects.find(p => p.id === projectId);
-      if (!project) {
-        console.warn('⚠️ [DELETE] Project not found in local state:', projectId);
-        return;
-      }
       
       // Show deleting status for immediate feedback
       updateProject(projectId, { status: 'deleting' });
       
-      try {
-        // Try to delete from database
-        await deleteProject.mutateAsync(projectId);
-        console.log('✅ [DELETE] Project deleted from database');
-      } catch (dbError) {
-        console.warn('⚠️ [DELETE] Database deletion failed (project may not exist in DB):', dbError.message);
-        // Continue with local removal even if DB deletion fails
-      }
+      // Delete from database (this will handle Firebase cleanup too)
+      await deleteProject.mutateAsync(projectId);
+      console.log('✅ [DELETE] Project deleted from database');
       
       // Remove from local store
       removeProject(projectId);
       console.log('✅ [DELETE] Project removed from local state');
       
+      // Close dialog
+      handleCloseDeleteDialog();
+      
     } catch (error) {
       console.error('❌ [DELETE] Failed to delete project:', error);
-      alert('Failed to delete project. Please try again.');
       
       // Restore project status if deletion failed
       updateProject(projectId, { status: 'completed' });
+      
+      // Close dialog and show error
+      handleCloseDeleteDialog();
+      alert('Failed to delete project. Please try again.');
     }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialog({
+      isOpen: false,
+      projectId: null,
+      projectTitle: null
+    });
   };
 
   const handleSaveProject = async (projectId) => {
@@ -481,11 +602,15 @@ export default function ClipperStudio() {
   };
 
   // Show clips gallery if processing is complete
-  if (showClipsGallery) {
+  if (showClipsGallery && currentProjectId) {
+    const currentProjectClips = allProjectClips[currentProjectId]?.clips || [];
+    
     return (
       <ClipsGallery
+        clips={currentProjectClips}
         onClipSelect={handleClipSelection}
         onBack={handleReturnToStudio}
+        aspectRatio="vertical" // Use 9:16 aspect ratio for TikTok/Reels/Shorts
       />
     );
   }
@@ -758,26 +883,43 @@ export default function ClipperStudio() {
             
             {/* Processing Views Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {/* TODO: Replace with database projects using useClipperProjects hook */}
-              {activeProjects.map((project) => (
-                <ProcessingView
-                  key={project.id}
-                  projectId={project.id}
-                  videoUrl={project.url}
-                  videoTitle={project.title}
-                  progress={project.progress}
-                  status={project.status}
-                  thumbnailUrl={project.thumbnailUrl} // Pass stored Firebase thumbnail URL
-                  onClick={() => project.status === 'completed' && handleProcessingViewClick(project.id)}
-                  isClickable={project.status === 'completed'}
-                  onDelete={handleDeleteProject}
-                  onSave={handleSaveProject}
-                />
-              ))}
+              {activeProjects.map((project) => {
+                // Get clip data for this project
+                const projectClips = allProjectClips[project.id] || { clips: [], totalClips: 0, processedClips: 0 };
+                const hasClips = projectClips.totalClips > 0;
+                const hasProcessedClips = projectClips.processedClips > 0;
+                
+                return (
+                  <ProcessingView
+                    key={project.id}
+                    projectId={project.id}
+                    videoUrl={project.url}
+                    videoTitle={project.title}
+                    progress={project.progress}
+                    status={project.status}
+                    thumbnailUrl={project.thumbnailUrl} // Pass stored Firebase thumbnail URL
+                    hasClips={hasClips}
+                    totalClips={projectClips.totalClips}
+                    processedClips={projectClips.processedClips}
+                    onClick={() => hasProcessedClips && handleProcessingViewClick(project.id)}
+                    isClickable={hasProcessedClips}
+                    onDelete={handleDeleteProject}
+                    onSave={handleSaveProject}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+        projectTitle={deleteDialog.projectTitle}
+      />
     </div>
   );
 
@@ -798,6 +940,7 @@ export default function ClipperStudio() {
         body: JSON.stringify({
           url: typeof videoSource === 'string' ? videoSource : null,
           file: typeof videoSource !== 'string' ? videoSource : null,
+          projectId: projectId, // Pass projectId for database storage
           options: {
             numFrames: 8,
             minEngagementScore: 25,
@@ -816,11 +959,12 @@ export default function ClipperStudio() {
       if (result.success) {
         console.log(`✅ [PROCESSING] Found ${result.clips.length} clips for project ${projectId}`);
         
-        // Update progress to completion
-        updateProjectProgress(projectId, 100);
+        // Update progress to 50% (metadata done, video processing next)
+        updateProjectProgress(projectId, 50);
         
-        // TODO: Store clips in database (next task)
-        // TODO: Update project status to 'completed' (next task)
+        // Automatically start clip processing (FFmpeg + Whisper)
+        console.log(`🎬 [PROCESSING] Starting background clip processing...`);
+        handleProcessClips(projectId);
         
       } else {
         throw new Error(result.error || 'Clip detection failed');

@@ -2,18 +2,14 @@
 
 import { useState } from "react";
 import {
-  Play,
-  Download,
-  Share2,
-  X,
   Filter,
   MoreHorizontal,
   ArrowLeft,
+  Download,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
-import { Card } from "@/app/components/ui/card";
-import { Badge } from "@/app/components/ui/badge";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import ClipCard from "./ClipCard";
 
 const defaultClips = [
   {
@@ -87,27 +83,51 @@ export default function ClipsGallery({
   clips = defaultClips,
   onClipSelect,
   onBack,
+  aspectRatio = "vertical", // "video" or "vertical"
 }) {
   const [selectedClips, setSelectedClips] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
 
-  const handleClipSelect = (clipId) => {
-    if (selectMode) {
-      setSelectedClips((prev) =>
-        prev.includes(clipId)
-          ? prev.filter((id) => id !== clipId)
-          : [...prev, clipId]
-      );
-    } else {
-      onClipSelect?.(clipId);
-    }
-  };
+  // Moved handleClipSelect logic into the ClipCard component for better encapsulation
 
   const toggleSelectMode = () => {
     setSelectMode(!selectMode);
     if (selectMode) {
       setSelectedClips([]);
     }
+  };
+
+  const handleBulkDownload = async () => {
+    const clipsToDownload = selectMode && selectedClips.length > 0 
+      ? clips.filter(clip => selectedClips.includes(clip.id))
+      : clips;
+
+    console.log(`📦 [BULK-DOWNLOAD] Starting bulk download of ${clipsToDownload.length} clips`);
+
+    for (let i = 0; i < clipsToDownload.length; i++) {
+      const clip = clipsToDownload[i];
+      if (clip.videoUrl) {
+        try {
+          // Create download link for each clip
+          const link = document.createElement('a');
+          link.href = clip.videoUrl;
+          link.download = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          // Small delay between downloads to avoid overwhelming the browser
+          if (i < clipsToDownload.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch (error) {
+          console.error(`❌ [BULK-DOWNLOAD] Failed to download clip: ${clip.title}`, error);
+        }
+      }
+    }
+
+    console.log(`✅ [BULK-DOWNLOAD] Bulk download completed`);
   };
 
   return (
@@ -130,12 +150,7 @@ export default function ClipsGallery({
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleSelectMode}
-            className="border-border text-foreground hover:bg-muted/50 bg-transparent"
-          >
+          <div className="flex items-center gap-2">
             <Checkbox
               checked={selectMode && selectedClips.length === clips.length}
               onCheckedChange={() => {
@@ -145,9 +160,28 @@ export default function ClipsGallery({
                   setSelectedClips(clips.map((clip) => clip.id));
                 }
               }}
-              className="w-4 h-4 mr-2"
+              className="w-4 h-4"
             />
-            Select
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSelectMode}
+              className="border-border text-foreground hover:bg-muted/50 bg-transparent"
+            >
+              Select
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBulkDownload}
+            className="border-border text-foreground hover:bg-muted/50 bg-transparent"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {selectMode && selectedClips.length > 0 
+              ? `Bulk Download (${selectedClips.length})` 
+              : `Bulk Download (${clips.length})`
+            }
           </Button>
           <Button
             variant="outline"
@@ -167,101 +201,39 @@ export default function ClipsGallery({
         </div>
       </div>
 
-      {/* Clips Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+      {/* Clips Grid - Responsive layout based on aspect ratio */}
+      <div className={`grid gap-4 mb-8 ${
+        aspectRatio === "vertical" 
+          ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7" 
+          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      }`}>
         {clips.map((clip) => (
-          <Card
+          <ClipCard
             key={clip.id}
-            className={`bg-card/80 backdrop-blur-sm border-border overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${
-              selectedClips.includes(clip.id) ? "ring-2 ring-primary" : ""
-            }`}
-            onClick={() => handleClipSelect(clip.id)}
-          >
-            {/* Thumbnail */}
-            <div className="relative aspect-video bg-gray-900">
-              <img
-                src={clip.thumbnail || "/placeholder.svg"}
-                alt={clip.title}
-                className="w-full h-full object-cover"
-              />
-
-              {/* Duration Badge */}
-              <div className="absolute top-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs font-medium">
-                {clip.timestamp} {clip.duration}
-              </div>
-
-              {/* Pro Badge */}
-              {clip.isPro && (
-                <Badge className="absolute top-2 left-2 bg-white text-black text-xs font-medium">
-                  Pro
-                </Badge>
-              )}
-
-              {/* Play Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 hover:opacity-100 transition-opacity duration-200">
-                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                  <Play className="w-6 h-6 text-white ml-1" />
-                </div>
-              </div>
-
-              {/* Selection Checkbox */}
-              {selectMode && (
-                <div className="absolute top-2 left-2">
-                  <Checkbox
-                    checked={selectedClips.includes(clip.id)}
-                    onCheckedChange={() => handleClipSelect(clip.id)}
-                    className="bg-white border-white"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Content */}
-            <div className="p-4">
-              <h3 className="font-medium text-foreground text-sm line-clamp-2 mb-3">
-                {clip.title}
-              </h3>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 w-8 p-0 border-border hover:bg-muted/50 bg-transparent"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Handle download
-                    }}
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 w-8 p-0 border-border hover:bg-muted/50 bg-transparent"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Handle share
-                    }}
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </Button>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 p-0 border-border hover:bg-muted/50 hover:text-destructive bg-transparent"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Handle remove
-                  }}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </Card>
+            clip={clip}
+            isSelected={selectedClips.includes(clip.id)}
+            selectMode={selectMode}
+            aspectRatio={aspectRatio}
+            onClipSelect={(clipId) => {
+              if (selectMode) {
+                setSelectedClips((prev) =>
+                  prev.includes(clipId)
+                    ? prev.filter((id) => id !== clipId)
+                    : [...prev, clipId]
+                );
+              } else {
+                onClipSelect?.(clipId);
+              }
+            }}
+            onShare={(clip) => {
+              // Handle share functionality
+              console.log('Sharing clip:', clip.title);
+            }}
+            onRemove={(clipId) => {
+              // Handle remove functionality
+              console.log('Removing clip:', clipId);
+            }}
+          />
         ))}
       </div>
 

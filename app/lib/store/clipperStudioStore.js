@@ -14,6 +14,7 @@ const initialState = {
   // UI States  
   hasVideo: false,
   showClipsGallery: false,
+  currentProjectId: null, // ID of project whose clips are being viewed
   
   // Loading States
   isLoadingPreview: false,
@@ -92,6 +93,17 @@ export const useClipperStudioStore = create(
           }
           if (state.showClipsGallery === show) return state;
           return { showClipsGallery: show, ...get()._updateTimestamp() };
+        }),
+      
+      setCurrentProjectId: (projectId) =>
+        set((state) => {
+          // Validate projectId input
+          if (projectId !== null && (typeof projectId !== 'string' && typeof projectId !== 'number')) {
+            console.warn('setCurrentProjectId: ProjectId must be a string, number, or null.', projectId);
+            return state;
+          }
+          if (state.currentProjectId === projectId) return state;
+          return { currentProjectId: projectId, ...get()._updateTimestamp() };
         }),
 
       // --- Loading State Actions ---

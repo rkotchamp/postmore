@@ -16,6 +16,9 @@ export default function ProcessingView({
   projectId, // Project ID for actions
   onDelete,
   onSave,
+  hasClips = false, // New prop to indicate if clips are available
+  totalClips = 0, // New prop for clip count
+  processedClips = 0, // New prop for processed clips count
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -138,13 +141,25 @@ export default function ProcessingView({
 
         {/* Status Badge */}
         <div className="absolute bottom-2 left-2">
-          {progress < 100 ? (
+          {status === 'processing' || (hasClips && totalClips > 0 && processedClips === 0) ? (
             <Badge className="bg-orange-500/90 text-white border-0 text-xs">
               Processing
             </Badge>
-          ) : (
+          ) : hasClips && processedClips > 0 ? (
+            <Badge className="bg-green-500/90 text-white border-0 text-xs">
+              {processedClips} Clip{processedClips !== 1 ? 's' : ''} Ready
+            </Badge>
+          ) : status === 'completed' ? (
+            <Badge className="bg-blue-500/90 text-white border-0 text-xs">
+              Ready
+            </Badge>
+          ) : status === 'failed' ? (
             <Badge className="bg-red-500/90 text-white border-0 text-xs">
-              Expired
+              Failed
+            </Badge>
+          ) : (
+            <Badge className="bg-gray-500/90 text-white border-0 text-xs">
+              Unknown
             </Badge>
           )}
         </div>

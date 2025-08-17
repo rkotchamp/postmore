@@ -1,12 +1,26 @@
 import { NextResponse } from 'next/server';
 import { detectVideoClips, healthCheck } from '@/app/lib/video-processing/services/visionClipService';
 import { downloadVideoWithMetadata } from '@/app/lib/video-processing/services/videoDownloadService';
+import VideoProject from '@/app/models/VideoProject';
+import VideoClip from '@/app/models/VideoClip';
+import connectToMongoose from '@/app/lib/db/mongoose';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function POST(request) {
   console.log('🎬 [CLIP-API] Starting clip detection request...');
   
   try {
-    const { url, options = {} } = await request.json();
+    // Get user session for database operations
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      console.error('❌ [CLIP-API] Unauthorized - no valid session');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await connectToMongoose();
+    
+    const { url, projectId, options = {} } = await request.json();
     
     if (!url) {
       console.error('❌ [CLIP-API] No URL provided');
@@ -57,7 +71,59 @@ export async function POST(request) {
     console.log(`🎉 [CLIP-API] Clip detection completed successfully`);
     console.log(`📊 [CLIP-API] Found ${clipResult.clips.length} clips`);
     
-    // Step 4: Cleanup downloaded video
+    // Step 4: Store clips in database
+    let savedClips = [];
+    if (projectId && clipResult.clips.length > 0) {
+      console.log(`💾 [CLIP-API] Storing ${clipResult.clips.length} clips in database...`);
+      
+      try {
+        // Verify project exists and belongs to user
+        const project = await VideoProject.findOne({ 
+          _id: projectId, 
+          userId: session.user.id 
+        });
+        
+        if (!project) {
+          console.error(`❌ [CLIP-API] Project ${projectId} not found or unauthorized`);
+          return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+        }
+        
+        // Create VideoClip records
+        const clipData = clipResult.clips.map(clip => ({
+          projectId: projectId,
+          userId: session.user.id,
+          title: `${downloadResult.metadata.title} - Clip ${clip.id}`,
+          startTime: clip.startTime,
+          endTime: clip.endTime,
+          duration: clip.duration,
+          viralityScore: Math.round(clip.engagementScore),
+          status: 'ready'
+        }));
+        
+        savedClips = await VideoClip.insertMany(clipData);
+        console.log(`✅ [CLIP-API] Successfully saved ${savedClips.length} clips to database`);
+        
+        // Update project status and analytics
+        await VideoProject.findByIdAndUpdate(projectId, {
+          $set: {
+            status: 'completed',
+            processingCompleted: new Date(),
+            'analytics.totalClipsGenerated': savedClips.length
+          }
+        });
+        
+        console.log(`✅ [CLIP-API] Updated project ${projectId} status to completed`);
+        
+      } catch (dbError) {
+        console.error(`❌ [CLIP-API] Database error:`, dbError);
+        // Continue with response even if database save fails
+        savedClips = [];
+      }
+    } else {
+      console.log(`⚠️ [CLIP-API] No projectId provided or no clips found - skipping database storage`);
+    }
+    
+    // Step 5: Cleanup downloaded video
     try {
       const fs = require('fs');
       if (fs.existsSync(downloadResult.filePath)) {

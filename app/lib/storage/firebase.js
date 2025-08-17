@@ -143,28 +143,57 @@ export const uploadVideoThumbnail = async (thumbnailFile, videoId) => {
  * Upload ClipperStudio project thumbnail
  * @param {File} thumbnailFile - The thumbnail image file
  * @param {string} projectId - ID of the project this thumbnail belongs to
+ * @param {string} fileExtension - Optional file extension override (default: auto-detect)
  * @returns {Promise<object>} - Thumbnail metadata including download URL
  */
-export const uploadClipperThumbnail = async (thumbnailFile, projectId) => {
+export const uploadClipperThumbnail = async (thumbnailFile, projectId, fileExtension = null) => {
   try {
-    // Validate that it's an image
-    if (!thumbnailFile.type.startsWith("image/")) {
-      throw new Error("Thumbnail must be an image file");
+    // Handle both image thumbnails and video clips
+    const isVideo = fileExtension === 'mp4' || fileExtension === 'webm' || fileExtension === 'mov';
+    const isImage = !isVideo && thumbnailFile.type && thumbnailFile.type.startsWith("image/");
+    
+    // For video files (Buffer data), we don't have a type property
+    const isBufferVideo = !thumbnailFile.type && fileExtension && ['mp4', 'webm', 'mov'].includes(fileExtension);
+    
+    if (!isVideo && !isImage && !isBufferVideo) {
+      throw new Error("File must be an image or video file");
     }
 
     // Generate UUID for the file
     const uuid = uuidv4();
-    const fileExtension = thumbnailFile.name.split(".").pop();
-    const fileName = `clipper_${projectId}_${uuid}.${fileExtension}`;
+    const finalExtension = fileExtension || (thumbnailFile.name ? thumbnailFile.name.split(".").pop() : 'mp4');
+    const fileName = `clipper_${projectId}_${uuid}.${finalExtension}`;
 
-    // Create storage path in clipperThumbnails folder
-    const storagePath = `clipperThumbnails/${fileName}`;
+    // Create storage path - use different folders for videos vs thumbnails
+    const folder = isVideo || isBufferVideo ? 'clipperVideos' : 'clipperThumbnails';
+    const storagePath = `${folder}/${fileName}`;
 
     // Create a storage reference
     const storageRef = ref(storage, storagePath);
 
-    // Upload the file
-    const uploadTask = uploadBytesResumable(storageRef, thumbnailFile);
+    // Handle Buffer data (for video clips) or File objects (for thumbnails)
+    let uploadData;
+    if (Buffer.isBuffer(thumbnailFile)) {
+      // Convert Buffer to Uint8Array for Firebase upload
+      uploadData = new Uint8Array(thumbnailFile);
+    } else {
+      // Regular File object
+      uploadData = thumbnailFile;
+    }
+
+    // Set proper metadata for video files to enable both streaming and downloading
+    const metadata = {};
+    if (isVideo || isBufferVideo) {
+      metadata.contentType = 'video/mp4'; // This enables streaming in browsers
+      metadata.customMetadata = {
+        'Cache-Control': 'public, max-age=31536000' // 1 year cache for better performance
+      };
+    } else if (isImage) {
+      metadata.contentType = thumbnailFile.type || 'image/jpeg';
+    }
+
+    // Upload the file with proper metadata
+    const uploadTask = uploadBytesResumable(storageRef, uploadData, metadata);
 
     // Return a promise that resolves with the download URL when upload completes
     return new Promise((resolve, reject) => {
@@ -172,8 +201,6 @@ export const uploadClipperThumbnail = async (thumbnailFile, projectId) => {
         "state_changed",
         (snapshot) => {
           // Optional: Track upload progress
-          const progress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           // Progress tracking without logging for better performance
         },
         (error) => {
@@ -185,11 +212,12 @@ export const uploadClipperThumbnail = async (thumbnailFile, projectId) => {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           resolve({
             url: downloadURL,
+            downloadURL: downloadURL, // Also include downloadURL for compatibility
             path: storagePath,
-            size: thumbnailFile.size,
-            type: thumbnailFile.type,
+            size: thumbnailFile.size || (Buffer.isBuffer(thumbnailFile) ? thumbnailFile.length : 0),
+            type: thumbnailFile.type || `video/${finalExtension}`,
             name: fileName,
-            originalName: thumbnailFile.name,
+            originalName: thumbnailFile.name || `clip.${finalExtension}`,
             uuid: uuid,
             projectId: projectId,
           });
