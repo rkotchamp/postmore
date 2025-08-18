@@ -41,13 +41,51 @@ export default function ClipCard({
   };
 
 
-  const handleDownload = (e) => {
+  const handleDownload = async (e) => {
     e.stopPropagation();
     if (onDownload && clip.videoUrl) {
       onDownload(clip);
     } else if (clip.videoUrl) {
-      // Simple fallback - open video in new tab
-      window.open(clip.videoUrl, '_blank');
+      try {
+        // Use our API proxy to download video (bypasses CORS)
+        const filename = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
+        
+        const response = await fetch('/api/download-video', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            videoUrl: clip.videoUrl,
+            filename: filename
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.statusText}`);
+        }
+        
+        // Get the blob from the response
+        const blob = await response.blob();
+        
+        // Create blob URL and trigger download
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up blob URL
+        URL.revokeObjectURL(blobUrl);
+        
+      } catch (error) {
+        console.error('Download failed:', error);
+        // Fallback to opening in new tab
+        window.open(clip.videoUrl, '_blank');
+      }
     }
   };
 
