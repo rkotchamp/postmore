@@ -1,15 +1,13 @@
 /**
  * Video Transcription API Route
- * Handles audio/video transcription using Hugging Face Whisper
+ * Handles audio/video transcription using OpenAI Whisper
  */
 
 import { NextResponse } from 'next/server';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
-import HuggingFaceWhisperService from '@/app/lib/video-processing/services/huggingfaceWhisperService';
+import { transcribeWithWhisper } from '@/app/lib/video-processing/services/openaiWhisperService';
 import VideoUtils from '@/app/lib/video-processing/utils/videoUtils';
-
-const whisperService = new HuggingFaceWhisperService();
 
 export async function POST(request) {
   let tempFilePath = null;
@@ -52,9 +50,9 @@ export async function POST(request) {
     await writeFile(tempFilePath, buffer);
 
     // Transcribe the file
-    const transcriptionResult = await whisperService.transcribeFromFile(tempFilePath, {
-      includeTimestamps: options.includeTimestamps !== false,
-      language: options.language || 'auto',
+    const transcriptionResult = await transcribeWithWhisper(tempFilePath, {
+      language: options.language || null,
+      responseFormat: options.includeTimestamps !== false ? 'verbose_json' : 'text',
       ...options
     });
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { HuggingFaceWhisperService } from '../../../lib/video-processing/services/huggingfaceWhisperService';
+import { transcribeWithWhisper } from '../../../lib/video-processing/services/openaiWhisperService';
 import { detectClips, getHealthStatus } from '../../../lib/video-processing/services/clipDetectionService';
 import { secondsToFFmpegTime, validateTimestampRange, generateTimelineData } from '../../../lib/video-processing/utils/timestampParser';
 

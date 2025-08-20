@@ -147,6 +147,59 @@ export async function PUT(request, { params }) {
 }
 
 /**
+ * PATCH endpoint to update specific project fields (used for status updates)
+ */
+export async function PATCH(request, { params }) {
+  try {
+    // Await params in Next.js 15
+    const { id } = await params;
+    console.log(`🔄 [PROJECT-PATCH] Updating project: ${id}`);
+    
+    // Get the user's session
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Connect to database
+    await connectToMongoose();
+
+    const updates = await request.json();
+    
+    // Find the project first to ensure it belongs to the user
+    const project = await VideoProject.findOne({
+      _id: id,
+      userId: session.user.id
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    // Update the project with provided fields
+    const updatedProject = await VideoProject.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, lean: true }
+    );
+
+    console.log(`✅ [PROJECT-PATCH] Updated project ${id}:`, updates);
+
+    return NextResponse.json({
+      success: true,
+      project: updatedProject
+    });
+
+  } catch (error) {
+    console.error("========== Video Project Patch Failed ==========");
+    console.error(`❌ [PROJECT-PATCH] Update failed for ${params.id}:`, error);
+    return NextResponse.json({
+      error: "Failed to update video project"
+    }, { status: 500 });
+  }
+}
+
+/**
  * DELETE endpoint to delete a video project
  */
 export async function DELETE(request, { params }) {

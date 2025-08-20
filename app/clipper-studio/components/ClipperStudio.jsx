@@ -26,6 +26,9 @@ export default function ClipperStudio() {
     projectTitle: null
   });
   
+  // Projects tab state
+  const [selectedProjectsTab, setSelectedProjectsTab] = useState('all'); // 'all' or 'saved'
+  
   // Use Zustand store instead of local state
   const {
     url,
@@ -304,9 +307,14 @@ export default function ClipperStudio() {
         try {
           console.log('📤 [FIREBASE] Uploading thumbnail to Firebase...');
           
-          // Convert base64 to File for upload
-          const response = await fetch(previewThumbnail);
-          const blob = await response.blob();
+          // Convert base64 to File for upload without using fetch (CSP compliant)
+          const base64Data = previewThumbnail.split(',')[1]; // Remove data:image/...;base64, prefix
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'image/jpeg' });
           const timestamp = Date.now();
           const file = new File([blob], `thumbnail_${timestamp}.jpg`, { type: 'image/jpeg' });
           
@@ -604,6 +612,7 @@ export default function ClipperStudio() {
 
   // Show clips gallery if processing is complete
   if (showClipsGallery && currentProjectId) {
+    console.log(`🎬 [GALLERY] Rendering clips gallery for project: ${currentProjectId}`);
     const currentProjectData = allProjectClips[currentProjectId];
     const currentProjectClips = currentProjectData?.clips || [];
     const isStillProcessing = currentProjectData?.processedClips === 0 && currentProjectData?.totalClips > 0;
@@ -888,18 +897,52 @@ export default function ClipperStudio() {
           <div className="w-full max-w-6xl mx-auto mt-8">
             {/* Tab Headers */}
             <div className="flex gap-8 mb-6">
-              <h3 className="text-lg font-semibold text-foreground border-b-2 border-primary pb-1">
+              <button
+                onClick={() => setSelectedProjectsTab('all')}
+                className={`text-lg font-semibold pb-1 transition-colors duration-200 ${
+                  selectedProjectsTab === 'all'
+                    ? 'text-foreground border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
                 All projects ({activeProjects.length})
-              </h3>
-              <h3 className="text-lg font-semibold text-muted-foreground pb-1">
-                Saved projects (0)
-                {/* TODO: Get saved projects count from database using useClipperProjects hook */}
-              </h3>
+              </button>
+              <button
+                onClick={() => setSelectedProjectsTab('saved')}
+                className={`text-lg font-semibold pb-1 transition-colors duration-200 ${
+                  selectedProjectsTab === 'saved'
+                    ? 'text-foreground border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Saved projects ({activeProjects.filter(project => project.saveStatus?.isSaved).length})
+              </button>
             </div>
             
             {/* Processing Views Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {activeProjects.map((project) => {
+              {(() => {
+                const filteredProjects = activeProjects.filter(project => {
+                  if (selectedProjectsTab === 'saved') {
+                    return project.saveStatus?.isSaved === true;
+                  }
+                  return true; // Show all projects for 'all' tab
+                });
+
+                if (filteredProjects.length === 0) {
+                  return (
+                    <div className="col-span-full text-center py-12">
+                      <p className="text-muted-foreground text-lg">
+                        {selectedProjectsTab === 'saved' 
+                          ? "No saved projects yet"
+                          : "No projects found."
+                        }
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filteredProjects.map((project) => {
                 // Get clip data for this project
                 const projectClips = allProjectClips[project.id] || { clips: [], totalClips: 0, processedClips: 0 };
                 const hasClips = projectClips.totalClips > 0;
@@ -923,7 +966,8 @@ export default function ClipperStudio() {
                     onSave={handleSaveProject}
                   />
                 );
-              })}
+                });
+              })()}
             </div>
           </div>
         </div>
@@ -947,24 +991,33 @@ export default function ClipperStudio() {
       // Update progress to show processing started
       updateProjectProgress(projectId, 10);
       
-      // Call our SmolVLM2 clip detection API
+      // Call our AI-powered clip detection API with extended timeout for large videos
+      console.log(`🚀 [PROCESSING] Starting API call for project ${projectId}...`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minute timeout
+      
       const response = await fetch('/api/video-processing/detect-clips', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           url: typeof videoSource === 'string' ? videoSource : null,
           file: typeof videoSource !== 'string' ? videoSource : null,
           projectId: projectId, // Pass projectId for database storage
           options: {
-            numFrames: 8,
-            minEngagementScore: 25,
-            maxClips: 5,
-            clipDuration: 30
+            minClipDuration: 15,     // AI determines optimal duration (15-60s)
+            maxClipDuration: 60,
+            maxClips: 10,            // Let AI find up to 10 quality clips
+            language: null,          // Auto-detect language
+            videoType: 'general'     // Can be: gaming, tutorial, reaction, etc.
           }
         }),
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Clip detection failed: ${response.statusText}`);
@@ -973,14 +1026,20 @@ export default function ClipperStudio() {
       const result = await response.json();
       
       if (result.success) {
-        console.log(`✅ [PROCESSING] Found ${result.clips.length} clips for project ${projectId}`);
-        
-        // Update progress to 50% (metadata done, video processing next)
-        updateProjectProgress(projectId, 50);
-        
-        // Automatically start clip processing (FFmpeg + Whisper)
-        console.log(`🎬 [PROCESSING] Starting background clip processing...`);
-        handleProcessClips(projectId);
+        if (result.status === 'processing') {
+          // Async processing started, poll for status
+          console.log(`🔄 [PROCESSING] Async processing started for project ${projectId}`);
+          console.log(`⏰ [PROCESSING] Estimated time: ${result.estimatedTime}`);
+          
+          // Start polling for status updates
+          pollProjectStatus(projectId);
+          
+        } else if (result.clips) {
+          // Synchronous processing completed (fallback for small videos)
+          console.log(`✅ [PROCESSING] Found ${result.clips.length} clips for project ${projectId}`);
+          updateProjectProgress(projectId, 100, 'completed');
+          queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
+        }
         
       } else {
         throw new Error(result.error || 'Clip detection failed');
@@ -989,11 +1048,112 @@ export default function ClipperStudio() {
     } catch (error) {
       console.error(`❌ [PROCESSING] Failed to process project ${projectId}:`, error);
       
-      // Update project to show error state
-      updateProjectProgress(projectId, 0, 'error');
+      // Handle specific error types
+      if (error.name === 'AbortError') {
+        console.warn(`⏰ [PROCESSING] Request timed out after 10 minutes for project ${projectId}`);
+        updateProjectProgress(projectId, 0, 'timeout');
+      } else if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
+        console.warn(`🌐 [PROCESSING] Network error for project ${projectId}:`, error.message);
+        updateProjectProgress(projectId, 0, 'network_error');
+      } else {
+        console.error(`💥 [PROCESSING] Unknown error for project ${projectId}:`, error.message);
+        updateProjectProgress(projectId, 0, 'error');
+      }
     }
   }
-  
+
+  // Poll project status for async processing
+  function pollProjectStatus(projectId, interval = 5000) { // Poll every 5 seconds for better responsiveness
+    console.log(`🔄 [POLLING] Starting status polling for project ${projectId}`);
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/clipper-studio/projects/${projectId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          console.error(`❌ [POLLING] Failed to fetch project status: ${response.statusText}`);
+          return;
+        }
+        
+        const responseData = await response.json();
+        const project = responseData.project; // Extract the nested project data
+        
+        // Debug logging to see what we're getting from the API
+        console.log(`🔍 [POLLING] Project ${projectId} details:`, {
+          status: project.status,
+          processingStage: project.analytics?.processingStage,
+          analytics: project.analytics
+        });
+        
+        if (project.status === 'completed') {
+          console.log(`✅ [POLLING] Project ${projectId} completed with ${project.analytics?.totalClipsGenerated || 0} clips`);
+          clearInterval(pollInterval);
+          updateProjectProgress(projectId, 100, 'completed');
+          queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
+          
+        } else if (project.status === 'error') {
+          console.error(`❌ [POLLING] Project ${projectId} failed: ${project.analytics?.error}`);
+          clearInterval(pollInterval);
+          updateProjectProgress(projectId, 0, 'failed');
+          
+        } else if (project.status === 'processing') {
+          // Update progress based on processing stage
+          const stage = project.analytics?.processingStage;
+          let progress = 20;
+          let displayStatus = 'processing';
+          
+          switch (stage) {
+            case 'downloading': 
+              progress = 30; 
+              displayStatus = 'downloading';
+              break;
+            case 'transcribing': 
+              progress = 50; 
+              displayStatus = 'transcribing';
+              break;
+            case 'analyzing': 
+              progress = 70; 
+              displayStatus = 'analyzing';
+              break;
+            case 'saving': 
+              progress = 90; 
+              displayStatus = 'saving';
+              // Backend will automatically mark as completed when clips are ready
+              console.log(`⏳ [POLLING] Project ${projectId} in saving stage, waiting for backend completion`);
+              break;
+            case 'completed': 
+              progress = 100; 
+              displayStatus = 'completed';
+              // Clear polling since we're complete
+              clearInterval(pollInterval);
+              queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
+              break;
+            default: 
+              progress = 20;
+              displayStatus = 'processing';
+          }
+          
+          console.log(`🔄 [POLLING] Project ${projectId} status: ${stage} (${progress}%)`);
+          updateProjectProgress(projectId, progress, displayStatus);
+        }
+        
+      } catch (error) {
+        console.error(`❌ [POLLING] Error polling project ${projectId}:`, error);
+      }
+    }, interval);
+    
+    // Stop polling after 60 minutes to prevent infinite polling (extended for large video files)
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      console.warn(`⏰ [POLLING] Stopped polling for project ${projectId} after 60 minutes`);
+    }, 60 * 60 * 1000);
+  }
+
   // Helper function to update project progress
   function updateProjectProgress(projectId, progress, status = 'processing') {
     updateProject(projectId, { progress, status });

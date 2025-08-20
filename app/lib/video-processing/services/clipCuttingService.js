@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { uploadClipperThumbnail } from '@/app/lib/storage/firebase';
-import { transcribeAudio } from './huggingfaceWhisperService';
+import { transcribeWithWhisper } from './openaiWhisperService';
 
 /**
  * Video Clip Cutting Service
@@ -31,10 +31,11 @@ export const cutVideoClip = async (inputVideoPath, startTime, endTime, outputPat
     console.log(`📱 [CLIP-CUTTER] Target platform: ${platform}`);
     console.log(`📐 [CLIP-CUTTER] Aspect ratio: ${aspectRatio}`);
     
-    // Base FFmpeg arguments
+    // Base FFmpeg arguments - OPTIMIZED: Use input seek for faster processing of large files
+    // Input seek (-ss before -i) is much faster for large files, especially with long seek times
     const args = [
+      '-ss', startTime.toString(),   // Start time (BEFORE input for fast seek)
       '-i', inputVideoPath,          // Input file
-      '-ss', startTime.toString(),   // Start time
       '-t', duration.toString(),     // Duration (not end time)
     ];
     
@@ -125,10 +126,10 @@ export const extractAudioSegment = async (inputVideoPath, startTime, endTime, ou
     
     console.log(`🎵 [AUDIO-EXTRACT] Output audio: ${outputFilePath}`);
     
-    // FFmpeg command to extract audio
+    // FFmpeg command to extract audio - OPTIMIZED: Use input seek for faster processing
     const args = [
+      '-ss', startTime.toString(),   // Start time (BEFORE input for fast seek)
       '-i', inputVideoPath,          // Input file
-      '-ss', startTime.toString(),   // Start time
       '-t', duration.toString(),     // Duration
       '-vn',                         // No video
       '-acodec', 'pcm_s16le',       // Audio codec for Whisper
@@ -183,8 +184,7 @@ export const generateClipTitle = async (audioFilePath, fallbackTitle = 'Untitled
   
   try {
     // Use Whisper to transcribe the audio segment
-    const audioBuffer = fs.readFileSync(audioFilePath);
-    const transcriptionResult = await transcribeAudio(audioBuffer);
+    const transcriptionResult = await transcribeWithWhisper(audioFilePath);
     
     if (transcriptionResult.success && transcriptionResult.text) {
       let transcriptionText = transcriptionResult.text.trim();
@@ -249,6 +249,9 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
     try {
       // Step 1: Cut video clip using metadata timestamps with 9:16 aspect ratio
       console.log(`🎬 [CLIP-PROCESSOR] Step 1: Cutting video from metadata for vertical format...`);
+      console.log(`📹 [CLIP-PROCESSOR] Input video exists: ${fs.existsSync(inputVideoPath)}`);
+      console.log(`📊 [CLIP-PROCESSOR] Input video size: ${fs.existsSync(inputVideoPath) ? (fs.statSync(inputVideoPath).size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}`);
+      
       const videoResult = await cutVideoClip(
         inputVideoPath,
         clipMeta.startTime,
@@ -259,6 +262,13 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
           platform: 'tiktok' // Default to TikTok format (can be made configurable later)
         }
       );
+      
+      console.log(`✅ [CLIP-PROCESSOR] Video cutting result:`, {
+        success: videoResult.success,
+        filePath: videoResult.filePath,
+        fileName: videoResult.fileName,
+        size: `${(videoResult.size / 1024 / 1024).toFixed(2)} MB`
+      });
       
       // Step 2: Extract audio for transcription
       console.log(`🎵 [CLIP-PROCESSOR] Step 2: Extracting audio...`);
@@ -278,12 +288,26 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
       
       // Step 4: Upload video to Firebase
       console.log(`☁️ [CLIP-PROCESSOR] Step 4: Uploading video to Firebase...`);
+      console.log(`📁 [CLIP-PROCESSOR] Video file path: ${videoResult.filePath}`);
+      console.log(`📊 [CLIP-PROCESSOR] Video file size: ${(videoResult.size / 1024 / 1024).toFixed(2)} MB`);
+      
       const videoFile = fs.readFileSync(videoResult.filePath);
+      console.log(`📦 [CLIP-PROCESSOR] Read video file buffer: ${(videoFile.length / 1024 / 1024).toFixed(2)} MB`);
+      
+      const uploadKey = `${projectId}_clip_${clipMeta.startTime}s`;
+      console.log(`🏷️ [CLIP-PROCESSOR] Upload key: ${uploadKey}`);
+      
       const videoUploadResult = await uploadClipperThumbnail(
         videoFile,
-        `${projectId}_clip_${clipMeta.startTime}s`,
+        uploadKey,
         'mp4'
       );
+      
+      console.log(`✅ [CLIP-PROCESSOR] Firebase upload result:`, {
+        url: videoUploadResult.downloadURL,
+        name: videoUploadResult.name,
+        size: videoUploadResult.size
+      });
       
       // Step 5: Cleanup temporary files
       console.log(`🧹 [CLIP-PROCESSOR] Step 5: Cleaning up temp files...`);

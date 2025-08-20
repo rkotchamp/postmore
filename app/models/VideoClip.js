@@ -61,12 +61,23 @@ const VideoClipSchema = new mongoose.Schema({
     size: Number,
   },
 
-  // Virality score from Whisper AI analysis (0-100)
+  // Virality score from AI analysis (0-100)
   viralityScore: {
     type: Number,
     min: 0,
     max: 100,
     default: 0,
+  },
+
+  // AI analysis metadata
+  aiAnalysis: {
+    source: String, // 'deepseek-v3', 'manual', etc.
+    reason: String, // Why this moment was selected
+    engagementType: String, // 'reaction', 'educational', 'funny', etc.
+    contentTags: [String], // ['emotion', 'surprise', 'quotable']
+    hasSetup: Boolean, // Whether clip includes context/setup
+    hasPayoff: Boolean, // Whether clip includes resolution/punchline
+    analyzedAt: Date
   },
 
   // Clip processing status

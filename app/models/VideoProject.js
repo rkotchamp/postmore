@@ -96,6 +96,12 @@ const VideoProjectSchema = new mongoose.Schema(
         default: 0,
       },
       lastAccessed: Date,
+      processingStage: {
+        type: String,
+        enum: ["downloading", "transcribing", "analyzing", "saving", "completed", "error"],
+        default: "downloading",
+      },
+      error: String, // Error message if processing stage fails
     },
   },
   { 

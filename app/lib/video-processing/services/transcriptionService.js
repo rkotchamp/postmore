@@ -3,13 +3,11 @@ import path from 'path';
 
 /**
  * Video Transcription Service
- * Handles speech-to-text transcription for video files using existing Hugging Face Whisper service
+ * Handles speech-to-text transcription for video files using OpenAI Whisper service
  */
 
-// Import the existing Hugging Face Whisper service
-const HuggingFaceWhisperService = require('./huggingfaceWhisperService');
-
-const whisperService = new HuggingFaceWhisperService();
+// Import the OpenAI Whisper service
+import { transcribeWithWhisper } from './openaiWhisperService';
 
 /**
  * Extract audio from video file using FFmpeg
@@ -57,8 +55,8 @@ export const transcribeVideo = async (videoPath, options = {}) => {
     const audioPath = await extractAudioFromVideo(videoPath);
 
     try {
-      // Use existing Hugging Face Whisper service
-      const result = await whisperService.transcribeFromFile(audioPath, options);
+      // Use OpenAI Whisper service
+      const result = await transcribeWithWhisper(audioPath, options);
 
       // Clean up audio file
       if (fs.existsSync(audioPath)) {

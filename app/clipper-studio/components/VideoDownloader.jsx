@@ -98,7 +98,7 @@ export default function ProcessingView({
         />
 
         {/* Progress Overlay */}
-        {progress < 100 ? (
+        {(progress < 100 && status !== 'failed') ? (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
             <div className="text-center">
               {/* Circular Progress */}
@@ -135,23 +135,60 @@ export default function ProcessingView({
                   </span>
                 </div>
               </div>
+              {/* Status Text */}
+              <p className="text-white text-xs opacity-90">
+                {status === 'downloading' ? 'Downloading video...' :
+                 status === 'transcribing' ? 'Transcribing audio...' :
+                 status === 'analyzing' ? 'AI analyzing content...' :
+                 status === 'saving' ? 'Saving clips...' :
+                 'Processing...'}
+              </p>
+            </div>
+          </div>
+        ) : status === 'failed' ? (
+          <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-red-500 flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <p className="text-white text-xs opacity-90">
+                Processing failed
+              </p>
             </div>
           </div>
         ) : null}
 
         {/* Status Badge */}
         <div className="absolute bottom-2 left-2">
-          {status === 'processing' || (hasClips && totalClips > 0 && processedClips === 0) ? (
-            <Badge className="bg-orange-500/90 text-white border-0 text-xs">
-              Processing
+          {status === 'downloading' ? (
+            <Badge className="bg-blue-500/90 text-white border-0 text-xs">
+              Downloading
             </Badge>
-          ) : hasClips && processedClips > 0 ? (
+          ) : status === 'transcribing' ? (
+            <Badge className="bg-purple-500/90 text-white border-0 text-xs">
+              Transcribing
+            </Badge>
+          ) : status === 'analyzing' ? (
+            <Badge className="bg-indigo-500/90 text-white border-0 text-xs">
+              Analyzing
+            </Badge>
+          ) : status === 'saving' ? (
+            <Badge className="bg-green-500/90 text-white border-0 text-xs">
+              Saving
+            </Badge>
+          ) : status === 'completed' && hasClips && processedClips > 0 ? (
             <Badge className="bg-green-500/90 text-white border-0 text-xs">
               {processedClips} Clip{processedClips !== 1 ? 's' : ''} Ready
             </Badge>
           ) : status === 'completed' ? (
             <Badge className="bg-blue-500/90 text-white border-0 text-xs">
               Ready
+            </Badge>
+          ) : status === 'processing' || (hasClips && totalClips > 0 && processedClips === 0) ? (
+            <Badge className="bg-orange-500/90 text-white border-0 text-xs">
+              Processing
             </Badge>
           ) : status === 'failed' ? (
             <Badge className="bg-red-500/90 text-white border-0 text-xs">

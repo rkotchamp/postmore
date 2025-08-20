@@ -353,6 +353,9 @@ export const useClipperStudioStore = create(
         // Persist project data and selected project
         activeProjects: state.activeProjects,
         selectedProjectId: state.selectedProjectId,
+        // Persist clip gallery state to maintain view across refreshes
+        showClipsGallery: state.showClipsGallery,
+        currentProjectId: state.currentProjectId,
         _version: state._version,
         // Don't persist temporary UI states like loading, preview data, etc.
       }),
@@ -365,6 +368,7 @@ export const selectUrl = (state) => state.url;
 export const selectUploadedFile = (state) => state.uploadedFile;
 export const selectHasVideo = (state) => state.hasVideo;
 export const selectShowClipsGallery = (state) => state.showClipsGallery;
+export const selectCurrentProjectId = (state) => state.currentProjectId;
 export const selectIsLoadingPreview = (state) => state.isLoadingPreview;
 export const selectIsLoadingProcessing = (state) => state.isLoadingProcessing;
 export const selectIsExtractingThumbnail = (state) => state.isExtractingThumbnail;
