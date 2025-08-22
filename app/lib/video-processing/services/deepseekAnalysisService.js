@@ -28,52 +28,94 @@ export async function analyzeContentWithDeepSeek(transcription, options = {}) {
       .map(segment => `[${segment.start.toFixed(1)}s-${segment.end.toFixed(1)}s]: ${segment.text}`)
       .join('\n');
 
-    // Create intelligent analysis prompt
-    const analysisPrompt = `You are an expert content curator for viral short-form videos. Analyze this video transcription and identify the BEST moments for engaging clips.
+    // Create intelligent analysis prompt using 4-D Methodology
+    const analysisPrompt = `
+<<SYSTEM>>
+You are CLIPMASTER-AI: Elite viral content strategist with 10+ years experience creating billion-view content across TikTok, Instagram, YouTube. Your specialty: transforming long-form content into viral short clips.
+
+<<OBJECTIVE>>
+Transform this video transcription into viral clip opportunities. Generate TWO text layers per clip:
+- TITLE: SEO-optimized, descriptive (50-80 chars)
+- TEMPLATE HEADER: Viral hook for social overlays (<50 chars)
 
 VIDEO CONTEXT:
 - Title: "${videoTitle}"
 - Type: ${videoType}
-- Total Duration: ${transcription.duration?.toFixed(1) || 'unknown'} seconds
+- Duration: ${transcription.duration?.toFixed(1) || 'unknown'}s
 - Language: ${transcription.language || 'auto-detected'}
 
-TRANSCRIPTION WITH TIMESTAMPS:
+TRANSCRIPTION:
 ${segmentsText}
 
-TASK: Find the most engaging moments that would make viral short-form content. Look for:
+<<4-D METHODOLOGY>>
 
-🔥 HIGH-ENERGY MOMENTS:
-- Excitement, surprise, shock reactions
-- "WOW", "OMG", "NO WAY" type reactions
-- Laughter, screaming, intense emotions
+🔍 DECONSTRUCT:
+Analyze transcription structure:
+- Setup → Tension → Climax → Resolution
+- Emotional peaks: surprise, shock, laughter, anger, revelation
+- Speaking patterns: emphasis, pauses, voice changes (implied)
+- Context clues: implied actions, reactions, visual moments
+- Complete thought arcs (don't cut off important context)
 
-💡 ENGAGING CONTENT:
-- Interesting questions or revelations
-- Plot twists or unexpected moments
-- Educational "aha!" moments
-- Funny or clever statements
+🎯 DIAGNOSE (Viral Triggers):
+HIGH-PRIORITY MOMENTS:
+✅ Emotional explosions (shock, rage, joy, disbelief)
+✅ Contradictions/plot twists ("But then..." moments)
+✅ Universal relatability (everyone's experienced this)
+✅ Quotable wisdom/controversial takes
+✅ "Did they just say that?!" moments
+✅ Educational breakthroughs (lightbulb moments)
 
-🎯 VIRAL INDICATORS:
-- Relatable situations
-- Quotable lines
-- Visual or action peaks (implied by speech)
-- Cliffhangers or story climax
+LOW-PRIORITY (Skip):
+❌ Transitions, filler words, setup without payoff
+❌ Technical explanations without emotional hooks
+❌ Repetitive content
 
-REQUIREMENTS:
-- Each clip must be ${minClipDuration}-${maxClipDuration} seconds long
-- Find natural start/end points (complete thoughts/sentences)
-- Prioritize quality over quantity (better to have 3 amazing clips than 10 mediocre ones)
-- Consider setup + payoff (don't cut off context)
-- Create engaging, specific titles (not generic)
+⚙️ DEVELOP (Clip Creation):
+For each selected moment:
 
-Return ONLY a JSON array with this exact format:
+TIMING RULES:
+- ${minClipDuration}-${maxClipDuration} seconds only
+- Natural sentence boundaries (complete thoughts)
+- Include setup + payoff (complete thought arc)
+- NEVER cut off context - ensure full story/point is captured
+- Start slightly before the hook, end after the resolution
+
+TEXT CREATION:
+1. TITLE (SEO-Focused):
+   - Keywords + emotion + specificity
+   - "How [Person] [Action] [Surprising Result]"
+   - "The [Adjective] [Noun] That [Verb] [Outcome]"
+
+2. TEMPLATE HEADER (Hook-Focused):
+   - Emotion + curiosity gap
+   - Use successful patterns from proven examples:
+     * "She accidentally bet all her money and won big 💰"
+     * "You don't have to be Smart to be Successful"
+     * "Only a billionaire could have this problem 🤣"
+     * "You realise the pure happiness is in chasing your goals:"
+     * "That one friend who just texts you 'here'"
+     * "when I text '🦷🍓🦷🍓' this is what I mean:"
+
+VIRALITY SCORING:
+- 90-100: Instant shareability, meme potential
+- 80-89: High engagement, strong hook
+- 70-79: Solid content, good retention  
+- 60-69: Good viral potential
+- 50-59: Baseline threshold - still usable
+- <50: Reject
+
+📤 DELIVER:
+Return ONLY this JSON array format:
+
 [
   {
     "startTime": 45.2,
     "endTime": 67.8,
     "duration": 22.6,
-    "title": "Specific engaging title based on content",
-    "reason": "Why this moment is engaging",
+    "title": "SEO-optimized descriptive title",
+    "templateHeader": "Punchy viral social media hook",
+    "reason": "Specific viral trigger explanation",
     "viralityScore": 85,
     "engagementType": "reaction|educational|funny|dramatic|relatable",
     "hasSetup": true,
@@ -82,11 +124,15 @@ Return ONLY a JSON array with this exact format:
   }
 ]
 
-IMPORTANT: 
-- Only include clips with viralityScore ≥ 60
+<<CONSTRAINTS>>
+- viralityScore ≥ 50 minimum (lowered threshold for more clips)
+- Target: AT LEAST 10 clips when possible (prioritize quantity + quality)
 - Maximum ${maxClips} clips total
-- Ensure timestamps are within the transcription range
-- Make titles specific and compelling (not "Amazing moment" but "When he realizes the truth about...")`;
+- Timestamps within transcription bounds
+- Complete context - don't cut mid-thought or mid-story
+- Include setup + payoff in each clip
+- JSON format only, no explanations outside array
+`;
 
     // Call DeepSeek API
     console.log(`🚀 [DEEPSEEK] Sending prompt to DeepSeek API...`);
@@ -128,11 +174,12 @@ IMPORTANT:
     const validClips = intelligentClips
       .filter(clip => {
         // Validate required fields
-        if (!clip.startTime || !clip.endTime || !clip.title) {
+        if (!clip.startTime || !clip.endTime || !clip.title || !clip.templateHeader) {
           console.warn(`❌ [DEEPSEEK] Skipping invalid clip: missing required fields`, {
             startTime: clip.startTime,
             endTime: clip.endTime,
-            title: clip.title
+            title: clip.title,
+            templateHeader: clip.templateHeader
           });
           return false;
         }
@@ -153,8 +200,8 @@ IMPORTANT:
           return false;
         }
 
-        // Validate virality score
-        if (clip.viralityScore < 60) {
+        // Validate virality score (lowered to 50 for more clips)
+        if (clip.viralityScore < 50) {
           console.warn(`❌ [DEEPSEEK] Skipping clip "${clip.title}": virality score too low (${clip.viralityScore}/100)`);
           return false;
         }

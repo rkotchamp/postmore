@@ -98,11 +98,13 @@ async function processVideoAsync(url, projectId, options, userId, captionOptions
           projectId: projectId,
           userId: userId,
           title: finalTitle,
+          templateHeader: clip.templateHeader || finalTitle, // DeepSeek generated template header
           startTime: clip.startTime,
           endTime: clip.endTime,
           duration: clip.duration,
           viralityScore: clip.viralityScore,
           status: 'ready',
+          templateStatus: 'ready', // Ready for template application
           aiAnalysis: {
             source: 'deepseek-v3',
             reason: clip.reason,
@@ -423,11 +425,13 @@ export async function POST(request) {
             projectId: projectId,
             userId: session.user.id,
             title: finalTitle,
+            templateHeader: clip.templateHeader || finalTitle, // DeepSeek generated template header
             startTime: clip.startTime,
             endTime: clip.endTime,
             duration: clip.duration,
             viralityScore: clip.viralityScore,
             status: 'ready',
+            templateStatus: 'ready', // Ready for template application
             // Add AI analysis metadata
             aiAnalysis: {
               source: 'deepseek-v3',

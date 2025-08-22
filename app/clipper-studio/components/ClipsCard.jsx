@@ -10,6 +10,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import ClipCard from "./ClipCard";
+import TemplateFloatingSidebar from "./TemplateFloatingSidebar";
 
 const defaultClips = [
   {
@@ -87,6 +88,7 @@ export default function ClipsGallery({
 }) {
   const [selectedClips, setSelectedClips] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
 
   // Moved handleClipSelect logic into the ClipCard component for better encapsulation
 
@@ -156,6 +158,29 @@ export default function ClipsGallery({
     }
 
     console.log(`✅ [BULK-DOWNLOAD] Bulk download completed`);
+  };
+
+  const handleTemplateApply = async (templateData) => {
+    setIsApplyingTemplate(true);
+    
+    try {
+      console.log('🎨 [TEMPLATE-APPLY] Starting template application:', templateData);
+      
+      // TODO: Call template application API
+      // For now, just simulate the process
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Show success message
+      console.log('✅ [TEMPLATE-APPLY] Template applied successfully');
+      
+      // Optionally refresh clips or update UI state
+      
+    } catch (error) {
+      console.error('❌ [TEMPLATE-APPLY] Failed to apply template:', error);
+      // TODO: Show error toast/notification
+    } finally {
+      setIsApplyingTemplate(false);
+    }
   };
 
   return (
@@ -291,6 +316,13 @@ export default function ClipsGallery({
           </Button>
         </div>
       </div>
+
+      {/* Template Floating Sidebar */}
+      <TemplateFloatingSidebar
+        selectedClips={selectedClips}
+        onTemplateApply={handleTemplateApply}
+        isApplying={isApplyingTemplate}
+      />
     </div>
   );
 }
