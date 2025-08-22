@@ -152,6 +152,8 @@ async function transcribeSingleFile(filePath, options = {}) {
       model: 'whisper-1',
       response_format: responseFormat,
       temperature: temperature,
+      // Enable word-level timestamps for caption timing
+      timestamp_granularities: ['word', 'segment']
     };
     
     // Only add language if it's not null (OpenAI API auto-detects if omitted)
@@ -215,6 +217,15 @@ async function transcribeSingleFile(filePath, options = {}) {
     // Parse the response based on format
     if (responseFormat === 'verbose_json') {
       console.log(`📝 [WHISPER] Transcription complete: ${transcription.segments?.length || 0} segments`);
+      console.log(`🔤 [WHISPER] Word-level timestamps: ${transcription.words?.length || 0} words`);
+      
+      // Log sample words for debugging captions
+      if (transcription.words && transcription.words.length > 0) {
+        console.log(`📋 [WHISPER] Sample words for caption timing:`);
+        transcription.words.slice(0, 5).forEach(word => {
+          console.log(`  "${word.word}" [${word.start}s - ${word.end}s]`);
+        });
+      }
       
       return {
         success: true,

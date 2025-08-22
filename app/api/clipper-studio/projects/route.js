@@ -38,7 +38,7 @@ export async function GET(request) {
 
     // Get projects with pagination
     const projects = await VideoProject.find(query)
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .limit(limit)
       .skip(skip)
       .lean();

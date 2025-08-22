@@ -15,7 +15,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 // Global processing lock to prevent duplicate processing
 const processingLocks = new Set();
 
-async function processVideoAsync(url, projectId, options, userId) {
+async function processVideoAsync(url, projectId, options, userId, captionOptions = {}) {
   console.log(`🎬 [ASYNC] Starting async processing for project ${projectId}...`);
   
   // Check if this project is already being processed
@@ -80,25 +80,40 @@ async function processVideoAsync(url, projectId, options, userId) {
     });
     
     if (analysisResult.clips.length > 0) {
-      const clipData = analysisResult.clips.map((clip, index) => ({
-        projectId: projectId,
-        userId: userId,
-        title: clip.title || `${downloadResult.metadata.title} - Clip ${index + 1}`,
-        startTime: clip.startTime,
-        endTime: clip.endTime,
-        duration: clip.duration,
-        viralityScore: clip.viralityScore,
-        status: 'ready',
-        aiAnalysis: {
-          source: 'deepseek-v3',
-          reason: clip.reason,
-          engagementType: clip.engagementType,
-          contentTags: clip.contentTags || [],
-          hasSetup: clip.hasSetup,
-          hasPayoff: clip.hasPayoff,
-          analyzedAt: clip.analyzedAt
-        }
-      }));
+      console.log(`🔍 [DEBUG] Checking DeepSeek titles in analysisResult.clips:`);
+      analysisResult.clips.forEach((clip, index) => {
+        console.log(`  Clip ${index + 1}: "${clip.title}" (${clip.viralityScore}/100)`);
+        console.log(`  Reason: ${clip.reason}`);
+        console.log(`  Type: ${clip.engagementType}`);
+        console.log(`  ---`);
+      });
+      
+      const clipData = analysisResult.clips.map((clip, index) => {
+        const finalTitle = clip.title || `${downloadResult.metadata.title} - Clip ${index + 1}`;
+        console.log(`💾 [DATABASE] Saving clip ${index + 1} with title: "${finalTitle}"`);
+        console.log(`📋 [DATABASE] Source title from DeepSeek: "${clip.title}"`);
+        console.log(`🎯 [DATABASE] Using ${clip.title ? 'DeepSeek' : 'fallback'} title`);
+        
+        return {
+          projectId: projectId,
+          userId: userId,
+          title: finalTitle,
+          startTime: clip.startTime,
+          endTime: clip.endTime,
+          duration: clip.duration,
+          viralityScore: clip.viralityScore,
+          status: 'ready',
+          aiAnalysis: {
+            source: 'deepseek-v3',
+            reason: clip.reason,
+            engagementType: clip.engagementType,
+            contentTags: clip.contentTags || [],
+            hasSetup: clip.hasSetup,
+            hasPayoff: clip.hasPayoff,
+            analyzedAt: clip.analyzedAt
+          }
+        };
+      });
       
       const savedClips = await VideoClip.insertMany(clipData);
       console.log(`✅ [ASYNC] Saved ${savedClips.length} clips for project ${projectId}`);
@@ -136,6 +151,7 @@ async function processVideoAsync(url, projectId, options, userId) {
       try {
         console.log(`🎬 [ASYNC] Starting video clip cutting for project ${projectId}...`);
         
+        
         const processedClips = await processClipsFromMetadata(
           downloadResult.filePath,
           savedClips.map(clip => ({
@@ -146,7 +162,9 @@ async function processVideoAsync(url, projectId, options, userId) {
             viralityScore: clip.viralityScore
           })),
           projectId,
-          downloadResult.metadata.title || 'Video'
+          downloadResult.metadata.title || 'Video',
+          transcriptionResult, // Pass transcription data for caption generation
+          captionOptions // Pass caption options
         );
         
         console.log(`🎬 [ASYNC] Video cutting completed for project ${projectId}: ${processedClips.length} clips processed`);
@@ -246,6 +264,21 @@ export async function POST(request) {
   console.log('🎬 [CLIP-API] Starting clip detection request...');
   
   try {
+    // Parse request body for settings
+    const body = await request.json();
+    const { url, projectId } = body;
+    
+    // Extract caption settings from request
+    const captionOptions = {
+      enableCaptions: body.enableCaptions !== false, // Default to true
+      captionStyle: body.captionStyle || 'tiktok',
+      maxWordsPerLine: body.maxWordsPerLine || 3,
+      captionPosition: body.captionPosition || 'bottom',
+      customCaptionSettings: body.customCaptionSettings || {}
+    };
+    
+    console.log(`📝 [CLIP-API] Caption settings:`, captionOptions);
+    
     // Get user session for database operations
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -255,7 +288,7 @@ export async function POST(request) {
 
     await connectToMongoose();
     
-    const { url, projectId, options = {} } = await request.json();
+    const { options = {} } = body;
     
     if (!url) {
       console.error('❌ [CLIP-API] No URL provided');
@@ -279,7 +312,7 @@ export async function POST(request) {
       });
       
       // Start async processing (don't await)
-      processVideoAsync(url, projectId, options, session.user.id)
+      processVideoAsync(url, projectId, options, session.user.id, captionOptions)
         .catch(error => {
           console.error(`❌ [CLIP-API] Async processing failed for ${projectId}:`, error);
           // Update project to error state
@@ -372,26 +405,41 @@ export async function POST(request) {
         }
         
         // Create VideoClip records with AI analysis data
-        const clipData = clipResult.clips.map((clip, index) => ({
-          projectId: projectId,
-          userId: session.user.id,
-          title: clip.title || `${downloadResult.metadata.title} - Clip ${index + 1}`,
-          startTime: clip.startTime,
-          endTime: clip.endTime,
-          duration: clip.duration,
-          viralityScore: clip.viralityScore,
-          status: 'ready',
-          // Add AI analysis metadata
-          aiAnalysis: {
-            source: 'deepseek-v3',
-            reason: clip.reason,
-            engagementType: clip.engagementType,
-            contentTags: clip.contentTags || [],
-            hasSetup: clip.hasSetup,
-            hasPayoff: clip.hasPayoff,
-            analyzedAt: clip.analyzedAt
-          }
-        }));
+        console.log(`🔍 [DEBUG] Checking DeepSeek titles in clipResult.clips:`);
+        clipResult.clips.forEach((clip, index) => {
+          console.log(`  Clip ${index + 1}: "${clip.title}" (${clip.viralityScore}/100)`);
+          console.log(`  Reason: ${clip.reason}`);
+          console.log(`  Type: ${clip.engagementType}`);
+          console.log(`  ---`);
+        });
+        
+        const clipData = clipResult.clips.map((clip, index) => {
+          const finalTitle = clip.title || `${downloadResult.metadata.title} - Clip ${index + 1}`;
+          console.log(`💾 [DATABASE] Saving clip ${index + 1} with title: "${finalTitle}"`);
+          console.log(`📋 [DATABASE] Source title from DeepSeek: "${clip.title}"`);
+          console.log(`🎯 [DATABASE] Using ${clip.title ? 'DeepSeek' : 'fallback'} title`);
+          
+          return {
+            projectId: projectId,
+            userId: session.user.id,
+            title: finalTitle,
+            startTime: clip.startTime,
+            endTime: clip.endTime,
+            duration: clip.duration,
+            viralityScore: clip.viralityScore,
+            status: 'ready',
+            // Add AI analysis metadata
+            aiAnalysis: {
+              source: 'deepseek-v3',
+              reason: clip.reason,
+              engagementType: clip.engagementType,
+              contentTags: clip.contentTags || [],
+              hasSetup: clip.hasSetup,
+              hasPayoff: clip.hasPayoff,
+              analyzedAt: clip.analyzedAt
+            }
+          };
+        });
         
         savedClips = await VideoClip.insertMany(clipData);
         console.log(`✅ [CLIP-API] Successfully saved ${savedClips.length} clips to database`);

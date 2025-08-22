@@ -927,6 +927,11 @@ export default function ClipperStudio() {
                     return project.saveStatus?.isSaved === true;
                   }
                   return true; // Show all projects for 'all' tab
+                }).sort((a, b) => {
+                  // Sort by most recent activity (updatedAt first, then createdAt)
+                  const aTime = new Date(a.updatedAt || a.createdAt).getTime();
+                  const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+                  return bTime - aTime; // Newest first
                 });
 
                 if (filteredProjects.length === 0) {
