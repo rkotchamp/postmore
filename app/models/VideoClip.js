@@ -73,10 +73,34 @@ const VideoClipSchema = new mongoose.Schema({
     default: "pending"
   },
 
-  // Generated video file information
+  // Generated video files - dual aspect ratio support
   generatedVideo: {
-    path: String,
-    url: String,
+    // Vertical format (9:16) for TikTok, Instagram Stories, YouTube Shorts
+    vertical: {
+      path: String,
+      url: String,
+      format: String,
+      resolution: String,
+      aspectRatio: {
+        type: String,
+        default: '9:16'
+      },
+      size: Number,
+    },
+    // Horizontal format (16:9) for YouTube, Instagram Feed, Facebook
+    horizontal: {
+      path: String,
+      url: String,
+      format: String,
+      resolution: String,
+      aspectRatio: {
+        type: String,
+        default: '16:9'
+      },
+      size: Number,
+    },
+    // Legacy single video support (for backward compatibility)
+    url: String, // Will be removed in future version
     format: String,
     resolution: String,
     size: Number,

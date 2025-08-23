@@ -53,12 +53,15 @@ export async function GET(request, { params }) {
         duration: clip.duration,
         viralityScore: clip.viralityScore,
         status: clip.status,
-        videoUrl: clip.generatedVideo?.url || null,
-        hasProcessedVideo: !!(clip.generatedVideo?.url),
+        videoUrl: clip.generatedVideo?.vertical?.url || clip.generatedVideo?.horizontal?.url || clip.generatedVideo?.url || null,
+        hasProcessedVideo: !!(clip.generatedVideo?.vertical?.url || clip.generatedVideo?.horizontal?.url || clip.generatedVideo?.url),
+        // Dual aspect ratio support
+        verticalVideoUrl: clip.generatedVideo?.vertical?.url || null,
+        horizontalVideoUrl: clip.generatedVideo?.horizontal?.url || null,
         createdAt: clip.createdAt
       })),
       totalClips: clips.length,
-      processedClips: clips.filter(clip => clip.generatedVideo?.url).length
+      processedClips: clips.filter(clip => clip.generatedVideo?.vertical?.url || clip.generatedVideo?.horizontal?.url || clip.generatedVideo?.url).length
     });
     
   } catch (error) {

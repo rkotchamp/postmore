@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Palette,
   User,
@@ -26,8 +26,29 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef(null);
 
-  // Get preview video URL from first selected clip
-  const previewVideoUrl = selectedClips?.[0]?.previewVideo?.url || selectedClips?.[0]?.videoUrl;
+  // Get preview video URL from first selected clip - prioritize dual aspect ratio structure
+  const selectedClip = selectedClips?.[0];
+  const previewVideoUrl = selectedClip?.previewVideo?.url || 
+                         selectedClip?.generatedVideo?.vertical?.url || 
+                         selectedClip?.generatedVideo?.horizontal?.url ||
+                         selectedClip?.generatedVideo?.url || 
+                         selectedClip?.videoUrl;
+  
+  // Debug logging
+  console.log('🎬 [TEMPLATE-CARD] Debug Info:', {
+    templateId: template.id,
+    templateName: template.name,
+    selectedClipsLength: selectedClips?.length || 0,
+    firstClip: selectedClips?.[0] ? {
+      id: selectedClips[0].id,
+      title: selectedClips[0].title,
+      previewVideoUrl: selectedClips[0].previewVideo?.url,
+      videoUrl: selectedClips[0].videoUrl,
+      generatedVideoUrl: selectedClips[0].generatedVideo?.url,
+      generatedVideo: selectedClips[0].generatedVideo,
+    } : null,
+    resolvedPreviewUrl: previewVideoUrl
+  });
 
   // Auto-play video on hover for better UX
   const handleMouseEnter = () => {
@@ -56,21 +77,68 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
       )}
       onClick={() => onSelect(template.id)}
     >
-      {/* Template Preview - Real video + overlay */}
-      <div className="aspect-[9/16] w-full mb-2 rounded-md overflow-hidden bg-muted">
-        {isGenerating ? (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
-            <div className="text-center">
-              <div className="w-6 h-6 mx-auto mb-1 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs text-muted-foreground">Generating...</span>
+      {/* Template Preview - 1-minute video with overlay */}
+      <div 
+        className="aspect-[9/16] w-full mb-2 rounded-md overflow-hidden bg-muted relative"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {previewVideoUrl && !videoError ? (
+          <div className="relative w-full h-full">
+            {/* Background video */}
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              muted
+              loop
+              playsInline
+              onError={() => setVideoError(true)}
+            >
+              <source src={previewVideoUrl} type="video/mp4" />
+            </video>
+            
+            {/* Template overlay */}
+            <div className="absolute inset-0 pointer-events-none">
+              {template.id === 'social-profile' && (
+                <div 
+                  className="absolute top-0 left-0 right-0 h-[30%] p-2"
+                  style={{ 
+                    backgroundColor: `${overlaySettings?.overlayColor || '#000000'}${Math.round((overlaySettings?.overlayOpacity || 80) * 2.55).toString(16).padStart(2, '0')}`,
+                    color: overlaySettings?.textColor || '#ffffff'
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center">
+                      <User className="w-3 h-3" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold">{overlaySettings?.username || 'YourUsername'}</div>
+                      <div className="text-xs opacity-80">@{(overlaySettings?.username || 'username').toLowerCase()}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1 line-clamp-2">{overlaySettings?.customHeader || 'Your header text'}</div>
+                </div>
+              )}
+              
+              {template.id === 'title-only' && (
+                <div 
+                  className="absolute top-0 left-0 right-0 h-[25%] flex items-center justify-center p-2"
+                  style={{ 
+                    backgroundColor: `${overlaySettings?.overlayColor || '#000000'}${Math.round((overlaySettings?.overlayOpacity || 80) * 2.55).toString(16).padStart(2, '0')}`,
+                    color: overlaySettings?.textColor || '#ffffff'
+                  }}
+                >
+                  <div className="text-xs font-bold text-center line-clamp-2">
+                    {overlaySettings?.customHeader || 'Your title text'}
+                  </div>
+                </div>
+              )}
+              
+              {template.id === 'bw-frame' && (
+                <div className="absolute inset-0 bg-black/20" style={{ filter: 'grayscale(100%)' }} />
+              )}
             </div>
           </div>
-        ) : previewUrl ? (
-          <img 
-            src={previewUrl} 
-            alt={`${template.name} preview`}
-            className="w-full h-full object-cover"
-          />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
             <div className="text-center">
@@ -740,8 +808,14 @@ export default function TemplateFloatingSidebar({
                     template={template}
                     isSelected={selectedTemplate === template.id}
                     onSelect={handleTemplateSelect}
-                    generatePreview={generateTemplatePreview}
                     selectedClips={selectedClips}
+                    overlaySettings={{
+                      overlayColor,
+                      overlayOpacity,
+                      textColor,
+                      username,
+                      customHeader
+                    }}
                   />
                 ))}
               </div>

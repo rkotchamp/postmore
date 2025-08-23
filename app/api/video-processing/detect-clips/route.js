@@ -180,6 +180,7 @@ async function processVideoAsync(url, projectId, options, userId, captionOptions
                 $set: {
                   title: processedClip.title,
                   generatedVideo: processedClip.generatedVideo,
+                  previewVideo: processedClip.previewVideo,
                   status: 'ready'
                 }
               });

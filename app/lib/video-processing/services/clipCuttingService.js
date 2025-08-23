@@ -324,6 +324,103 @@ export const extractAudioSegment = async (inputVideoPath, startTime, endTime, ou
 };
 
 /**
+ * Extract 1-minute preview segment from original video for template previews
+ */
+export const extractPreviewSegment = async (inputVideoPath, startTime, endTime, clipId, outputPath = '/tmp') => {
+  console.log(`🎬 [PREVIEW-EXTRACT] Extracting 1-minute preview: ${startTime}s - ${endTime}s`);
+  
+  return new Promise(async (resolve, reject) => {
+    const clipDuration = endTime - startTime;
+    const previewDuration = Math.min(60, clipDuration); // 1 minute or clip duration, whichever is shorter
+    const timestamp = Date.now();
+    const outputFileName = `preview_${timestamp}_${clipId}.mp4`;
+    const outputFilePath = path.join(outputPath, outputFileName);
+    
+    console.log(`🎬 [PREVIEW-EXTRACT] Output preview: ${outputFilePath}`);
+    console.log(`⏱️ [PREVIEW-EXTRACT] Preview duration: ${previewDuration}s`);
+    
+    // FFmpeg command to extract video preview - no processing, just raw segment
+    const args = [
+      '-ss', startTime.toString(),     // Start time
+      '-i', inputVideoPath,            // Input file
+      '-t', previewDuration.toString(), // Duration (max 1 minute)
+      '-c:v', 'libx264',              // Video codec
+      '-c:a', 'aac',                  // Audio codec
+      '-preset', 'ultrafast',         // Fast encoding for preview
+      '-crf', '28',                   // Moderate quality for smaller size
+      '-avoid_negative_ts', 'make_zero',
+      '-y',                           // Overwrite output file
+      outputFilePath
+    ];
+    
+    console.log(`🔧 [PREVIEW-EXTRACT] FFmpeg command: ffmpeg ${args.join(' ')}`);
+    
+    const ffmpeg = spawn('ffmpeg', args);
+    let stderr = '';
+    
+    ffmpeg.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    ffmpeg.on('close', async (code) => {
+      if (code === 0) {
+        console.log(`🏁 [PREVIEW-EXTRACT] FFmpeg process exited with code: ${code}`);
+        
+        try {
+          // Check if file exists and get stats
+          const fileStats = fs.statSync(outputFilePath);
+          console.log(`✅ [PREVIEW-EXTRACT] Preview extracted successfully`);
+          console.log(`📊 [PREVIEW-EXTRACT] File size: ${(fileStats.size / 1024).toFixed(2)} KB`);
+          
+          // Upload preview to Firebase
+          console.log(`☁️ [PREVIEW-EXTRACT] Uploading preview to Firebase...`);
+          const videoFile = fs.readFileSync(outputFilePath);
+          const uploadKey = `${clipId}_preview_${timestamp}`;
+          
+          const uploadResult = await uploadClipperThumbnail(videoFile, uploadKey, 'mp4');
+          
+          console.log(`✅ [PREVIEW-EXTRACT] Firebase upload result:`, {
+            url: uploadResult.url,
+            name: uploadResult.name,
+            size: uploadResult.size
+          });
+          
+          // Clean up temp file
+          fs.unlinkSync(outputFilePath);
+          console.log(`🧹 [PREVIEW-EXTRACT] Cleaned up temp file`);
+          
+          resolve({
+            success: true,
+            url: uploadResult.url,
+            name: uploadResult.name,
+            size: uploadResult.size,
+            duration: previewDuration
+          });
+          
+        } catch (error) {
+          console.error(`❌ [PREVIEW-EXTRACT] Error during upload:`, error);
+          // Clean up temp file even on error
+          if (fs.existsSync(outputFilePath)) {
+            fs.unlinkSync(outputFilePath);
+          }
+          reject(new Error(`Preview upload failed: ${error.message}`));
+        }
+        
+      } else {
+        console.error(`❌ [PREVIEW-EXTRACT] Failed to extract preview`);
+        console.error(`📝 [PREVIEW-EXTRACT] FFmpeg stderr:`, stderr.substring(0, 500));
+        reject(new Error(`Preview extraction failed with code ${code}: ${stderr.substring(0, 200)}`));
+      }
+    });
+    
+    ffmpeg.on('error', (error) => {
+      console.error(`❌ [PREVIEW-EXTRACT] FFmpeg process error:`, error.message);
+      reject(new Error(`FFmpeg process failed: ${error.message}`));
+    });
+  });
+};
+
+/**
  * Generate clip title using Whisper transcription
  */
 export const generateClipTitle = async (audioFilePath, fallbackTitle = 'Untitled Clip') => {
@@ -435,42 +532,76 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
     console.log(`🎯 [CLIP-PROCESSOR] Score: ${clipMeta.viralityScore}/100`);
     
     try {
-      // Step 1: Cut video clip using metadata timestamps with 9:16 aspect ratio
-      console.log(`🎬 [CLIP-PROCESSOR] Step 1: Cutting video from metadata for vertical format...`);
+      // Step 1: Cut video clip using metadata timestamps - Generate both aspect ratios
+      console.log(`🎬 [CLIP-PROCESSOR] Step 1: Cutting video from metadata for dual aspect ratio...`);
       console.log(`📹 [CLIP-PROCESSOR] Input video exists: ${fs.existsSync(inputVideoPath)}`);
       console.log(`📊 [CLIP-PROCESSOR] Input video size: ${fs.existsSync(inputVideoPath) ? (fs.statSync(inputVideoPath).size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}`);
       
-      const videoResult = await cutVideoClip(
+      // Generate 9:16 (vertical) version for TikTok, Instagram Stories, YouTube Shorts
+      console.log(`📱 [CLIP-PROCESSOR] Step 1a: Generating 9:16 (vertical) version...`);
+      const videoResultVertical = await cutVideoClip(
         inputVideoPath,
         clipMeta.startTime,
         clipMeta.endTime,
         '/tmp',
         { 
           aspectRatio: '9:16', 
-          platform: captionStyle, // Use caption style as platform
+          platform: captionStyle + '_vertical',
           captionData: captionData,
           enableCaptions: enableCaptions,
           captionPosition: captionPosition
         }
       );
       
-      console.log(`✅ [CLIP-PROCESSOR] Video cutting result:`, {
-        success: videoResult.success,
-        filePath: videoResult.filePath,
-        fileName: videoResult.fileName,
-        size: `${(videoResult.size / 1024 / 1024).toFixed(2)} MB`
+      console.log(`✅ [CLIP-PROCESSOR] Vertical video result:`, {
+        success: videoResultVertical.success,
+        filePath: videoResultVertical.filePath,
+        fileName: videoResultVertical.fileName,
+        size: `${(videoResultVertical.size / 1024 / 1024).toFixed(2)} MB`
       });
       
-      // Step 2: Extract audio for transcription
-      console.log(`🎵 [CLIP-PROCESSOR] Step 2: Extracting audio...`);
+      // Generate 16:9 (horizontal) version for YouTube, Instagram Feed, Facebook
+      console.log(`🖥️ [CLIP-PROCESSOR] Step 1b: Generating 16:9 (horizontal) version...`);
+      const videoResultHorizontal = await cutVideoClip(
+        inputVideoPath,
+        clipMeta.startTime,
+        clipMeta.endTime,
+        '/tmp',
+        { 
+          aspectRatio: '16:9', 
+          platform: captionStyle + '_horizontal',
+          captionData: captionData,
+          enableCaptions: enableCaptions,
+          captionPosition: captionPosition
+        }
+      );
+      
+      console.log(`✅ [CLIP-PROCESSOR] Horizontal video result:`, {
+        success: videoResultHorizontal.success,
+        filePath: videoResultHorizontal.filePath,
+        fileName: videoResultHorizontal.fileName,
+        size: `${(videoResultHorizontal.size / 1024 / 1024).toFixed(2)} MB`
+      });
+      
+      // Step 2: Extract 1-minute preview from original video for templates
+      console.log(`🎬 [CLIP-PROCESSOR] Step 2: Extracting 1-minute preview for templates...`);
+      const previewResult = await extractPreviewSegment(
+        inputVideoPath,
+        clipMeta.startTime,
+        clipMeta.endTime,
+        clipMeta.id || clipMeta._id
+      );
+      
+      // Step 3: Extract audio for transcription
+      console.log(`🎵 [CLIP-PROCESSOR] Step 3: Extracting audio...`);
       const audioResult = await extractAudioSegment(
         inputVideoPath,
         clipMeta.startTime,
         clipMeta.endTime
       );
       
-      // Step 3: Use DeepSeek-generated title from metadata
-      console.log(`🎙️ [CLIP-PROCESSOR] Step 3: Using DeepSeek-generated title from metadata...`);
+      // Step 4: Use DeepSeek-generated title from metadata
+      console.log(`🎙️ [CLIP-PROCESSOR] Step 4: Using DeepSeek-generated title from metadata...`);
       
       // Use the DeepSeek-generated title if available, otherwise fallback to original video title
       const generatedTitle = clipMeta.title || `${originalVideoTitle} - ${clipMeta.startTime}s`;
@@ -480,33 +611,50 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
       console.log(`🎯 [CLIP-PROCESSOR] Engagement type: ${clipMeta.engagementType || 'N/A'}`);
       console.log(`🏷️ [CLIP-PROCESSOR] Content tags: ${clipMeta.contentTags ? clipMeta.contentTags.join(', ') : 'N/A'}`);
       
-      // Step 4: Upload video to Firebase
-      console.log(`☁️ [CLIP-PROCESSOR] Step 4: Uploading video to Firebase...`);
-      console.log(`📁 [CLIP-PROCESSOR] Video file path: ${videoResult.filePath}`);
-      console.log(`📊 [CLIP-PROCESSOR] Video file size: ${(videoResult.size / 1024 / 1024).toFixed(2)} MB`);
+      // Step 5: Upload both videos to Firebase
+      console.log(`☁️ [CLIP-PROCESSOR] Step 5: Uploading dual aspect ratio videos to Firebase...`);
       
-      const videoFile = fs.readFileSync(videoResult.filePath);
-      console.log(`📦 [CLIP-PROCESSOR] Read video file buffer: ${(videoFile.length / 1024 / 1024).toFixed(2)} MB`);
+      // Upload vertical (9:16) video
+      console.log(`📱 [CLIP-PROCESSOR] Step 5a: Uploading vertical video...`);
+      const verticalVideoFile = fs.readFileSync(videoResultVertical.filePath);
+      const verticalUploadKey = `${projectId}_clip_${clipMeta.startTime}s_9x16`;
+      console.log(`🏷️ [CLIP-PROCESSOR] Vertical upload key: ${verticalUploadKey}`);
       
-      const uploadKey = `${projectId}_clip_${clipMeta.startTime}s`;
-      console.log(`🏷️ [CLIP-PROCESSOR] Upload key: ${uploadKey}`);
-      
-      const videoUploadResult = await uploadClipperThumbnail(
-        videoFile,
-        uploadKey,
+      const verticalUploadResult = await uploadClipperThumbnail(
+        verticalVideoFile,
+        verticalUploadKey,
         'mp4'
       );
       
-      console.log(`✅ [CLIP-PROCESSOR] Firebase upload result:`, {
-        url: videoUploadResult.downloadURL,
-        name: videoUploadResult.name,
-        size: videoUploadResult.size
+      console.log(`✅ [CLIP-PROCESSOR] Vertical Firebase upload result:`, {
+        url: verticalUploadResult.downloadURL,
+        name: verticalUploadResult.name,
+        size: verticalUploadResult.size
       });
       
-      // Step 5: Cleanup temporary files
-      console.log(`🧹 [CLIP-PROCESSOR] Step 5: Cleaning up temp files...`);
+      // Upload horizontal (16:9) video
+      console.log(`🖥️ [CLIP-PROCESSOR] Step 5b: Uploading horizontal video...`);
+      const horizontalVideoFile = fs.readFileSync(videoResultHorizontal.filePath);
+      const horizontalUploadKey = `${projectId}_clip_${clipMeta.startTime}s_16x9`;
+      console.log(`🏷️ [CLIP-PROCESSOR] Horizontal upload key: ${horizontalUploadKey}`);
+      
+      const horizontalUploadResult = await uploadClipperThumbnail(
+        horizontalVideoFile,
+        horizontalUploadKey,
+        'mp4'
+      );
+      
+      console.log(`✅ [CLIP-PROCESSOR] Horizontal Firebase upload result:`, {
+        url: horizontalUploadResult.downloadURL,
+        name: horizontalUploadResult.name,
+        size: horizontalUploadResult.size
+      });
+      
+      // Step 6: Cleanup temporary files
+      console.log(`🧹 [CLIP-PROCESSOR] Step 6: Cleaning up temp files...`);
       try {
-        fs.unlinkSync(videoResult.filePath);
+        fs.unlinkSync(videoResultVertical.filePath);
+        fs.unlinkSync(videoResultHorizontal.filePath);
         fs.unlinkSync(audioResult.filePath);
         console.log(`✅ [CLIP-PROCESSOR] Cleaned up temp files`);
       } catch (cleanupError) {
@@ -521,11 +669,34 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
         duration: clipMeta.duration,
         viralityScore: clipMeta.viralityScore,
         generatedVideo: {
-          url: videoUploadResult.downloadURL,
+          vertical: {
+            url: verticalUploadResult.downloadURL,
+            format: 'mp4',
+            size: videoResultVertical.size,
+            duration: videoResultVertical.duration,
+            resolution: '720p',
+            aspectRatio: '9:16'
+          },
+          horizontal: {
+            url: horizontalUploadResult.downloadURL,
+            format: 'mp4',
+            size: videoResultHorizontal.size,
+            duration: videoResultHorizontal.duration,
+            resolution: '720p',
+            aspectRatio: '16:9'
+          },
+          // Legacy support - default to vertical for backward compatibility
+          url: verticalUploadResult.downloadURL,
           format: 'mp4',
-          size: videoResult.size,
-          duration: videoResult.duration,
-          resolution: '720p' // Based on download quality
+          size: videoResultVertical.size,
+          duration: videoResultVertical.duration,
+          resolution: '720p'
+        },
+        previewVideo: {
+          url: previewResult.url,
+          format: 'mp4',
+          size: previewResult.size,
+          duration: previewResult.duration
         }
       };
       
