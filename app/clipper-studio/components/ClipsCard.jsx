@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo, useCallback } from "react";
+import { useTemplateStore } from "../../lib/store/templateStore";
 import {
   Filter,
   MoreHorizontal,
@@ -80,8 +81,9 @@ const defaultClips = [
   },
 ];
 
-export default function ClipsGallery({
+const ClipsGallery = memo(function ClipsGallery({
   clips = defaultClips,
+  projectId, // Add projectId for TanStack Query
   onClipSelect,
   onBack,
   aspectRatio = "vertical", // "video" or "vertical"
@@ -90,21 +92,27 @@ export default function ClipsGallery({
   const [selectMode, setSelectMode] = useState(false);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
 
+  // Get template state to pass to ClipCards
+  const { 
+    appliedTemplate, 
+    appliedSettings, 
+    isTemplateApplied 
+  } = useTemplateStore();
+
   // Moved handleClipSelect logic into the ClipCard component for better encapsulation
 
-  const toggleSelectMode = () => {
+  const toggleSelectMode = useCallback(() => {
     setSelectMode(!selectMode);
     if (selectMode) {
       setSelectedClips([]);
     }
-  };
+  }, [selectMode]);
 
-  const handleBulkDownload = async () => {
+  const handleBulkDownload = useCallback(async () => {
     const clipsToDownload = selectMode && selectedClips.length > 0 
       ? clips.filter(clip => selectedClips.includes(clip.id))
       : clips;
 
-    console.log(`📦 [BULK-DOWNLOAD] Starting bulk download of ${clipsToDownload.length} clips`);
 
     for (let i = 0; i < clipsToDownload.length; i++) {
       const clip = clipsToDownload[i];
@@ -157,21 +165,18 @@ export default function ClipsGallery({
       }
     }
 
-    console.log(`✅ [BULK-DOWNLOAD] Bulk download completed`);
-  };
+  }, [selectMode, selectedClips, clips]);
 
-  const handleTemplateApply = async (templateData) => {
+  const handleTemplateApply = useCallback(async (templateData) => {
     setIsApplyingTemplate(true);
     
     try {
-      console.log('🎨 [TEMPLATE-APPLY] Starting template application:', templateData);
       
       // TODO: Call template application API
       // For now, just simulate the process
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Show success message
-      console.log('✅ [TEMPLATE-APPLY] Template applied successfully');
       
       // Optionally refresh clips or update UI state
       
@@ -181,7 +186,7 @@ export default function ClipsGallery({
     } finally {
       setIsApplyingTemplate(false);
     }
-  };
+  }, []);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-8 animate-fadeIn">
@@ -280,12 +285,14 @@ export default function ClipsGallery({
             }}
             onShare={(clip) => {
               // Handle share functionality
-              console.log('Sharing clip:', clip.title);
             }}
             onRemove={(clipId) => {
               // Handle remove functionality
-              console.log('Removing clip:', clipId);
             }}
+            // NEW: Pass template state to ClipCard
+            appliedTemplate={appliedTemplate}
+            appliedSettings={appliedSettings}
+            isTemplateApplied={isTemplateApplied}
           />
         ))}
       </div>
@@ -320,9 +327,12 @@ export default function ClipsGallery({
       {/* Template Floating Sidebar */}
       <TemplateFloatingSidebar
         selectedClips={selectedClips}
+        projectId={projectId}
         onTemplateApply={handleTemplateApply}
         isApplying={isApplyingTemplate}
       />
     </div>
   );
-}
+});
+
+export default ClipsGallery;

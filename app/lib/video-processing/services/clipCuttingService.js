@@ -54,6 +54,11 @@ export const cutVideoClip = async (inputVideoPath, startTime, endTime, outputPat
       console.log(`🎯 [CLIP-CUTTER] Converting to 9:16 aspect ratio for ${platform || 'vertical'} format`);
       videoFilters.push('scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920');
       needsReencoding = true;
+    } else if (aspectRatio === '2.35:1' || platform === 'cinematic_horizontal') {
+      console.log(`🎬 [CLIP-CUTTER] Converting to 2.35:1 cinematic aspect ratio for motivational templates`);
+      // 2.35:1 ratio with 1080p height = 2538x1080 (rounded to 2540x1080 for even numbers)
+      videoFilters.push('scale=2540:1080:force_original_aspect_ratio=decrease,pad=2540:1080:(ow-iw)/2:(oh-ih)/2');
+      needsReencoding = true;
     }
     
     // Add captions if provided and enabled
@@ -560,16 +565,16 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
         size: `${(videoResultVertical.size / 1024 / 1024).toFixed(2)} MB`
       });
       
-      // Generate 16:9 (horizontal) version for YouTube, Instagram Feed, Facebook
-      console.log(`🖥️ [CLIP-PROCESSOR] Step 1b: Generating 16:9 (horizontal) version...`);
+      // Generate 2.35:1 (cinematic horizontal) version for motivational templates with overlays
+      console.log(`🎬 [CLIP-PROCESSOR] Step 1b: Generating 2.35:1 (cinematic) version...`);
       const videoResultHorizontal = await cutVideoClip(
         inputVideoPath,
         clipMeta.startTime,
         clipMeta.endTime,
         '/tmp',
         { 
-          aspectRatio: '16:9', 
-          platform: captionStyle + '_horizontal',
+          aspectRatio: '2.35:1', 
+          platform: captionStyle + '_cinematic',
           captionData: captionData,
           enableCaptions: enableCaptions,
           captionPosition: captionPosition
@@ -632,11 +637,11 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
         size: verticalUploadResult.size
       });
       
-      // Upload horizontal (16:9) video
-      console.log(`🖥️ [CLIP-PROCESSOR] Step 5b: Uploading horizontal video...`);
+      // Upload cinematic (2.35:1) video
+      console.log(`🎬 [CLIP-PROCESSOR] Step 5b: Uploading cinematic video...`);
       const horizontalVideoFile = fs.readFileSync(videoResultHorizontal.filePath);
-      const horizontalUploadKey = `${projectId}_clip_${clipMeta.startTime}s_16x9`;
-      console.log(`🏷️ [CLIP-PROCESSOR] Horizontal upload key: ${horizontalUploadKey}`);
+      const horizontalUploadKey = `${projectId}_clip_${clipMeta.startTime}s_2.35x1`;
+      console.log(`🏷️ [CLIP-PROCESSOR] Cinematic upload key: ${horizontalUploadKey}`);
       
       const horizontalUploadResult = await uploadClipperThumbnail(
         horizontalVideoFile,
@@ -683,7 +688,7 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
             size: videoResultHorizontal.size,
             duration: videoResultHorizontal.duration,
             resolution: '720p',
-            aspectRatio: '16:9'
+            aspectRatio: '2.35:1'
           },
           // Legacy support - default to vertical for backward compatibility
           url: verticalUploadResult.downloadURL,
@@ -703,7 +708,8 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
       processedClips.push(processedClip);
       console.log(`✅ [CLIP-PROCESSOR] Clip ${i + 1} processed successfully`);
       console.log(`🏷️ [CLIP-PROCESSOR] Title: "${generatedTitle}"`);
-      console.log(`☁️ [CLIP-PROCESSOR] Firebase URL: ${videoUploadResult.downloadURL}`);
+      console.log(`☁️ [CLIP-PROCESSOR] Vertical Firebase URL: ${verticalUploadResult.downloadURL}`);
+      console.log(`☁️ [CLIP-PROCESSOR] Horizontal Firebase URL: ${horizontalUploadResult.downloadURL}`);
       
     } catch (error) {
       console.error(`❌ [CLIP-PROCESSOR] Error processing clip ${i + 1}:`, error.message);

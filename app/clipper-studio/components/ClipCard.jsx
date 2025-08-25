@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Download,
   Share2,
@@ -10,7 +10,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { Play } from "lucide-react";
+import { Play, User } from "lucide-react";
 
 export default function ClipCard({
   clip,
@@ -20,7 +20,11 @@ export default function ClipCard({
   onDownload,
   onShare,
   onRemove,
-  aspectRatio = "video" // "video" (16:9) or "vertical" (9:16)
+  aspectRatio = "video", // "video" (16:9) or "vertical" (9:16)
+  // NEW: Template-related props (optional - won't break existing usage)
+  appliedTemplate = null,
+  appliedSettings = null,
+  isTemplateApplied = false
 }) {
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -29,23 +33,77 @@ export default function ClipCard({
   const [isVideoLoading, setIsVideoLoading] = useState(true);
   const [showControls, setShowControls] = useState(false);
 
-  const handleClipClick = () => {
+  // Memoized template preferences mapping
+  const templatePreferences = useMemo(() => ({
+    'social-profile': 'horizontal',  // Sonnet prefers horizontal (2.35:1)
+    'title-only': 'horizontal',      // Focus prefers horizontal (2.35:1)  
+    'default': 'vertical',           // Blank prefers vertical (9:16)
+    'bw-frame': 'vertical'           // B&W prefers vertical (9:16)
+  }), []);
+
+  // Memoized CSS filter for B&W template
+  const getVideoFilter = useMemo(() => {
+    if (isTemplateApplied && appliedTemplate === 'bw-frame') {
+      // Dynamic B&W effect based on user settings
+      const grayscaleLevel = appliedSettings?.bwLevel || 50;
+      const contrast = (appliedSettings?.bwContrast || 130) / 100; // Convert percentage to decimal
+      const brightness = (appliedSettings?.bwBrightness || 80) / 100; // Convert percentage to decimal
+      
+      return `grayscale(${grayscaleLevel}%) contrast(${contrast}) brightness(${brightness})`;
+    }
+    return 'none';
+  }, [isTemplateApplied, appliedTemplate, appliedSettings?.bwLevel, appliedSettings?.bwContrast, appliedSettings?.bwBrightness]);
+
+  // Memoized video URL selection based on applied template
+  const videoUrl = useMemo(() => {
+    if (!isTemplateApplied || !appliedTemplate) {
+      // No template applied, use default video
+      return clip.videoUrl || clip.url;
+    }
+    
+    const preferredOrientation = templatePreferences[appliedTemplate] || 'vertical';
+    
+    // Debug logging
+    console.log(`🎯 [VIDEO-SWAP] Template: ${appliedTemplate}, Prefers: ${preferredOrientation}`);
+    console.log(`📹 [VIDEO-SWAP] Available videos:`, {
+      hasHorizontal: !!clip.horizontalVideoUrl,
+      hasVertical: !!clip.verticalVideoUrl,
+      horizontal: clip.horizontalVideoUrl,
+      vertical: clip.verticalVideoUrl,
+      default: clip.videoUrl
+    });
+    
+    // Get the appropriate video URL from clip properties
+    if (preferredOrientation === 'horizontal' && clip.horizontalVideoUrl) {
+      console.log(`✅ [VIDEO-SWAP] Using horizontal video (2.35:1) for ${appliedTemplate}`);
+      return clip.horizontalVideoUrl;
+    } else if (preferredOrientation === 'vertical' && clip.verticalVideoUrl) {
+      console.log(`✅ [VIDEO-SWAP] Using vertical video (9:16) for ${appliedTemplate}`);
+      return clip.verticalVideoUrl;
+    }
+    
+    // Fallback to default URL
+    console.log(`⚠️ [VIDEO-SWAP] Falling back to default URL`);
+    return clip.videoUrl || clip.url;
+  }, [isTemplateApplied, appliedTemplate, clip.videoUrl, clip.url, clip.horizontalVideoUrl, clip.verticalVideoUrl, templatePreferences]);
+
+  const handleClipClick = useCallback(() => {
     if (onClipSelect) {
       onClipSelect(clip.id);
     }
-  };
+  }, [onClipSelect, clip.id]);
 
-  const handlePlayClick = (e) => {
+  const handlePlayClick = useCallback((e) => {
     e.stopPropagation();
     setIsPlaying(true);
-  };
+  }, []);
 
 
-  const handleDownload = async (e) => {
+  const handleDownload = useCallback(async (e) => {
     e.stopPropagation();
-    if (onDownload && clip.videoUrl) {
+    if (onDownload && videoUrl) {
       onDownload(clip);
-    } else if (clip.videoUrl) {
+    } else if (videoUrl) {
       try {
         // Use our API proxy to download video (bypasses CORS)
         const filename = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
@@ -56,7 +114,7 @@ export default function ClipCard({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            videoUrl: clip.videoUrl,
+            videoUrl: videoUrl,
             filename: filename
           }),
         });
@@ -84,24 +142,24 @@ export default function ClipCard({
       } catch (error) {
         console.error('Download failed:', error);
         // Fallback to opening in new tab
-        window.open(clip.videoUrl, '_blank');
+        window.open(videoUrl, '_blank');
       }
     }
-  };
+  }, [onDownload, videoUrl, clip]);
 
-  const handleShare = (e) => {
+  const handleShare = useCallback((e) => {
     e.stopPropagation();
     if (onShare) {
       onShare(clip);
     }
-  };
+  }, [onShare, clip]);
 
-  const handleRemove = (e) => {
+  const handleRemove = useCallback((e) => {
     e.stopPropagation();
     if (onRemove) {
       onRemove(clip.id);
     }
-  };
+  }, [onRemove, clip.id]);
 
   // Dynamic classes - much larger and more breathing space like reference
   const aspectClass = aspectRatio === "vertical" ? "aspect-[9/16]" : "aspect-video";
@@ -122,68 +180,204 @@ export default function ClipCard({
         onMouseEnter={() => setShowControls(true)}
         onMouseLeave={() => setShowControls(false)}
       >
-        {clip.videoUrl ? (
-          <>
-            {/* Show thumbnail if available, otherwise show video with poster */}
-            {!isPlaying && clip.thumbnail ? (
-              <div className="w-full h-full relative">
-                <img
-                  src={clip.thumbnail}
-                  alt="Video thumbnail"
-                  className="w-full h-full object-cover transition-opacity duration-300"
-                  onLoad={() => {
-                    setVideoLoaded(true);
-                    setIsVideoLoading(false);
-                  }}
-                  onError={() => setVideoError(true)}
-                  style={{ backgroundColor: '#000' }} // Prevent white flash
-                />
-              </div>
-            ) : !isPlaying ? (
-              /* Show video with poster when no thumbnail */
-              <div className="w-full h-full relative">
-                <video
-                  className="w-full h-full object-cover"
-                  preload="metadata"
-                  muted
-                  playsInline
-                  style={{ backgroundColor: '#000' }}
-                  onLoadedMetadata={() => {
-                    setVideoLoaded(true);
-                    setIsVideoLoading(false);
-                  }}
-                  onError={() => setVideoError(true)}
-                >
-                  <source src={clip.videoUrl} type="video/mp4" />
-                </video>
-              </div>
-            ) : null}
+        {videoUrl ? (
+          <div className="relative w-full h-full overflow-hidden">
+            {/* Conditional styling based on applied template */}
+            {isTemplateApplied && appliedTemplate && templatePreferences[appliedTemplate] === 'horizontal' ? (
+              /* Horizontal templates (Sonnet, Focus): Black bars + centered horizontal video */
+              <>
+                {/* Black background fills entire container */}
+                <div className="absolute inset-0 bg-black" />
+                
+                {/* Centered horizontal video */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {!isPlaying && clip.thumbnail ? (
+                    <img
+                      src={clip.thumbnail}
+                      alt="Video thumbnail"
+                      className="max-w-full max-h-full object-contain transition-opacity duration-300"
+                      onLoad={() => {
+                        setVideoLoaded(true);
+                        setIsVideoLoading(false);
+                      }}
+                      onError={() => setVideoError(true)}
+                      style={{ 
+                        backgroundColor: '#000',
+                        filter: getVideoFilter
+                      }}
+                    />
+                  ) : !isPlaying ? (
+                    <video
+                      className="max-w-full max-h-full object-contain"
+                      preload="metadata"
+                      muted
+                      playsInline
+                      style={{ 
+                        backgroundColor: '#000',
+                        filter: getVideoFilter
+                      }}
+                      onLoadedMetadata={() => {
+                        setVideoLoaded(true);
+                        setIsVideoLoading(false);
+                      }}
+                      onError={() => setVideoError(true)}
+                    >
+                      <source src={videoUrl} type="video/mp4" />
+                    </video>
+                  ) : (
+                    <video
+                      className="max-w-full max-h-full object-contain transition-opacity duration-300"
+                      controls
+                      playsInline
+                      autoPlay
+                      preload="metadata"
+                      style={{ 
+                        backgroundColor: '#000',
+                        filter: getVideoFilter
+                      }}
+                      onError={() => {
+                        setVideoError(true);
+                        setIsPlaying(false);
+                      }}
+                      onLoadStart={() => setIsVideoLoading(true)}
+                      onLoadedData={() => {
+                        setIsVideoLoading(false);
+                        setVideoLoaded(true);
+                      }}
+                    >
+                      <source src={videoUrl} type="video/mp4" />
+                    </video>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Vertical templates and default: Full frame video */
+              <>
+                {!isPlaying && clip.thumbnail ? (
+                  <div className="w-full h-full relative">
+                    <img
+                      src={clip.thumbnail}
+                      alt="Video thumbnail"
+                      className="w-full h-full object-cover transition-opacity duration-300"
+                      onLoad={() => {
+                        setVideoLoaded(true);
+                        setIsVideoLoading(false);
+                      }}
+                      onError={() => setVideoError(true)}
+                      style={{ 
+                        backgroundColor: '#000',
+                        filter: getVideoFilter
+                      }}
+                    />
+                  </div>
+                ) : !isPlaying ? (
+                  <div className="w-full h-full relative">
+                    <video
+                      className="w-full h-full object-cover"
+                      preload="metadata"
+                      muted
+                      playsInline
+                      style={{ 
+                        backgroundColor: '#000',
+                        filter: getVideoFilter
+                      }}
+                      onLoadedMetadata={() => {
+                        setVideoLoaded(true);
+                        setIsVideoLoading(false);
+                      }}
+                      onError={() => setVideoError(true)}
+                    >
+                      <source src={videoUrl} type="video/mp4" />
+                    </video>
+                  </div>
+                ) : (
+                  <video
+                    className="w-full h-full object-cover transition-opacity duration-300"
+                    controls
+                    playsInline
+                    autoPlay
+                    preload="metadata"
+                    style={{ 
+                      backgroundColor: '#000',
+                      filter: getVideoFilter
+                    }}
+                    onError={() => {
+                      setVideoError(true);
+                      setIsPlaying(false);
+                    }}
+                    onLoadStart={() => setIsVideoLoading(true)}
+                    onLoadedData={() => {
+                      setIsVideoLoading(false);
+                      setVideoLoaded(true);
+                    }}
+                  >
+                    <source src={videoUrl} type="video/mp4" />
+                  </video>
+                )}
+              </>
+            )}
             
-            {/* Video element - only render when playing */}
-            {isPlaying && (
-              <video
-                className="w-full h-full object-cover transition-opacity duration-300"
-                controls
-                playsInline
-                autoPlay
-                preload="metadata"
-                style={{ backgroundColor: '#000' }}
-                onError={() => {
-                  setVideoError(true);
-                  setIsPlaying(false);
-                }}
-                onLoadStart={() => setIsVideoLoading(true)}
-                onLoadedData={() => {
-                  setIsVideoLoading(false);
-                  setVideoLoaded(true);
-                }}
-              >
-                <source src={clip.videoUrl} type="video/mp4" />
-              </video>
+            {/* Template Overlay - Show when template is applied */}
+            {isTemplateApplied && appliedTemplate && appliedSettings && (
+              <div className="absolute inset-0 pointer-events-none">
+                {appliedTemplate === 'social-profile' && (
+                  <div 
+                    className="absolute top-0 left-0 right-0 h-[30%] p-2"
+                    style={{ 
+                      backgroundColor: `${appliedSettings.overlayColor || '#000000'}${Math.round((appliedSettings.overlayOpacity || 80) * 2.55).toString(16).padStart(2, '0')}`,
+                      color: appliedSettings.textColor || '#ffffff'
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center overflow-hidden">
+                        {appliedSettings.profilePic ? (
+                          <img src={appliedSettings.profilePic} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-3 h-3" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-[10px] font-semibold">{appliedSettings.username || 'YourUsername'}</span>
+                          <svg className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                          </svg>
+                        </div>
+                        <div className="text-[9px] opacity-80 -mt-0.5">@{(appliedSettings.username || 'username').toLowerCase()}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs mt-1 line-clamp-2">{appliedSettings.customHeader || 'Your header text'}</div>
+                  </div>
+                )}
+                
+                {appliedTemplate === 'title-only' && (
+                  <div 
+                    className="absolute top-0 left-0 right-0 h-[25%] flex items-center justify-center p-2"
+                    style={{ 
+                      backgroundColor: `${appliedSettings.overlayColor || '#000000'}${Math.round((appliedSettings.overlayOpacity || 80) * 2.55).toString(16).padStart(2, '0')}`,
+                      color: appliedSettings.textColor || '#ffffff'
+                    }}
+                  >
+                    <div className="text-xs font-bold text-center line-clamp-2">
+                      {appliedSettings.customHeader || 'Your title text'}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Bottom overlay for letterbox effect */}
+                {(appliedTemplate === 'social-profile' || appliedTemplate === 'title-only') && (
+                  <div 
+                    className="absolute bottom-0 left-0 right-0 h-[15%]"
+                    style={{ 
+                      backgroundColor: `${appliedSettings.overlayColor || '#000000'}${Math.round((appliedSettings.overlayOpacity || 80) * 2.55).toString(16).padStart(2, '0')}`
+                    }}
+                  />
+                )}
+              </div>
             )}
             
             {/* Large Centered Play Button - Only on hover and when not playing */}
-            {clip.videoUrl && !videoError && videoLoaded && !isVideoLoading && showControls && !isPlaying && (
+            {videoUrl && !videoError && videoLoaded && !isVideoLoading && showControls && !isPlaying && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40 transition-all duration-300">
                 <button 
                   className="w-20 h-20 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center hover:bg-white hover:scale-110 transition-all duration-200 shadow-xl"
@@ -193,7 +387,7 @@ export default function ClipCard({
                 </button>
               </div>
             )}
-          </>
+          </div>
         ) : (
           <div className="w-full h-full relative overflow-hidden bg-gradient-to-br from-gray-900 via-slate-800 to-gray-900">
             {/* Bokeh gradient background */}
@@ -224,6 +418,7 @@ export default function ClipCard({
         }`}>
           {clip.duration ? `${clip.duration}s` : `${clip.endTime - clip.startTime}s`}
         </div>
+
 
         {/* Pro Badge */}
         {clip.isPro && (

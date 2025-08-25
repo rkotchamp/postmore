@@ -88,7 +88,6 @@ export default function ClipperStudio() {
     e.preventDefault();
     if (!isInputValid()) return;
 
-    console.log('🎬 [CLIPPER] Starting video preview extraction...');
     setLoadingPreview(true);
     setExtractingThumbnail(true);
     
@@ -99,13 +98,11 @@ export default function ClipperStudio() {
       // Check cache first
       const cachedThumbnail = getCachedThumbnail(cacheKey);
       if (cachedThumbnail) {
-        console.log('🎯 [CACHE] Using cached thumbnail');
         setPreviewThumbnail(cachedThumbnail);
         setHasVideo(true);
         return;
       }
       
-      console.log(`📹 [CLIPPER] Extracting thumbnail for: ${uploadedFile ? uploadedFile.name : url}`);
       
       // For uploaded files, process them with thumbnail integration
       if (uploadedFile) {
@@ -126,7 +123,6 @@ export default function ClipperStudio() {
         // For URLs, use the existing thumbnail extraction
         const thumbnailData = await getThumbnail(input);
         
-        console.log('✅ [CLIPPER] Thumbnail extracted successfully:', thumbnailData.title);
         
         cacheThumbnail(cacheKey, thumbnailData.thumbnail);
         setPreviewThumbnail(thumbnailData.thumbnail);
@@ -174,7 +170,6 @@ export default function ClipperStudio() {
     // Handle file drops
     const file = acceptedFiles[0];
     if (file) {
-      console.log('📁 [CLIPPER] File dropped:', file.name);
       setUploadedFile(file);
       setLoadingPreview(true);
       setExtractingThumbnail(true);
@@ -183,7 +178,6 @@ export default function ClipperStudio() {
         // Extract thumbnail from uploaded file
         const thumbnailData = await getThumbnail(file);
         
-        console.log('✅ [CLIPPER] File thumbnail generated successfully');
         
         setPreviewThumbnail(thumbnailData.thumbnail);
         setPreviewMetadata({
@@ -224,7 +218,6 @@ export default function ClipperStudio() {
       const urlToDrop = droppedUrl || droppedText;
       
       if (urlToDrop && isValidVideoUrl(urlToDrop)) {
-        console.log('🔗 [CLIPPER] URL dropped:', urlToDrop);
         setUrl(urlToDrop);
         setLoadingPreview(true);
         setExtractingThumbnail(true);
@@ -233,7 +226,6 @@ export default function ClipperStudio() {
           // Extract thumbnail from URL
           const thumbnailData = await getThumbnail(urlToDrop);
           
-          console.log('✅ [CLIPPER] URL thumbnail extracted successfully:', thumbnailData.title);
           
           setPreviewThumbnail(thumbnailData.thumbnail);
           setPreviewMetadata({
@@ -298,14 +290,12 @@ export default function ClipperStudio() {
     setLoadingProcessing(true);
     
     try {
-      console.log('🚀 [CLIPPER] Starting video processing...');
       
       // Upload thumbnail to Firebase if it's a base64 data URL
       let firebaseThumbnailUrl = previewThumbnail;
       
       if (previewThumbnail && previewThumbnail.startsWith('data:image/')) {
         try {
-          console.log('📤 [FIREBASE] Uploading thumbnail to Firebase...');
           
           // Convert base64 to File for upload without using fetch (CSP compliant)
           const base64Data = previewThumbnail.split(',')[1]; // Remove data:image/...;base64, prefix
@@ -323,7 +313,6 @@ export default function ClipperStudio() {
           const uploadResult = await uploadClipperThumbnail(file, `processed_${timestamp}`);
           firebaseThumbnailUrl = uploadResult.url;
           
-          console.log('✅ [FIREBASE] Thumbnail uploaded successfully');
         } catch (uploadError) {
           console.warn('⚠️ [FIREBASE] Thumbnail upload failed, using base64:', uploadError.message);
           // Keep the base64 URL as fallback
@@ -348,8 +337,6 @@ export default function ClipperStudio() {
       // Create the project using TanStack mutation
       const result = await createProject.mutateAsync(projectData);
       
-      console.log('✅ [CLIPPER] Project created successfully:', result);
-      console.log('📊 [CLIPPER] Project data:', result.project);
       
       // Add project to local store for UI updates
       const newProject = {
@@ -368,7 +355,6 @@ export default function ClipperStudio() {
       // Reset form to allow new videos
       clearPreview();
       
-      console.log('🎉 [CLIPPER] Processing started successfully');
       
       // Start actual video processing with SmolVLM2
       startVideoProcessing(result.project.id, url || uploadedFile);
@@ -427,31 +413,23 @@ export default function ClipperStudio() {
     const project = activeProjects.find(p => p.id === projectId);
     const projectClips = allProjectClips[projectId] || { clips: [], totalClips: 0, processedClips: 0 };
     
-    console.log(`🎯 [GALLERY] Processing view click for project: ${projectId}`);
-    console.log(`📊 [GALLERY] Project found:`, !!project);
-    console.log(`📊 [GALLERY] Project status:`, project?.status);
-    console.log(`📊 [GALLERY] Processed clips:`, projectClips.processedClips);
     
     if (project && project.status === "completed") {
       // Only allow clicking if clips have been fully processed
       const hasProcessedClips = projectClips.processedClips > 0;
       
       if (hasProcessedClips) {
-        console.log(`✅ [GALLERY] Opening gallery for project: ${projectId}`);
         setCurrentProjectId(projectId);
         setShowClipsGallery(true);
       } else {
-        console.log(`⚠️ [GALLERY] No processed clips available for project: ${projectId}`);
       }
       // If not processed, do nothing - processing happens automatically in background
     } else {
-      console.log(`⚠️ [GALLERY] Project not ready for gallery view: ${project?.status || 'not found'}`);
     }
   };
 
   const handleProcessClips = async (projectId) => {
     try {
-      console.log('🎬 [PROCESS] Starting background clip processing for project:', projectId);
       
       // Keep processing state and update progress
       updateProjectProgress(projectId, 60);
@@ -470,7 +448,6 @@ export default function ClipperStudio() {
       const result = await response.json();
       
       if (result.success) {
-        console.log(`✅ [PROCESS] Successfully processed ${result.processedClips}/${result.totalClips} clips`);
         
         // Mark as completed with 100% progress
         updateProject(projectId, { 
@@ -479,7 +456,6 @@ export default function ClipperStudio() {
         });
         
         // Trigger clips data refresh to update UI badges
-        console.log(`🔄 [PROCESS] Refreshing clips data for UI update...`);
         queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
         
         // Don't auto-open gallery - let user click when ready
@@ -500,15 +476,14 @@ export default function ClipperStudio() {
     }
   };
 
-  const handleClipSelection = (clipId) => {
-    console.log("Selected clip:", clipId);
+  const handleClipSelection = useCallback((clipId) => {
     // Handle clip selection/preview
-  };
+  }, []);
 
-  const handleReturnToStudio = () => {
+  const handleReturnToStudio = useCallback(() => {
     setShowClipsGallery(false);
     setCurrentProjectId(null);
-  };
+  }, []);
 
   const handleDeleteProject = (projectId) => {
     // Find project to get title for dialog
@@ -530,18 +505,15 @@ export default function ClipperStudio() {
     const { projectId } = deleteDialog;
     
     try {
-      console.log('🗑️ [DELETE] Deleting project:', projectId);
       
       // Show deleting status for immediate feedback
       updateProject(projectId, { status: 'deleting' });
       
       // Delete from database (this will handle Firebase cleanup too)
       await deleteProject.mutateAsync(projectId);
-      console.log('✅ [DELETE] Project deleted from database');
       
       // Remove from local store
       removeProject(projectId);
-      console.log('✅ [DELETE] Project removed from local state');
       
       // Close dialog
       handleCloseDeleteDialog();
@@ -568,10 +540,8 @@ export default function ClipperStudio() {
 
   const handleSaveProject = async (projectId) => {
     try {
-      console.log('💾 [SAVE] Saving project:', projectId);
       await saveProject.mutateAsync(projectId);
       
-      console.log('✅ [SAVE] Project saved successfully');
       // Show success message or update UI
     } catch (error) {
       console.error('❌ [SAVE] Failed to save project:', error);
@@ -612,7 +582,6 @@ export default function ClipperStudio() {
 
   // Show clips gallery if processing is complete
   if (showClipsGallery && currentProjectId) {
-    console.log(`🎬 [GALLERY] Rendering clips gallery for project: ${currentProjectId}`);
     const currentProjectData = allProjectClips[currentProjectId];
     const currentProjectClips = currentProjectData?.clips || [];
     const isStillProcessing = currentProjectData?.processedClips === 0 && currentProjectData?.totalClips > 0;
@@ -633,6 +602,7 @@ export default function ClipperStudio() {
     return (
       <ClipsGallery
         clips={currentProjectClips}
+        projectId={currentProjectId} // Add projectId prop for TanStack Query
         onClipSelect={handleClipSelection}
         onBack={handleReturnToStudio}
         aspectRatio="vertical" // Use 9:16 aspect ratio for TikTok/Reels/Shorts
@@ -990,14 +960,12 @@ export default function ClipperStudio() {
 
   // Function to start actual video processing with SmolVLM2
   async function startVideoProcessing(projectId, videoSource) {
-    console.log(`🚀 [PROCESSING] Starting SmolVLM2 analysis for project: ${projectId}`);
     
     try {
       // Update progress to show processing started
       updateProjectProgress(projectId, 10);
       
       // Call our AI-powered clip detection API with extended timeout for large videos
-      console.log(`🚀 [PROCESSING] Starting API call for project ${projectId}...`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minute timeout
@@ -1033,15 +1001,12 @@ export default function ClipperStudio() {
       if (result.success) {
         if (result.status === 'processing') {
           // Async processing started, poll for status
-          console.log(`🔄 [PROCESSING] Async processing started for project ${projectId}`);
-          console.log(`⏰ [PROCESSING] Estimated time: ${result.estimatedTime}`);
           
           // Start polling for status updates
           pollProjectStatus(projectId);
           
         } else if (result.clips) {
           // Synchronous processing completed (fallback for small videos)
-          console.log(`✅ [PROCESSING] Found ${result.clips.length} clips for project ${projectId}`);
           updateProjectProgress(projectId, 100, 'completed');
           queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
         }
@@ -1069,7 +1034,6 @@ export default function ClipperStudio() {
 
   // Poll project status for async processing
   function pollProjectStatus(projectId, interval = 5000) { // Poll every 5 seconds for better responsiveness
-    console.log(`🔄 [POLLING] Starting status polling for project ${projectId}`);
     
     const pollInterval = setInterval(async () => {
       try {
@@ -1089,14 +1053,8 @@ export default function ClipperStudio() {
         const project = responseData.project; // Extract the nested project data
         
         // Debug logging to see what we're getting from the API
-        console.log(`🔍 [POLLING] Project ${projectId} details:`, {
-          status: project.status,
-          processingStage: project.analytics?.processingStage,
-          analytics: project.analytics
-        });
         
         if (project.status === 'completed') {
-          console.log(`✅ [POLLING] Project ${projectId} completed with ${project.analytics?.totalClipsGenerated || 0} clips`);
           clearInterval(pollInterval);
           updateProjectProgress(projectId, 100, 'completed');
           queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
@@ -1129,7 +1087,6 @@ export default function ClipperStudio() {
               progress = 90; 
               displayStatus = 'saving';
               // Backend will automatically mark as completed when clips are ready
-              console.log(`⏳ [POLLING] Project ${projectId} in saving stage, waiting for backend completion`);
               break;
             case 'completed': 
               progress = 100; 
@@ -1143,7 +1100,6 @@ export default function ClipperStudio() {
               displayStatus = 'processing';
           }
           
-          console.log(`🔄 [POLLING] Project ${projectId} status: ${stage} (${progress}%)`);
           updateProjectProgress(projectId, progress, displayStatus);
         }
         

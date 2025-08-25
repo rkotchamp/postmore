@@ -62,10 +62,26 @@ export async function transcribeWithWhisper(filePath, options = {}) {
       const chunkTranscription = await transcribeSingleFile(chunkPath, options);
       
       // Adjust timestamps for this chunk (add cumulative time offset)
+      let chunkDuration = 0;
       if (chunkTranscription.segments) {
         chunkTranscription.segments.forEach(segment => {
           segment.start += cumulativeTime;
           segment.end += cumulativeTime;
+        });
+        
+        // Calculate actual chunk duration from transcription
+        if (chunkTranscription.segments.length > 0) {
+          const lastSegment = chunkTranscription.segments[chunkTranscription.segments.length - 1];
+          chunkDuration = lastSegment.end - cumulativeTime;
+          console.log(`📊 [WHISPER] Chunk ${i + 1} actual duration: ${chunkDuration.toFixed(1)}s`);
+        }
+      }
+      
+      // Also adjust word timestamps if present
+      if (chunkTranscription.words) {
+        chunkTranscription.words.forEach(word => {
+          word.start += cumulativeTime;
+          word.end += cumulativeTime;
         });
       }
       
@@ -73,8 +89,8 @@ export async function transcribeWithWhisper(filePath, options = {}) {
       totalCost += chunkTranscription.estimatedCost || 0;
       totalProcessingTime += chunkTranscription.processingTime || 0;
       
-      // Update cumulative time (10 minutes per chunk)
-      cumulativeTime += 10 * 60; // 10 minutes in seconds
+      // Update cumulative time based on actual chunk duration, fallback to 10 minutes
+      cumulativeTime += chunkDuration > 0 ? chunkDuration : (10 * 60);
     }
 
     // Combine all transcriptions

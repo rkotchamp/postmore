@@ -58,6 +58,8 @@ export async function GET(request, { params }) {
         // Dual aspect ratio support
         verticalVideoUrl: clip.generatedVideo?.vertical?.url || null,
         horizontalVideoUrl: clip.generatedVideo?.horizontal?.url || null,
+        // Preview video for templates
+        previewVideo: clip.previewVideo || null,
         createdAt: clip.createdAt
       })),
       totalClips: clips.length,

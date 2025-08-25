@@ -1,17 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo, useMemo, useCallback } from "react";
 import {
   Palette,
   User,
-  Type,
-  Image,
   ChevronRight,
+  Image,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Sidebar } from "@/app/components/ui/sidebar";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import {
   Tooltip,
@@ -19,44 +18,65 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/app/components/ui/tooltip";
+import { useTemplateStore } from "@/app/lib/store/templateStore";
+import { useClipsQuery, useBestPreviewVideo } from "@/app/hooks/useClipsQuery";
+import { TemplateCardsSkeletonGrid } from "./TemplateCardSkeleton";
 
-// Template Card Component with Video Preview
-function TemplateCard({ template, isSelected, onSelect, className, selectedClips, overlaySettings }) {
+// Template Card Component with Video Preview - Memoized to prevent unnecessary re-renders
+const TemplateCard = memo(function TemplateCard({ template, isSelected, onSelect, className, bestPreviewVideo, overlaySettings }) {
   const [showVideo, setShowVideo] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const videoRef = useRef(null);
 
-  // Get preview video URL from first selected clip - prioritize dual aspect ratio structure
-  const selectedClip = selectedClips?.[0];
-  const previewVideoUrl = selectedClip?.previewVideo?.url || 
-                         selectedClip?.generatedVideo?.vertical?.url || 
-                         selectedClip?.generatedVideo?.horizontal?.url ||
-                         selectedClip?.generatedVideo?.url || 
-                         selectedClip?.videoUrl;
+  // Select appropriate video format based on template type
+  const getVideoUrlForTemplate = (templateId, clipData) => {
+    if (!clipData) return null;
+
+
+    // Templates with top overlays PREFER horizontal video (16:9)
+    if (templateId === 'social-profile' || templateId === 'title-only') {
+      const selectedUrl = clipData.horizontalVideoUrl || 
+                          clipData.previewVideo?.url || 
+                          clipData.videoUrl;
+      return selectedUrl;
+    }
+    
+    // Templates without overlays PREFER vertical video (9:16) 
+    if (templateId === 'bw-frame' || templateId === 'default') {
+      const selectedUrl = clipData.verticalVideoUrl || 
+                          clipData.previewVideo?.url || 
+                          clipData.videoUrl;
+      return selectedUrl;
+    }
+    
+    // Fallback - try any available video
+    const selectedUrl = clipData.previewVideo?.url || 
+                        clipData.verticalVideoUrl || 
+                        clipData.horizontalVideoUrl || 
+                        clipData.videoUrl;
+    return selectedUrl;
+  };
+
+  const previewVideoUrl = getVideoUrlForTemplate(template.id, bestPreviewVideo);
   
-  // Debug logging
-  console.log('🎬 [TEMPLATE-CARD] Debug Info:', {
-    templateId: template.id,
-    templateName: template.name,
-    selectedClipsLength: selectedClips?.length || 0,
-    firstClip: selectedClips?.[0] ? {
-      id: selectedClips[0].id,
-      title: selectedClips[0].title,
-      previewVideoUrl: selectedClips[0].previewVideo?.url,
-      videoUrl: selectedClips[0].videoUrl,
-      generatedVideoUrl: selectedClips[0].generatedVideo?.url,
-      generatedVideo: selectedClips[0].generatedVideo,
-    } : null,
-    resolvedPreviewUrl: previewVideoUrl
-  });
 
   // Auto-play video on hover for better UX
   const handleMouseEnter = () => {
     setShowVideo(true);
     if (videoRef.current && previewVideoUrl) {
-      videoRef.current.play().catch(() => {
-        setVideoError(true);
-      });
+      // Wait for video to be ready before attempting to play
+      const attemptPlay = () => {
+        if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+          videoRef.current.play().catch(() => {
+            // Don't set videoError for play failures - video is still valid for display
+          });
+        } else if (videoRef.current) {
+          // Video not ready yet, wait for loadeddata event
+          videoRef.current.addEventListener('loadeddata', attemptPlay, { once: true });
+        }
+      };
+      
+      attemptPlay();
     }
   };
 
@@ -69,7 +89,7 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
   return (
     <div
       className={cn(
-        "relative p-3 border rounded-lg cursor-pointer transition-all duration-200 group",
+        "relative p-4 border rounded-lg cursor-pointer transition-all duration-200 group",
         isSelected
           ? 'border-primary bg-primary/10'
           : 'border-border hover:border-primary/50 hover:bg-muted/50',
@@ -79,23 +99,97 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
     >
       {/* Template Preview - 1-minute video with overlay */}
       <div 
-        className="aspect-[9/16] w-full mb-2 rounded-md overflow-hidden bg-muted relative"
+        className="aspect-[9/16] w-full mb-3 rounded-md overflow-hidden bg-muted relative"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
         {previewVideoUrl && !videoError ? (
-          <div className="relative w-full h-full">
-            {/* Background video */}
-            <video
-              ref={videoRef}
-              className="w-full h-full object-cover"
-              muted
-              loop
-              playsInline
-              onError={() => setVideoError(true)}
-            >
-              <source src={previewVideoUrl} type="video/mp4" />
-            </video>
+          <div className="relative w-full h-full overflow-hidden">
+            {/* For Sonnet and Focus templates: Black bars + centered horizontal video */}
+            {(template.id === 'social-profile' || template.id === 'title-only') ? (
+              <>
+                {/* Black background fills entire container */}
+                <div className="absolute inset-0 bg-black" />
+                
+                {/* Centered horizontal video */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <video
+                    key={`${template.id}-${previewVideoUrl}`}
+                    ref={videoRef}
+                    className="max-w-full max-h-full object-contain"
+                    muted
+                    loop
+                    playsInline
+                    style={{ 
+                      filter: template.id === 'bw-frame' ? 
+                        (() => {
+                          const grayscaleLevel = overlaySettings?.bwLevel || 50;
+                          const contrast = (overlaySettings?.bwContrast || 130) / 100;
+                          const brightness = (overlaySettings?.bwBrightness || 80) / 100;
+                          return `grayscale(${grayscaleLevel}%) contrast(${contrast}) brightness(${brightness})`;
+                        })() : 'none'
+                    }}
+                    onError={(e) => {
+                      const errorDetails = {
+                        url: previewVideoUrl,
+                        errorType: e.type,
+                        templateId: template.id,
+                        networkState: e.target.networkState,
+                        readyState: e.target.readyState,
+                        error: e.target.error ? {
+                          code: e.target.error.code,
+                          message: e.target.error.message
+                        } : null
+                      };
+                          setVideoError(true);
+                    }}
+                    onLoadedData={() => {
+                      setVideoError(false); // Reset error state when video loads successfully
+                    }}
+                  >
+                    <source src={previewVideoUrl} type="video/mp4" />
+                  </video>
+                </div>
+              </>
+            ) : (
+              /* For other templates: Full frame vertical video */
+              <video
+                key={`${template.id}-${previewVideoUrl}`}
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                muted
+                loop
+                playsInline
+                style={{ 
+                  filter: template.id === 'bw-frame' ? 
+                    (() => {
+                      const grayscaleLevel = overlaySettings?.bwLevel || 50;
+                      const contrast = (overlaySettings?.bwContrast || 130) / 100;
+                      const brightness = (overlaySettings?.bwBrightness || 80) / 100;
+                      return `grayscale(${grayscaleLevel}%) contrast(${contrast}) brightness(${brightness})`;
+                    })() : 'none'
+                }}
+                onError={(e) => {
+                  const errorDetails = {
+                    url: previewVideoUrl,
+                    errorType: e.type,
+                    templateId: template.id,
+                    networkState: e.target.networkState,
+                    readyState: e.target.readyState,
+                    error: e.target.error ? {
+                      code: e.target.error.code,
+                      message: e.target.error.message
+                    } : null
+                  };
+                  setVideoError(true);
+                }}
+                onLoadedData={() => {
+                  setVideoError(false); // Reset error state when video loads successfully
+                }}
+              >
+                <source src={previewVideoUrl} type="video/mp4" />
+              </video>
+            )}
             
             {/* Template overlay */}
             <div className="absolute inset-0 pointer-events-none">
@@ -108,12 +202,22 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
                   }}
                 >
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center">
-                      <User className="w-3 h-3" />
+                    <div className="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center overflow-hidden">
+                      {overlaySettings?.profilePic ? (
+                        <img src={overlaySettings.profilePic} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-3 h-3" />
+                      )}
                     </div>
                     <div>
-                      <div className="text-xs font-semibold">{overlaySettings?.username || 'YourUsername'}</div>
-                      <div className="text-xs opacity-80">@{(overlaySettings?.username || 'username').toLowerCase()}</div>
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-[10px] font-semibold">{overlaySettings?.username || 'YourUsername'}</span>
+                        {/* Verified Badge - Same as Twitter design */}
+                        <svg className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div className="text-[9px] opacity-80 -mt-0.5">@{(overlaySettings?.username || 'username').toLowerCase()}</div>
                     </div>
                   </div>
                   <div className="text-xs mt-1 line-clamp-2">{overlaySettings?.customHeader || 'Your header text'}</div>
@@ -134,6 +238,16 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
                 </div>
               )}
               
+              {/* Bottom overlay for Sonnet and Focus to complete the letterbox effect */}
+              {(template.id === 'social-profile' || template.id === 'title-only') && (
+                <div 
+                  className="absolute bottom-0 left-0 right-0 h-[15%]"
+                  style={{ 
+                    backgroundColor: `${overlaySettings?.overlayColor || '#000000'}${Math.round((overlaySettings?.overlayOpacity || 80) * 2.55).toString(16).padStart(2, '0')}`
+                  }}
+                />
+              )}
+              
               {template.id === 'bw-frame' && (
                 <div className="absolute inset-0 bg-black/20" style={{ filter: 'grayscale(100%)' }} />
               )}
@@ -142,8 +256,8 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900">
             <div className="text-center">
-              <Palette className="w-6 h-6 mx-auto mb-1 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground font-medium">{template.name}</span>
+              <Palette className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground font-medium">{template.name}</span>
             </div>
           </div>
         )}
@@ -152,7 +266,7 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
       {/* Template Info */}
       <div>
         <div className="flex items-center justify-between">
-          <h3 className="font-medium text-foreground text-sm">{template.name}</h3>
+          <h3 className="font-medium text-foreground text-base">{template.name}</h3>
           {template.isDefault && (
             <span className="px-1.5 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
               Default
@@ -169,7 +283,7 @@ function TemplateCard({ template, isSelected, onSelect, className, selectedClips
       )}
     </div>
   );
-}
+});
 
 const MOCK_TEMPLATES = [
   {
@@ -219,23 +333,80 @@ const MOCK_TEMPLATES = [
 
 export default function TemplateFloatingSidebar({ 
   selectedClips = [],
+  projectId, // Add projectId prop for TanStack Query
   onTemplateApply,
   isApplying = false 
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState('default');
-  const [username, setUsername] = useState('');
-  const [profilePic, setProfilePic] = useState('');
-  const [customHeader, setCustomHeader] = useState('');
-  const [customImage, setCustomImage] = useState('');
-  const [bwLevel, setBwLevel] = useState(50);
-  const [overlayColor, setOverlayColor] = useState('#000000');
-  const [overlayOpacity, setOverlayOpacity] = useState(80);
-  const [textColor, setTextColor] = useState('#ffffff');
-  const [selectedText, setSelectedText] = useState('');
-  const [selectedTextColor, setSelectedTextColor] = useState('#ffffff');
-  const [showTextColorPicker, setShowTextColorPicker] = useState(false);
-  const [previewCache, setPreviewCache] = useState({});
+  // Debug: Log component re-renders with timestamp
+  
+  // Use Zustand store - DON'T subscribe to customHeader to prevent re-renders during typing
+  const {
+    expanded, setExpanded,
+    selectedTemplate, setSelectedTemplate,
+    username, setUsername,
+    profilePic, setProfilePic,
+    // customHeader, setCustomHeader,  // REMOVED - don't subscribe to this
+    setCustomHeader,  // Keep the setter but don't subscribe to the value
+    customImage, setCustomImage,
+    bwLevel, setBwLevel,
+    bwContrast, setBwContrast,
+    bwBrightness, setBwBrightness,
+    overlayColor, setOverlayColor,
+    overlayOpacity, setOverlayOpacity,
+    textColor, setTextColor,
+    selectedText, setSelectedText,
+    selectedTextColor, setSelectedTextColor,
+    showTextColorPicker, setShowTextColorPicker,
+    previewCache, setPreviewCache,
+    bestPreviewVideo, setBestPreviewVideo,
+    clearPreviewCache,
+    // NEW: Template application actions
+    applyTemplateToGallery, isTemplateApplied
+  } = useTemplateStore();
+  
+  // Get customHeader only when needed (for template apply) without subscribing to changes
+  const getCustomHeader = useCallback(() => useTemplateStore.getState().customHeader, []);
+  
+  // Subscribe to customHeader changes only for template card updates (separate from input)
+  const customHeaderForTemplates = useTemplateStore((state) => state.customHeader);
+  
+  // Use TanStack Query for clips data instead of props
+  const { 
+    data: clipsData, 
+    isLoading: isLoadingClips
+  } = useClipsQuery(projectId);
+  
+  // Extract clips from the query result
+  const allClips = clipsData?.clips || [];
+  
+  // Get the best preview video for templates
+  const bestPreviewVideoFromQuery = useBestPreviewVideo(allClips);
+  
+  // Debug: Log current textColor and clips loading state
+  
+  // Refs to manage contentEditable without triggering re-renders
+  const headerRef = useRef(null);
+  const titleRef = useRef(null);
+
+  // Update the bestPreviewVideo in Zustand store when query data changes
+  // Use a more stable update pattern to prevent unnecessary re-renders
+  useEffect(() => {
+    if (bestPreviewVideoFromQuery && (!bestPreviewVideo || bestPreviewVideoFromQuery.id !== bestPreviewVideo.id)) {
+      setBestPreviewVideo(bestPreviewVideoFromQuery);
+    }
+  }, [bestPreviewVideoFromQuery?.id, bestPreviewVideo?.id, setBestPreviewVideo]);
+
+  // Component lifecycle - only reset UI when projectId changes (different gallery)
+  useEffect(() => {
+    
+    // Only reset sidebar expanded state (not video data)
+    setExpanded(false);
+    
+    return () => {
+      // Cleanup on unmount (when leaving clips gallery)
+      setExpanded(false);
+    };
+  }, [projectId, setExpanded]); // Run when projectId changes
 
   // Check for screen size on mount and when window resizes
   useEffect(() => {
@@ -252,9 +423,10 @@ export default function TemplateFloatingSidebar({
   }, []);
 
   // Clear preview cache when settings change to trigger regeneration
+  // REMOVED customHeader from dependencies to prevent re-renders during typing
   useEffect(() => {
-    setPreviewCache({});
-  }, [overlayColor, overlayOpacity, textColor, username, customHeader, profilePic]);
+    clearPreviewCache();
+  }, [overlayColor, overlayOpacity, textColor, username, profilePic, clearPreviewCache]);
 
   const toggleSidebar = () => {
     setExpanded(!expanded);
@@ -298,9 +470,9 @@ export default function TemplateFloatingSidebar({
     }
   };
 
-  const handleTemplateSelect = (templateId) => {
+  const handleTemplateSelect = useCallback((templateId) => {
     setSelectedTemplate(templateId);
-  };
+  }, [setSelectedTemplate]);
 
   // Extract video frame for preview
   const extractVideoFrame = (videoUrl, timeSeconds = 5) => {
@@ -445,23 +617,26 @@ export default function TemplateFloatingSidebar({
   };
 
   const handleApplyTemplate = async () => {
-    if (!selectedTemplate || selectedClips.length === 0) return;
+    if (!selectedTemplate) return;
     
+    // Apply template to entire gallery (not just selected clips)
+    applyTemplateToGallery();
+    
+    // Keep existing API call for now (will modify later)
     const template = MOCK_TEMPLATES.find(t => t.id === selectedTemplate);
     const applyData = {
       templateId: selectedTemplate,
       templateName: template.name,
-      clips: selectedClips,
+      clips: [], // Empty array - template applies to all clips now
       customData: {
         username: username,
         profileIcon: profilePic,
-        customTitle: customHeader,
+        customTitle: getCustomHeader(), // Use getter instead of subscription
         customImage: customImage,
         bwLevel: bwLevel
       },
     };
 
-    console.log('🎨 [TEMPLATE] Applying template:', applyData);
     
     if (onTemplateApply) {
       await onTemplateApply(applyData);
@@ -469,6 +644,19 @@ export default function TemplateFloatingSidebar({
   };
 
   const selectedTemplateData = MOCK_TEMPLATES.find(t => t.id === selectedTemplate);
+
+  // Memoize overlay settings to prevent unnecessary prop changes for TemplateCard
+  const overlaySettings = useMemo(() => ({
+    overlayColor,
+    overlayOpacity,
+    textColor,
+    username,
+    profilePic, // Add profilePic so template cards can show uploaded images
+    customHeader: customHeaderForTemplates, // Use separate subscription for real-time updates
+    bwLevel,
+    bwContrast,
+    bwBrightness
+  }), [overlayColor, overlayOpacity, textColor, username, profilePic, customHeaderForTemplates, bwLevel, bwContrast, bwBrightness]);
 
   return (
     <TooltipProvider>
@@ -487,7 +675,7 @@ export default function TemplateFloatingSidebar({
       {/* Sidebar - with smooth slide-in animation */}
       <Sidebar
         className={cn(
-          "fixed right-4 top-1/2 -translate-y-1/2 h-[calc(100vh-1rem)] max-h-[90vh] w-80 rounded-xl border bg-background shadow-lg transition-all duration-300 z-40",
+          "fixed right-4 top-1/2 -translate-y-1/2 h-[calc(100vh-1rem)] max-h-[90vh] w-[450px] rounded-xl border bg-background shadow-lg transition-all duration-300 z-40",
           // Smooth animations
           expanded 
             ? 'opacity-100 translate-x-0 scale-100' 
@@ -576,21 +764,21 @@ export default function TemplateFloatingSidebar({
                             
                             {/* Username & Verified Badge */}
                             <div className="flex-1">
-                              <div className="flex items-center">
+                              <div className="flex items-center gap-0.5">
                                 <input
                                   id="profile-section"
                                   value={username || 'YourUsername'}
                                   onChange={(e) => setUsername(e.target.value)}
-                                  className="bg-transparent text-white font-semibold text-sm border-none outline-none focus:bg-white/10 px-1 rounded flex-shrink-0"
+                                  className="bg-transparent text-white font-semibold text-xs border-none outline-none focus:bg-white/10 px-0.5 rounded min-w-0"
                                   placeholder="YourUsername"
-                                  style={{ width: `${Math.max(10, (username || 'YourUsername').length)}ch` }}
+                                  style={{ width: `${(username || 'YourUsername').length}ch` }}
                                 />
-                                {/* Verified Badge - Right next to username */}
-                                <svg className="w-4 h-4 text-blue-500 ml-1 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                {/* Verified Badge - Immediately next to username like Twitter */}
+                                <svg className="w-3 h-3 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                               </div>
-                              <div className="text-xs text-gray-400">
+                              <div className="text-[10px] text-gray-400 -mt-0.5">
                                 @{username || 'yourusername'}
                               </div>
                             </div>
@@ -599,15 +787,42 @@ export default function TemplateFloatingSidebar({
                           {/* Header Text - Clickable with Rich Text Support */}
                           <div className="mt-2">
                             <div
+                              ref={headerRef}
                               contentEditable
                               suppressContentEditableWarning={true}
-                              onInput={(e) => setCustomHeader(e.target.innerText)}
+                              onInput={(e) => {
+                                // Direct DOM manipulation - don't trigger React re-renders
+                                const text = e.target.innerText;
+                                
+                                if (text !== 'Your amazing header text will appear here...') {
+                                  // Update Zustand store directly without triggering re-render
+                                  useTemplateStore.setState({ customHeader: text });
+                                }
+                              }}
                               onMouseUp={handleTextSelection}
                               onKeyUp={handleTextSelection}
+                              onFocus={(e) => {
+                                if (e.target.innerText === 'Your amazing header text will appear here...') {
+                                  e.target.innerText = '';
+                                  // Clear the store but don't trigger re-render
+                                  useTemplateStore.setState({ customHeader: '' });
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const text = e.target.innerText.trim();
+                                if (text === '') {
+                                  e.target.innerText = 'Your amazing header text will appear here...';
+                                  useTemplateStore.setState({ customHeader: '' });
+                                } else {
+                                  useTemplateStore.setState({ customHeader: text });
+                                }
+                              }}
                               className="w-full bg-transparent text-white text-sm border-none outline-none focus:bg-white/10 p-2 rounded resize-none min-h-[3rem]"
                               style={{ color: textColor }}
+                              data-placeholder="Your amazing header text will appear here..."
                             >
-                              {customHeader || 'Your amazing header text will appear here...'}
+                              {/* Don't render customHeader here to avoid subscriptions - let DOM manage content */}
+                              Your amazing header text will appear here...
                             </div>
                           </div>
                         </div>
@@ -672,15 +887,42 @@ export default function TemplateFloatingSidebar({
                           {/* Title Text - Clickable and centered with Rich Text Support */}
                           <div className="text-center">
                             <div
+                              ref={titleRef}
                               contentEditable
                               suppressContentEditableWarning={true}
-                              onInput={(e) => setCustomHeader(e.target.innerText)}
+                              onInput={(e) => {
+                                // Direct DOM manipulation - don't trigger React re-renders
+                                const text = e.target.innerText;
+                                
+                                if (text !== 'Your amazing title text will appear here...') {
+                                  // Update Zustand store directly without triggering re-render
+                                  useTemplateStore.setState({ customHeader: text });
+                                }
+                              }}
                               onMouseUp={handleTextSelection}
                               onKeyUp={handleTextSelection}
+                              onFocus={(e) => {
+                                if (e.target.innerText === 'Your amazing title text will appear here...') {
+                                  e.target.innerText = '';
+                                  // Clear the store but don't trigger re-render
+                                  useTemplateStore.setState({ customHeader: '' });
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const text = e.target.innerText.trim();
+                                if (text === '') {
+                                  e.target.innerText = 'Your amazing title text will appear here...';
+                                  useTemplateStore.setState({ customHeader: '' });
+                                } else {
+                                  useTemplateStore.setState({ customHeader: text });
+                                }
+                              }}
                               className="w-full bg-transparent text-lg font-bold text-center border-none outline-none focus:bg-white/10 p-3 rounded resize-none leading-tight min-h-[4rem]"
                               style={{ color: textColor }}
+                              data-placeholder="Your amazing title text will appear here..."
                             >
-                              {customHeader || 'Your amazing title text will appear here...'}
+                              {/* Don't render customHeader here to avoid subscriptions - let DOM manage content */}
+                              Your amazing title text will appear here...
                             </div>
                           </div>
                         </div>
@@ -734,50 +976,86 @@ export default function TemplateFloatingSidebar({
                     {/* B&W Frame Template Controls */}
                     {selectedTemplate === 'bw-frame' && (
                       <div className="space-y-3">
-                        {/* Image Upload */}
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">Background Image</Label>
-                          <div className="mt-1 border-2 border-dashed border-border rounded-md p-4 text-center cursor-pointer hover:border-primary transition-colors">
-                            {customImage ? (
-                              <img src={customImage} alt="Background" className="w-full h-20 object-cover rounded mb-2" />
-                            ) : (
-                              <Image className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                            )}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => {
-                                const file = e.target.files[0];
-                                if (file) {
-                                  const url = URL.createObjectURL(file);
-                                  setCustomImage(url);
-                                }
-                              }}
-                              className="hidden"
-                              id="bg-image-upload"
-                            />
-                            <label
-                              htmlFor="bg-image-upload"
-                              className="text-xs text-primary cursor-pointer hover:underline"
+                        {/* Two Column Layout */}
+                        <div className="flex gap-3">
+                          {/* Left Column - Logo Upload (Small Square) */}
+                          <div className="flex-shrink-0">
+                            <Label className="text-xs font-medium text-muted-foreground mb-2 block">Logo</Label>
+                            <div 
+                              className="w-20 h-20 border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors bg-muted/20"
+                              onClick={() => document.getElementById('bg-image-upload').click()}
                             >
-                              {customImage ? 'Change Image' : 'Upload Image'}
-                            </label>
+                              {customImage ? (
+                                <img src={customImage} alt="Logo" className="w-full h-full object-cover rounded-lg" />
+                              ) : (
+                                <>
+                                  <Upload className="w-6 h-6 text-muted-foreground mb-1" />
+                                  <span className="text-[8px] text-muted-foreground">Upload</span>
+                                </>
+                              )}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files[0];
+                                  if (file) {
+                                    const url = URL.createObjectURL(file);
+                                    setCustomImage(url);
+                                  }
+                                }}
+                                className="hidden"
+                                id="bg-image-upload"
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        {/* B&W Level Slider */}
-                        <div>
-                          <Label className="text-xs font-medium text-muted-foreground">
-                            Black & White Level ({bwLevel}%)
-                          </Label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={bwLevel}
-                            onChange={(e) => setBwLevel(e.target.value)}
-                            className="w-full mt-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer slider"
-                          />
+                          {/* Right Column - B&W Controls (Stacked) */}
+                          <div className="flex-1 space-y-3">
+                            {/* B&W Level Slider */}
+                            <div>
+                              <Label className="text-xs font-medium text-muted-foreground">
+                                B&W Level ({bwLevel}%)
+                              </Label>
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={bwLevel}
+                                onChange={(e) => setBwLevel(e.target.value)}
+                                className="w-full mt-1 h-1 bg-muted rounded-lg appearance-none cursor-pointer slider"
+                              />
+                            </div>
+
+                            {/* B&W Contrast Slider */}
+                            <div>
+                              <Label className="text-xs font-medium text-muted-foreground">
+                                Contrast ({bwContrast}%)
+                              </Label>
+                              <input
+                                type="range"
+                                min="50"
+                                max="200"
+                                value={bwContrast}
+                                onChange={(e) => setBwContrast(e.target.value)}
+                                className="w-full mt-1 h-1 bg-muted rounded-lg appearance-none cursor-pointer slider"
+                              />
+                            </div>
+
+                            {/* B&W Brightness Slider */}
+                            <div>
+                              <Label className="text-xs font-medium text-muted-foreground">
+                                Brightness ({bwBrightness}%)
+                              </Label>
+                              <input
+                                type="range"
+                                min="30"
+                                max="150"
+                                value={bwBrightness}
+                                onChange={(e) => setBwBrightness(e.target.value)}
+                                className="w-full mt-1 h-1 bg-muted rounded-lg appearance-none cursor-pointer slider"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -801,23 +1079,22 @@ export default function TemplateFloatingSidebar({
           {/* Template List */}
           <div className="flex-1 overflow-y-auto p-4">
             {expanded ? (
-              <div className="grid grid-cols-2 gap-3">
-                {MOCK_TEMPLATES.map((template) => (
-                  <TemplateCard
-                    key={template.id}
-                    template={template}
-                    isSelected={selectedTemplate === template.id}
-                    onSelect={handleTemplateSelect}
-                    selectedClips={selectedClips}
-                    overlaySettings={{
-                      overlayColor,
-                      overlayOpacity,
-                      textColor,
-                      username,
-                      customHeader
-                    }}
-                  />
-                ))}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Show skeleton loading when clips are loading */}
+                {isLoadingClips ? (
+                  <TemplateCardsSkeletonGrid count={4} />
+                ) : (
+                  MOCK_TEMPLATES.map((template) => (
+                    <TemplateCard
+                      key={template.id}
+                      template={template}
+                      isSelected={selectedTemplate === template.id}
+                      onSelect={handleTemplateSelect}
+                      bestPreviewVideo={bestPreviewVideoFromQuery || bestPreviewVideo}
+                      overlaySettings={overlaySettings}
+                    />
+                  ))
+                )}
               </div>
             ) : (
               <div className="space-y-3 flex flex-col items-center">
@@ -849,7 +1126,7 @@ export default function TemplateFloatingSidebar({
             {expanded ? (
               <Button
                 onClick={handleApplyTemplate}
-                disabled={selectedClips.length === 0 || isApplying}
+                disabled={!selectedTemplate || isApplying}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground h-9 text-sm"
               >
                 {isApplying ? (
@@ -860,8 +1137,7 @@ export default function TemplateFloatingSidebar({
                 ) : (
                   <>
                     <Palette className="w-3 h-3 mr-2" />
-                    Apply Template
-                    {selectedClips.length > 0 && ` (${selectedClips.length})`}
+                    {isTemplateApplied ? 'Update Template' : 'Apply Template'}
                   </>
                 )}
               </Button>
@@ -870,7 +1146,7 @@ export default function TemplateFloatingSidebar({
                 <TooltipTrigger asChild>
                   <Button
                     onClick={handleApplyTemplate}
-                    disabled={selectedClips.length === 0 || isApplying}
+                    disabled={!selectedTemplate || isApplying}
                     className="w-10 h-10 p-0 bg-primary hover:bg-primary/90 text-primary-foreground"
                   >
                     {isApplying ? (
@@ -881,7 +1157,7 @@ export default function TemplateFloatingSidebar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  Apply Template {selectedClips.length > 0 && `(${selectedClips.length})`}
+                  {isTemplateApplied ? 'Update Template' : 'Apply Template'}
                 </TooltipContent>
               </Tooltip>
             )}
