@@ -12,6 +12,7 @@ import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import ClipCard from "./ClipCard";
 import TemplateFloatingSidebar from "./TemplateFloatingSidebar";
+import DownloadProgressPopup from "./DownloadProgressPopup";
 
 const defaultClips = [
   {
@@ -91,6 +92,10 @@ const ClipsGallery = memo(function ClipsGallery({
   const [selectedClips, setSelectedClips] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
+  
+  // Download progress state (global for all clips)
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState('');
 
   // Get template state to pass to ClipCards
   const { 
@@ -113,59 +118,121 @@ const ClipsGallery = memo(function ClipsGallery({
       ? clips.filter(clip => selectedClips.includes(clip.id))
       : clips;
 
-
+    // Show download progress
+    setIsDownloading(true);
+    
     for (let i = 0; i < clipsToDownload.length; i++) {
       const clip = clipsToDownload[i];
+      setDownloadProgress(`Downloading ${i + 1} of ${clipsToDownload.length} videos...`);
+      
       if (clip.videoUrl) {
         try {
-          // Use our API proxy to download video (bypasses CORS)
-          const filename = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
-          
-          const response = await fetch('/api/download-video', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              videoUrl: clip.videoUrl,
-              filename: filename
-            }),
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Download failed: ${response.statusText}`);
+          // Check if template is applied and use template processing
+          if (isTemplateApplied && appliedTemplate) {
+            await downloadWithTemplate(clip);
+          } else {
+            await downloadOriginal(clip);
           }
           
-          // Get the blob from the response
-          const blob = await response.blob();
-          
-          // Create blob URL and trigger download
-          const blobUrl = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = blobUrl;
-          link.download = filename;
-          link.style.display = 'none';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          
-          // Clean up blob URL
-          URL.revokeObjectURL(blobUrl);
-          
+          // Small delay between downloads
+          if (i < clipsToDownload.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         } catch (error) {
-          console.error(`❌ [BULK-DOWNLOAD] Failed to download clip: ${clip.title}`, error);
-          // Fallback to opening in new tab
-          window.open(clip.videoUrl, '_blank');
-        }
-        
-        // Small delay between downloads to avoid overwhelming the browser
-        if (i < clipsToDownload.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Continue with next clip even if one fails
         }
       }
     }
+    
+    // Hide progress popup
+    setDownloadProgress('Bulk download completed!');
+    setTimeout(() => {
+      setIsDownloading(false);
+      setDownloadProgress('');
+    }, 1500);
+  }, [clips, selectedClips, selectMode, isTemplateApplied, appliedTemplate, appliedSettings, aspectRatio, setIsDownloading, setDownloadProgress]);
 
-  }, [selectMode, selectedClips, clips]);
+  // Helper function for template download - Copy exact logic from working ClipCard
+  const downloadWithTemplate = async (clip) => {
+    // Use the same logic as working individual download
+    const displayTextContent = clip.templateHeader || clip.title || '';
+    
+    // Clean text - remove HTML and handle special characters/emojis properly
+    const plainText = displayTextContent
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/[^\x00-\x7F]/g, '') // Remove non-ASCII characters (emojis, special chars)
+      .trim();
+    
+    // Clean filename - ensure it's safe for filesystem
+    const safeTitle = plainText.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+    const filename = `${safeTitle || `clip_${clip.startTime}s`}_templated.mp4`;
+    
+    // Copy exact templateData structure from working download
+    const templateData = {
+      template: appliedTemplate,
+      title: displayTextContent, // HTML with colors (same as working version)
+      plainTitle: plainText,
+      templateHeader: displayTextContent, // Include templateHeader for download API (same as working version)
+      settings: appliedSettings, // Logo already converted to base64 on upload
+      aspectRatio: aspectRatio
+    };
+    
+    
+    // Use same video URL logic - prioritize different video formats like ClipCard
+    const videoUrl = clip.horizontalVideoUrl || clip.verticalVideoUrl || clip.videoUrl;
+    
+    const response = await fetch('/api/download-video-with-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clipId: clip.id,
+        videoUrl: videoUrl, // Use same videoUrl logic as working version
+        filename: filename,
+        templateData: templateData
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    triggerDownload(blob, filename);
+  };
+
+  // Helper function for original download
+  const downloadOriginal = async (clip) => {
+    const filename = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
+    
+    const response = await fetch('/api/download-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoUrl: clip.videoUrl,
+        filename: filename
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Download failed: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    triggerDownload(blob, filename);
+  };
+
+  // Helper to trigger browser download
+  const triggerDownload = (blob, filename) => {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+  };
 
   const handleTemplateApply = useCallback(async (templateData) => {
     setIsApplyingTemplate(true);
@@ -293,9 +360,20 @@ const ClipsGallery = memo(function ClipsGallery({
             appliedTemplate={appliedTemplate}
             appliedSettings={appliedSettings}
             isTemplateApplied={isTemplateApplied}
+            // Pass projectId for clip updates
+            projectId={projectId}
+            // Download progress handlers
+            setIsDownloading={setIsDownloading}
+            setDownloadProgress={setDownloadProgress}
           />
         ))}
       </div>
+
+      {/* Download Progress Popup - Global for all clips */}
+      <DownloadProgressPopup 
+        isVisible={isDownloading} 
+        progress={downloadProgress} 
+      />
 
       {/* Bottom Actions */}
       <div className="flex items-center justify-between">

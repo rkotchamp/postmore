@@ -249,7 +249,15 @@ const TemplateCard = memo(function TemplateCard({ template, isSelected, onSelect
               )}
               
               {template.id === 'bw-frame' && (
-                <div className="absolute inset-0 bg-black/20" style={{ filter: 'grayscale(100%)' }} />
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                  {overlaySettings?.customImage ? (
+                    <img src={overlaySettings.customImage} alt="Logo" className="h-12 max-w-40 object-contain" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-500/30 flex items-center justify-center">
+                      <span className="text-white/80 text-[10px] font-semibold">logo</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -652,11 +660,12 @@ export default function TemplateFloatingSidebar({
     textColor,
     username,
     profilePic, // Add profilePic so template cards can show uploaded images
+    customImage, // Add customImage for B&W template logo
     customHeader: customHeaderForTemplates, // Use separate subscription for real-time updates
     bwLevel,
     bwContrast,
     bwBrightness
-  }), [overlayColor, overlayOpacity, textColor, username, profilePic, customHeaderForTemplates, bwLevel, bwContrast, bwBrightness]);
+  }), [overlayColor, overlayOpacity, textColor, username, profilePic, customImage, customHeaderForTemplates, bwLevel, bwContrast, bwBrightness]);
 
   return (
     <TooltipProvider>
@@ -750,11 +759,22 @@ export default function TemplateFloatingSidebar({
                               <input
                                 type="file"
                                 accept="image/*"
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const file = e.target.files[0];
                                   if (file) {
-                                    const url = URL.createObjectURL(file);
-                                    setProfilePic(url);
+                                    console.log('📷 [LOGO-UPLOAD] Converting logo to base64...');
+                                    try {
+                                      const base64 = await new Promise((resolve, reject) => {
+                                        const reader = new FileReader();
+                                        reader.onload = () => resolve(reader.result);
+                                        reader.onerror = reject;
+                                        reader.readAsDataURL(file);
+                                      });
+                                      setProfilePic(base64);
+                                      console.log('✅ [LOGO-UPLOAD] Logo converted to base64, length:', base64.length);
+                                    } catch (error) {
+                                      console.error('❌ [LOGO-UPLOAD] Failed to convert logo:', error);
+                                    }
                                   }
                                 }}
                                 className="absolute inset-0 opacity-0 cursor-pointer"
@@ -787,42 +807,13 @@ export default function TemplateFloatingSidebar({
                           {/* Header Text - Clickable with Rich Text Support */}
                           <div className="mt-2">
                             <div
-                              ref={headerRef}
-                              contentEditable
-                              suppressContentEditableWarning={true}
-                              onInput={(e) => {
-                                // Direct DOM manipulation - don't trigger React re-renders
-                                const text = e.target.innerText;
-                                
-                                if (text !== 'Your amazing header text will appear here...') {
-                                  // Update Zustand store directly without triggering re-render
-                                  useTemplateStore.setState({ customHeader: text });
-                                }
-                              }}
-                              onMouseUp={handleTextSelection}
-                              onKeyUp={handleTextSelection}
-                              onFocus={(e) => {
-                                if (e.target.innerText === 'Your amazing header text will appear here...') {
-                                  e.target.innerText = '';
-                                  // Clear the store but don't trigger re-render
-                                  useTemplateStore.setState({ customHeader: '' });
-                                }
-                              }}
-                              onBlur={(e) => {
-                                const text = e.target.innerText.trim();
-                                if (text === '') {
-                                  e.target.innerText = 'Your amazing header text will appear here...';
-                                  useTemplateStore.setState({ customHeader: '' });
-                                } else {
-                                  useTemplateStore.setState({ customHeader: text });
-                                }
-                              }}
-                              className="w-full bg-transparent text-white text-sm border-none outline-none focus:bg-white/10 p-2 rounded resize-none min-h-[3rem]"
+                              className="w-full bg-transparent text-white text-sm border border-dashed border-white/30 p-2 rounded min-h-[3rem] flex items-center justify-center text-center opacity-60"
                               style={{ color: textColor }}
-                              data-placeholder="Your amazing header text will appear here..."
                             >
-                              {/* Don't render customHeader here to avoid subscriptions - let DOM manage content */}
-                              Your amazing header text will appear here...
+                              <span className="text-xs">
+                                Individual clips will use their own titles.<br/>
+                                Edit titles directly on each video clip.
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -887,42 +878,13 @@ export default function TemplateFloatingSidebar({
                           {/* Title Text - Clickable and centered with Rich Text Support */}
                           <div className="text-center">
                             <div
-                              ref={titleRef}
-                              contentEditable
-                              suppressContentEditableWarning={true}
-                              onInput={(e) => {
-                                // Direct DOM manipulation - don't trigger React re-renders
-                                const text = e.target.innerText;
-                                
-                                if (text !== 'Your amazing title text will appear here...') {
-                                  // Update Zustand store directly without triggering re-render
-                                  useTemplateStore.setState({ customHeader: text });
-                                }
-                              }}
-                              onMouseUp={handleTextSelection}
-                              onKeyUp={handleTextSelection}
-                              onFocus={(e) => {
-                                if (e.target.innerText === 'Your amazing title text will appear here...') {
-                                  e.target.innerText = '';
-                                  // Clear the store but don't trigger re-render
-                                  useTemplateStore.setState({ customHeader: '' });
-                                }
-                              }}
-                              onBlur={(e) => {
-                                const text = e.target.innerText.trim();
-                                if (text === '') {
-                                  e.target.innerText = 'Your amazing title text will appear here...';
-                                  useTemplateStore.setState({ customHeader: '' });
-                                } else {
-                                  useTemplateStore.setState({ customHeader: text });
-                                }
-                              }}
-                              className="w-full bg-transparent text-lg font-bold text-center border-none outline-none focus:bg-white/10 p-3 rounded resize-none leading-tight min-h-[4rem]"
+                              className="w-full bg-transparent text-lg font-bold text-center border border-dashed border-white/30 p-3 rounded min-h-[4rem] flex items-center justify-center text-center opacity-60"
                               style={{ color: textColor }}
-                              data-placeholder="Your amazing title text will appear here..."
                             >
-                              {/* Don't render customHeader here to avoid subscriptions - let DOM manage content */}
-                              Your amazing title text will appear here...
+                              <span className="text-sm">
+                                Individual clips will use their own titles.<br/>
+                                Edit titles directly on each video clip.
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -996,11 +958,22 @@ export default function TemplateFloatingSidebar({
                               <input
                                 type="file"
                                 accept="image/*"
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const file = e.target.files[0];
                                   if (file) {
-                                    const url = URL.createObjectURL(file);
-                                    setCustomImage(url);
+                                    console.log('🖼️ [BW-LOGO-UPLOAD] File selected:', file.name, file.size);
+                                    try {
+                                      const base64 = await new Promise((resolve, reject) => {
+                                        const reader = new FileReader();
+                                        reader.onload = () => resolve(reader.result);
+                                        reader.onerror = reject;
+                                        reader.readAsDataURL(file);
+                                      });
+                                      setCustomImage(base64);
+                                      console.log('✅ [BW-LOGO-UPLOAD] Logo converted to base64, length:', base64.length);
+                                    } catch (error) {
+                                      console.error('❌ [BW-LOGO-UPLOAD] Failed to convert logo:', error);
+                                    }
                                   }
                                 }}
                                 className="hidden"

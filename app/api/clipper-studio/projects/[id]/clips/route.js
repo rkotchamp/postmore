@@ -48,6 +48,7 @@ export async function GET(request, { params }) {
       clips: clips.map(clip => ({
         id: clip._id,
         title: clip.title,
+        templateHeader: clip.templateHeader, // Add templateHeader field
         startTime: clip.startTime,
         endTime: clip.endTime,
         duration: clip.duration,
