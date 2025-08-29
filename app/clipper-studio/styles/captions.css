@@ -1,0 +1,258 @@
+/**
+ * Dynamic Caption Styles
+ * CSS for HTML5 video caption overlay with Google Fonts
+ * Supports real-time font switching without video re-processing
+ */
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&display=swap');
+
+/* Base caption styling for all video elements */
+video::cue {
+  /* Default positioning */
+  line-height: 1.2;
+  text-align: center;
+  
+  /* Visual styling */
+  color: white;
+  text-shadow: 
+    2px 2px 0px black,
+    -2px -2px 0px black,
+    2px -2px 0px black,
+    -2px 2px 0px black,
+    0px 2px 0px black,
+    2px 0px 0px black,
+    0px -2px 0px black,
+    -2px 0px 0px black;
+  
+  /* Typography */
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  
+  /* Spacing and layout */
+  padding: 0.25rem 0.75rem;
+  margin-bottom: 2rem;
+  
+  /* Background for better readability */
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 0.375rem;
+  
+  /* Animation */
+  transition: all 0.2s ease-in-out;
+}
+
+/* Font-specific caption styles */
+
+/* Roboto Font */
+.font-roboto-caption::cue {
+  font-family: 'Roboto', Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 1.5rem;
+}
+
+/* Montserrat Font */
+.font-montserrat-caption::cue {
+  font-family: 'Montserrat', Arial Black, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  font-size: 1.5rem;
+  text-transform: none;
+}
+
+/* Poppins Font */
+.font-poppins-caption::cue {
+  font-family: 'Poppins', Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  font-size: 1.5rem;
+}
+
+/* Inter Font */
+.font-inter-caption::cue {
+  font-family: 'Inter', Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 1.5rem;
+}
+
+/* Noto Sans Font */
+.font-noto-sans-caption::cue {
+  font-family: 'Noto Sans', Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  font-size: 1.5rem;
+}
+
+/* Responsive caption sizing */
+
+/* Mobile devices (portrait) */
+@media screen and (max-width: 480px) {
+  video::cue {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.2rem 0.5rem;
+  }
+  
+  .font-roboto-caption::cue,
+  .font-montserrat-caption::cue,
+  .font-poppins-caption::cue,
+  .font-inter-caption::cue,
+  .font-noto-sans-caption::cue {
+    font-size: 1rem;
+  }
+}
+
+/* Small tablets */
+@media screen and (min-width: 481px) and (max-width: 768px) {
+  video::cue {
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .font-roboto-caption::cue,
+  .font-montserrat-caption::cue,
+  .font-poppins-caption::cue,
+  .font-inter-caption::cue,
+  .font-noto-sans-caption::cue {
+    font-size: 1.25rem;
+  }
+}
+
+/* Large tablets and desktop */
+@media screen and (min-width: 769px) {
+  video::cue {
+    font-size: 1.75rem;
+    margin-bottom: 2.5rem;
+  }
+  
+  .font-roboto-caption::cue,
+  .font-montserrat-caption::cue,
+  .font-poppins-caption::cue,
+  .font-inter-caption::cue,
+  .font-noto-sans-caption::cue {
+    font-size: 1.75rem;
+  }
+}
+
+/* Caption positioning variants */
+
+/* Top positioning */
+.captions-top::cue {
+  margin-top: 2rem;
+  margin-bottom: 0;
+}
+
+/* Center positioning */
+.captions-center::cue {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Bottom positioning (default) */
+.captions-bottom::cue {
+  margin-top: 0;
+  margin-bottom: 2rem;
+}
+
+/* Caption visibility states */
+
+/* Hidden captions */
+.captions-hidden::cue {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Visible captions */
+.captions-visible::cue {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Caption style variants */
+
+/* High contrast style */
+.captions-high-contrast::cue {
+  color: #FFFFFF;
+  background: rgba(0, 0, 0, 0.9);
+  text-shadow: none;
+  border: 2px solid #FFFFFF;
+}
+
+/* Minimal style */
+.captions-minimal::cue {
+  background: none;
+  text-shadow: 
+    1px 1px 2px rgba(0, 0, 0, 0.8),
+    -1px -1px 2px rgba(0, 0, 0, 0.8),
+    1px -1px 2px rgba(0, 0, 0, 0.8),
+    -1px 1px 2px rgba(0, 0, 0, 0.8);
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Outlined style */
+.captions-outlined::cue {
+  background: none;
+  color: white;
+  text-shadow: 
+    3px 3px 0px black,
+    -3px -3px 0px black,
+    3px -3px 0px black,
+    -3px 3px 0px black,
+    0px 3px 0px black,
+    3px 0px 0px black,
+    0px -3px 0px black,
+    -3px 0px 0px black;
+}
+
+/* Animation effects */
+
+/* Fade in animation */
+@keyframes captionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.captions-animated::cue {
+  animation: captionFadeIn 0.3s ease-out;
+}
+
+/* Font switching animation */
+.caption-font-transition {
+  transition: font-family 0.2s ease-in-out;
+}
+
+/* Accessibility improvements */
+
+/* High motion preference - disable animations */
+@media (prefers-reduced-motion: reduce) {
+  video::cue {
+    transition: none;
+    animation: none;
+  }
+  
+  .captions-animated::cue {
+    animation: none;
+  }
+}
+
+/* High contrast preference */
+@media (prefers-contrast: high) {
+  video::cue {
+    background: rgba(0, 0, 0, 0.95);
+    border: 1px solid white;
+    text-shadow: none;
+  }
+}

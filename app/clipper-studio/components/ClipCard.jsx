@@ -338,16 +338,32 @@ export default function ClipCard({
   const handleDownload = useCallback(async (e) => {
     e.stopPropagation();
     
+    console.log('🔄 [DOWNLOAD] Starting download process for clip:', clip._id);
+    console.log('🔄 [DOWNLOAD] Clip data:', {
+      title: clip.title,
+      videoUrl,
+      isTemplateApplied,
+      appliedTemplate,
+      hasDisplayText: !!displayTextContent
+    });
+    
     // Check if user has template applied - if yes, download with template
     const hasTemplate = isTemplateApplied && appliedTemplate && displayTextContent;
     
+    console.log('🔍 [DOWNLOAD] Template check result:', {
+      hasTemplate,
+      isTemplateApplied,
+      appliedTemplate,
+      hasDisplayTextContent: !!displayTextContent
+    });
+    
     if (hasTemplate) {
       // User has template applied - download video WITH template overlay
-      ('📥 [DOWNLOAD] Template detected - downloading with overlay');
+      console.log('📥 [DOWNLOAD] Template detected - downloading with overlay');
       await downloadWithTemplate();
     } else {
       // No template - download original video
-      ('📥 [DOWNLOAD] No template - downloading original video');
+      console.log('📥 [DOWNLOAD] No template - downloading original video');
       await downloadOriginal();
     }
     
@@ -369,7 +385,13 @@ export default function ClipCard({
           aspectRatio: aspectRatio
         };
         
-        ('🎬 [TEMPLATE-DOWNLOAD] Processing with data:', templateData);
+        console.log('🎬 [TEMPLATE-DOWNLOAD] Processing with data:', templateData);
+        console.log('🎬 [TEMPLATE-DOWNLOAD] Request payload:', {
+          clipId: clip._id,
+          videoUrl: videoUrl,
+          filename: filename,
+          templateData: templateData
+        });
         
         setDownloadProgress('Processing video with template...');
         
@@ -377,15 +399,21 @@ export default function ClipCard({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            clipId: clip.id,
+            clipId: clip._id,
             videoUrl: videoUrl,
             filename: filename,
             templateData: templateData
           }),
         });
         
+        console.log('📡 [TEMPLATE-DOWNLOAD] API Response:', {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText
+        });
+        
         if (!response.ok) {
-          ('⚠️ [TEMPLATE-DOWNLOAD] Template processing not available, using original');
+          console.log('⚠️ [TEMPLATE-DOWNLOAD] Template processing not available, using original');
           setDownloadProgress('Template processing failed, downloading original...');
           await downloadOriginal();
           return;
@@ -393,8 +421,13 @@ export default function ClipCard({
         
         setDownloadProgress('Finalizing download...');
         const blob = await response.blob();
+        console.log('📦 [TEMPLATE-DOWNLOAD] Blob created:', {
+          size: blob.size,
+          type: blob.type
+        });
+        
         triggerDownload(blob, filename);
-        ('✅ [TEMPLATE-DOWNLOAD] Success!');
+        console.log('✅ [TEMPLATE-DOWNLOAD] Success!');
         
         setDownloadProgress('Download completed!');
         setTimeout(() => {
@@ -403,7 +436,7 @@ export default function ClipCard({
         }, 1000);
         
       } catch (error) {
-        ('❌ [TEMPLATE-DOWNLOAD] Failed, falling back to original:', error);
+        console.error('❌ [TEMPLATE-DOWNLOAD] Failed, falling back to original:', error);
         setDownloadProgress('Error occurred, trying original download...');
         await downloadOriginal();
       } finally {
@@ -416,15 +449,28 @@ export default function ClipCard({
     
     // Download original video
     async function downloadOriginal() {
+      console.log('📥 [DOWNLOAD-ORIGINAL] Starting original download');
+      console.log('📥 [DOWNLOAD-ORIGINAL] Parameters:', {
+        hasOnDownload: !!onDownload,
+        videoUrl,
+        filename: `${clip.title?.replace(/[^a-zA-Z0-9]/g, '_') || 'clip'}.mp4`
+      });
+      
       if (onDownload && videoUrl) {
+        console.log('📥 [DOWNLOAD-ORIGINAL] Using onDownload callback');
         onDownload(clip);
         return;
       }
       
-      if (!videoUrl) return;
+      if (!videoUrl) {
+        console.log('❌ [DOWNLOAD-ORIGINAL] No video URL available');
+        return;
+      }
       
       try {
         const filename = `${clip.title || `clip_${clip.startTime}s`}.mp4`;
+        console.log('📥 [DOWNLOAD-ORIGINAL] Making API call to /api/download-video');
+        console.log('📥 [DOWNLOAD-ORIGINAL] Request data:', { videoUrl, filename });
         
         const response = await fetch('/api/download-video', {
           method: 'POST',
@@ -432,30 +478,56 @@ export default function ClipCard({
           body: JSON.stringify({ videoUrl: videoUrl, filename: filename }),
         });
         
+        console.log('📡 [DOWNLOAD-ORIGINAL] API Response:', {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText
+        });
+        
         if (!response.ok) {
           throw new Error(`Download failed: ${response.statusText}`);
         }
         
         const blob = await response.blob();
+        console.log('📦 [DOWNLOAD-ORIGINAL] Blob created:', {
+          size: blob.size,
+          type: blob.type
+        });
+        
         triggerDownload(blob, filename);
+        console.log('✅ [DOWNLOAD-ORIGINAL] Success!');
         
       } catch (error) {
-        ('❌ [ORIGINAL-DOWNLOAD] Failed:', error);
+        console.error('❌ [ORIGINAL-DOWNLOAD] Failed:', error);
+        console.log('🔗 [DOWNLOAD-ORIGINAL] Falling back to opening URL in new tab');
         window.open(videoUrl, '_blank');
       }
     }
     
     // Helper to trigger browser download
     function triggerDownload(blob, filename) {
+      console.log('🔗 [TRIGGER-DOWNLOAD] Creating download link');
+      console.log('🔗 [TRIGGER-DOWNLOAD] Parameters:', {
+        blobSize: blob.size,
+        blobType: blob.type,
+        filename
+      });
+      
       const blobUrl = URL.createObjectURL(blob);
+      console.log('🔗 [TRIGGER-DOWNLOAD] Created blob URL:', blobUrl);
+      
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = filename;
       link.style.display = 'none';
+      
       document.body.appendChild(link);
+      console.log('🔗 [TRIGGER-DOWNLOAD] Triggering click');
       link.click();
+      
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
+      console.log('🔗 [TRIGGER-DOWNLOAD] Cleanup completed');
     }
     
   }, [onDownload, videoUrl, clip, isTemplateApplied, appliedTemplate, displayTextContent, appliedSettings, aspectRatio, getPlainText]);
@@ -642,6 +714,13 @@ export default function ClipCard({
                     }}
                   >
                     <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-gray-500 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {appliedSettings.profilePic ? (
+                          <img src={appliedSettings.profilePic} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                          <User className="w-3 h-3" />
+                        )}
+                      </div>
                       <div>
                         <div className="flex items-center gap-0.5">
                           <span className="text-[10px] font-semibold">{appliedSettings.username || 'YourUsername'}</span>
@@ -694,24 +773,6 @@ export default function ClipCard({
                   </div>
                 )}
                 
-                {/* Bottom caption with logo */}
-                {(appliedTemplate === 'social-profile' || appliedTemplate === 'title-only') && (
-                  <div 
-                    className="absolute bottom-2 left-2 right-2 flex items-center gap-2 bg-black/70 backdrop-blur-sm rounded-lg p-2"
-                    style={{ 
-                      color: appliedSettings.textColor || '#ffffff'
-                    }}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {appliedSettings.profilePic ? (
-                        <img src={appliedSettings.profilePic} alt="Profile" className="w-full h-full object-cover" />
-                      ) : (
-                        <User className="w-4 h-4" />
-                      )}
-                    </div>
-                    <span className="text-xs font-medium truncate">{appliedSettings.username || 'username'}</span>
-                  </div>
-                )}
 
                 {/* B&W template logo overlay */}
                 {appliedTemplate === 'bw-frame' && (

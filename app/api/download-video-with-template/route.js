@@ -53,35 +53,40 @@ export async function POST(request) {
 
     try {
       // Save input video
-      const videoBuffer = await videoResponse.arrayBuffer();
-      await fs.writeFile(inputVideoPath, new Uint8Array(videoBuffer));
+      const inputVideoBuffer = await videoResponse.arrayBuffer();
+      await fs.writeFile(inputVideoPath, new Uint8Array(inputVideoBuffer));
       console.log(
         `💾 [TEMPLATE-DOWNLOAD] Saved input video: ${inputVideoPath}`
       );
 
-      // Check if this is a template that needs overlay processing
+      // Check template type
+      const isBlankTemplate = templateData.template === "default" || templateData.template === "blank";
       const isBWTemplate = templateData.template === "bw-frame" || 
                            templateData.template === "black-and-white" || 
                            templateData.template === "bw";
 
-      // All templates now need overlay processing (including B&W with logo)
-      console.log(`🎨 [TEMPLATE-DOWNLOAD] Rendering HTML template to PNG...`);
       let overlayBuffer;
-      try {
-        overlayBuffer = await renderTemplateToImage(templateData);
-        console.log(`✅ [TEMPLATE-DOWNLOAD] Template rendered successfully`);
-      } catch (puppeteerError) {
-        console.error(
-          `❌ [TEMPLATE-DOWNLOAD] Puppeteer rendering failed:`,
-          puppeteerError
-        );
-        throw new Error(`Template rendering failed: ${puppeteerError.message}`);
-      }
+      if (!isBlankTemplate) {
+        // Only render overlay for non-blank templates
+        console.log(`🎨 [TEMPLATE-DOWNLOAD] Rendering HTML template to PNG...`);
+        try {
+          overlayBuffer = await renderTemplateToImage(templateData);
+          console.log(`✅ [TEMPLATE-DOWNLOAD] Template rendered successfully`);
+        } catch (puppeteerError) {
+          console.error(
+            `❌ [TEMPLATE-DOWNLOAD] Puppeteer rendering failed:`,
+            puppeteerError
+          );
+          throw new Error(`Template rendering failed: ${puppeteerError.message}`);
+        }
 
-      await fs.writeFile(overlayImagePath, overlayBuffer);
-      console.log(
-        `🖼️ [TEMPLATE-DOWNLOAD] Saved overlay image: ${overlayImagePath}`
-      );
+        await fs.writeFile(overlayImagePath, overlayBuffer);
+        console.log(
+          `🖼️ [TEMPLATE-DOWNLOAD] Saved overlay image: ${overlayImagePath}`
+        );
+      } else {
+        console.log(`🎨 [TEMPLATE-DOWNLOAD] Blank template - skipping overlay generation`);
+      }
 
       // Step 2: Use FFmpeg to overlay PNG on video (with B&W effects if needed)
       console.log(`🎬 [TEMPLATE-DOWNLOAD] Processing video with FFmpeg...`);
@@ -101,23 +106,33 @@ export async function POST(request) {
         throw new Error(`Video overlay failed: ${ffmpegError.message}`);
       }
 
-      // Step 3: Read the processed video and return it
-      const processedVideo = await fs.readFile(outputVideoPath);
+      // Step 3: Read the processed video as a buffer
+      const videoBuffer = await fs.readFile(outputVideoPath);
+      
+      // Ensure we have a proper buffer for binary data
+      const finalBuffer = Buffer.isBuffer(videoBuffer) ? videoBuffer : Buffer.from(videoBuffer);
 
       // Clean up temporary files
-      await cleanup([inputVideoPath, overlayImagePath, outputVideoPath]);
+      const filesToClean = [inputVideoPath, outputVideoPath];
+      if (!isBlankTemplate) {
+        filesToClean.push(overlayImagePath);
+      }
+      await cleanup(filesToClean);
 
       console.log(
         `📤 [TEMPLATE-DOWNLOAD] Returning processed video: ${filename}`
       );
+      console.log(
+        `📦 [TEMPLATE-DOWNLOAD] Video buffer size: ${finalBuffer.length} bytes`
+      );
 
-      // Return the processed video with proper headers
-      return new NextResponse(processedVideo, {
+      // Use standard Response constructor for binary data (most reliable approach)
+      return new Response(finalBuffer, {
         status: 200,
         headers: {
           "Content-Type": "video/mp4",
-          "Content-Disposition": `attachment; filename="${filename}"`,
-          "Content-Length": processedVideo.length.toString(),
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+          "Content-Length": finalBuffer.length.toString(),
           "Cache-Control": "no-cache",
         },
       });
@@ -128,7 +143,11 @@ export async function POST(request) {
       );
 
       // Clean up on failure
-      await cleanup([inputVideoPath, overlayImagePath, outputVideoPath]);
+      const filesToClean = [inputVideoPath, outputVideoPath];
+      if (!isBlankTemplate) {
+        filesToClean.push(overlayImagePath);
+      }
+      await cleanup(filesToClean);
 
       throw processingError;
     }
@@ -308,7 +327,23 @@ function generateTemplateHTML(templateData) {
     .container { position: relative; width: 100%; height: 100%; overflow: hidden; }
   `;
 
-  if (template === "social-profile") {
+  // Handle blank/default template - no overlays needed
+  if (template === "default" || template === "blank") {
+    return `
+      <html>
+        <head>
+          <style>
+            ${baseStyle}
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <!-- Blank template - no overlays -->
+          </div>
+        </body>
+      </html>
+    `;
+  } else if (template === "social-profile") {
     return `
       <html>
         <head>
@@ -329,6 +364,17 @@ function generateTemplateHTML(templateData) {
               align-items: center;
               gap: 15px;
               margin-bottom: 10px;
+            }
+            .user-avatar {
+              width: 48px;
+              height: 48px;
+              border-radius: 50%;
+              background: rgba(255,255,255,1.0);
+              flex-shrink: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
             }
             .user-text {
               display: flex;
@@ -381,39 +427,18 @@ function generateTemplateHTML(templateData) {
               max-width: 100%;
               word-wrap: break-word;
             }
-            .bottom-caption {
-              position: absolute;
-              bottom: 60px;
-              left: 24px;
-              right: 24px;
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              background: rgba(0, 0, 0, 0.7);
-              padding: 12px 16px;
-              border-radius: 12px;
-              backdrop-filter: blur(8px);
-            }
-            .caption-avatar {
-              width: 40px;
-              height: 40px;
-              border-radius: 50%;
-              flex-shrink: 0;
-              background: rgba(255,255,255,0.3);
-            }
-            .caption-text {
-              color: ${textColor};
-              font-size: 16px;
-              font-weight: 600;
-              font-family: "Chirp", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-            }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="profile-overlay">
               <div class="user-info">
+                <div class="user-avatar">
+                  ${hasCustomLogo ? 
+                    `<img src="${logoSource}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover;" />` : 
+                    `<div style="color: rgba(255,255,255,0.8); font-size: 16px;">👤</div>`
+                  }
+                </div>
                 <div class="user-text">
                   <div class="username">
                     ${username}
@@ -423,13 +448,6 @@ function generateTemplateHTML(templateData) {
                 </div>
               </div>
               <div class="title">${displayText}</div>
-            </div>
-            <div class="bottom-caption">
-              ${hasCustomLogo ? 
-                `<img src="${logoSource}" alt="Logo" class="caption-image" />` : 
-                `<div class="caption-avatar"></div>`
-              }
-              <div class="caption-text">${username}</div>
             </div>
           </div>
         </body>
@@ -463,46 +481,12 @@ function generateTemplateHTML(templateData) {
               word-wrap: break-word;
               text-align: center;
             }
-            .bottom-caption {
-              position: absolute;
-              bottom: 60px;
-              left: 24px;
-              right: 24px;
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              background: rgba(0, 0, 0, 0.7);
-              padding: 12px 16px;
-              border-radius: 12px;
-              backdrop-filter: blur(8px);
-            }
-            .caption-avatar {
-              width: 40px;
-              height: 40px;
-              border-radius: 50%;
-              flex-shrink: 0;
-              background: rgba(255,255,255,0.3);
-            }
-            .caption-text {
-              color: ${textColor};
-              font-size: 16px;
-              font-weight: 600;
-              font-family: "Chirp", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-            }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="title-overlay">
               <div class="title">${displayText}</div>
-            </div>
-            <div class="bottom-caption">
-              ${hasCustomLogo ? 
-                `<img src="${logoSource}" alt="Logo" class="caption-image" />` : 
-                `<div class="caption-avatar"></div>`
-              }
-              <div class="caption-text">${username}</div>
             </div>
           </div>
         </body>
@@ -519,17 +503,17 @@ function generateTemplateHTML(templateData) {
             ${baseStyle}
             .bottom-logo {
               position: absolute;
-              bottom: 40px;
+              bottom: 200px;
               left: 50%;
               transform: translateX(-50%);
             }
             .logo-placeholder {
-              width: 40px;
-              height: 40px;
+              width: 140px;
+              height: 140px;
               border-radius: 50%;
               background: rgba(255,255,255,0.3);
               color: rgba(255,255,255,0.8);
-              font-size: 12px;
+              font-size: 32px;
               font-weight: 600;
               font-family: "Chirp", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
               flex-shrink: 0;
@@ -538,13 +522,8 @@ function generateTemplateHTML(templateData) {
               justify-content: center;
             }
             .logo-image {
-              height: 100px;
-              max-width: 250px;
-              object-fit: contain;
-            }
-            .caption-image {
-              height: 40px;
-              max-width: 80px;
+              height: 360px;
+              max-width: 750px;
               object-fit: contain;
             }
           </style>
@@ -616,7 +595,8 @@ async function overlayImageOnVideo(
       ? templateData.settings.overlayColor
       : "#000000"; // Default to black background
 
-  // Check if this is a B&W template that needs video effects
+  // Check template type
+  const isBlankTemplate = templateData.template === "default" || templateData.template === "blank";
   const isBWTemplate = templateData.template === "bw-frame" || 
                        templateData.template === "black-and-white" || 
                        templateData.template === "bw";
@@ -626,7 +606,7 @@ async function overlayImageOnVideo(
   const bwContrast = templateData.settings?.bwContrast || 130; // Default contrast
   const bwBrightness = templateData.settings?.bwBrightness || 80; // Default brightness
   
-  console.log(`🎨 [BW-EFFECTS] Template: ${templateData.template}, isBWTemplate: ${isBWTemplate}`);
+  console.log(`🎨 [TEMPLATE-TYPE] Template: ${templateData.template}, isBlank: ${isBlankTemplate}, isBW: ${isBWTemplate}`);
   if (isBWTemplate) {
     console.log(`🎨 [BW-EFFECTS] Applying B&W effects - Level: ${bwLevel}%, Contrast: ${bwContrast}%, Brightness: ${bwBrightness}%`);
   }
@@ -637,7 +617,11 @@ async function overlayImageOnVideo(
     // Build the filter complex chain based on template type
     let filterComplex;
     
-    if (isBWTemplate) {
+    if (isBlankTemplate) {
+      // For blank templates: Just scale to 9:16 without any overlays or cropping
+      filterComplex = 
+        `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black[output]`;
+    } else if (isBWTemplate) {
       // For B&W templates: Apply grayscale, contrast, and brightness effects + overlay
       // Keep full 9:16 aspect ratio without cropping
       filterComplex = 
@@ -659,28 +643,55 @@ async function overlayImageOnVideo(
         "[scaled_video][1:v]overlay=0:0[output]";
     }
     
-    const args = [
-      "-i",
-      inputVideoPath, // Input video
-      "-i", 
-      overlayImagePath, // Overlay PNG
-      "-filter_complex",
-      filterComplex,
-      "-map",
-      "[output]", // Map the output video
-      "-map",
-      "0:a", // Map the original audio
-      "-c:v",
-      "libx264", // Force video codec
-      "-c:a", 
-      "aac", // Force audio codec
-      "-pix_fmt",
-      "yuv420p", // Ensure compatible pixel format
-      "-t",
-      "30", // Limit to 30 seconds for testing
-      "-y", // Overwrite output
-      outputVideoPath,
-    ];
+    let args;
+    
+    if (isBlankTemplate) {
+      // For blank templates: Don't use overlay, just process the video directly
+      args = [
+        "-i",
+        inputVideoPath, // Input video only
+        "-filter_complex",
+        filterComplex,
+        "-map",
+        "[output]", // Map the output video
+        "-map",
+        "0:a", // Map the original audio
+        "-c:v",
+        "libx264", // Force video codec
+        "-c:a", 
+        "aac", // Force audio codec
+        "-pix_fmt",
+        "yuv420p", // Ensure compatible pixel format
+        "-t",
+        "30", // Limit to 30 seconds for testing
+        "-y", // Overwrite output
+        outputVideoPath,
+      ];
+    } else {
+      // For templates with overlays
+      args = [
+        "-i",
+        inputVideoPath, // Input video
+        "-i", 
+        overlayImagePath, // Overlay PNG
+        "-filter_complex",
+        filterComplex,
+        "-map",
+        "[output]", // Map the output video
+        "-map",
+        "0:a", // Map the original audio
+        "-c:v",
+        "libx264", // Force video codec
+        "-c:a", 
+        "aac", // Force audio codec
+        "-pix_fmt",
+        "yuv420p", // Ensure compatible pixel format
+        "-t",
+        "30", // Limit to 30 seconds for testing
+        "-y", // Overwrite output
+        outputVideoPath,
+      ];
+    }
 
     console.log(`🎬 [FFMPEG] Command: ffmpeg ${args.join(" ")}`);
 
