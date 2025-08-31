@@ -75,11 +75,13 @@ LOW-PRIORITY (Skip):
 For each selected moment:
 
 TIMING RULES:
-- ${minClipDuration}-${maxClipDuration} seconds only
+- ${minClipDuration}-${maxClipDuration} seconds only - EXPAND clips to reach minimum duration
+- Start MUCH EARLIER to include setup, context, and build-up
+- End MUCH LATER to include full payoff, reactions, and aftermath
 - Natural sentence boundaries (complete thoughts)
-- Include setup + payoff (complete thought arc)
-- NEVER cut off context - ensure full story/point is captured
-- Start slightly before the hook, end after the resolution
+- Include FULL story arc with adequate context before and after viral moment
+- If core moment is 3-8 seconds, ADD 10-20 seconds of setup/context before and after
+- NEVER create clips shorter than ${minClipDuration} seconds - always expand timeframe
 
 TEXT CREATION:
 1. TITLE (SEO-Focused):
@@ -131,7 +133,11 @@ Return ONLY this JSON array format:
 - Timestamps within transcription bounds
 - Complete context - don't cut mid-thought or mid-story
 - Include setup + payoff in each clip
+- CRITICAL: ALL clips must be ${minClipDuration}-${maxClipDuration} seconds
+- If viral moment is short, EXPAND the timeframe by adding context before/after
 - JSON format only, no explanations outside array
+
+EXAMPLE: If viral moment is at 102-108s (6s), expand to 95-125s (30s) with context
 `;
 
     // Call DeepSeek API
