@@ -48,9 +48,22 @@ export async function GET(request) {
 
     console.log(`✅ [PROJECTS] Found ${projects.length} projects (${totalCount} total)`);
 
+    // Map database fields to frontend expected format
+    const mappedProjects = projects.map(project => ({
+      ...project,
+      // Map analytics fields to frontend expected fields
+      progress: project.analytics?.progressPercentage || 0,
+      status: project.analytics?.processingStage || project.status || 'processing',
+      progressMessage: project.analytics?.progressMessage || 'we\'re cooking 👨‍🍳',
+      // Keep other fields as they are
+      id: project._id,
+      title: project.originalVideo?.title || project.sourceUrl || 'Untitled Video',
+      url: project.sourceUrl || ''
+    }));
+
     return NextResponse.json({
       success: true,
-      projects,
+      projects: mappedProjects,
       pagination: {
         page,
         limit,

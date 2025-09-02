@@ -22,6 +22,14 @@ export async function analyzeContentWithDeepSeek(transcription, options = {}) {
   try {
     console.log(`🧠 [DEEPSEEK] Starting content analysis for: ${videoTitle}`);
     console.log(`⚙️ [DEEPSEEK] Duration range: ${minClipDuration}s - ${maxClipDuration}s`);
+    
+    // Check if transcript is too long and needs chunking
+    if (needsChunking(transcription)) {
+      console.log(`📏 [DEEPSEEK] Transcript is too long, using MapReduce analysis`);
+      return await analyzeWithMapReduce(transcription, options);
+    }
+    
+    console.log(`📏 [DEEPSEEK] Transcript fits in token limit, using single analysis`);
 
     // Prepare transcription data for DeepSeek
     const segmentsText = transcription.segments
@@ -342,6 +350,403 @@ function calculateDeepSeekCost(prompt, response) {
 function estimateTokens(text) {
   // Rough estimate: 1 token ≈ 4 characters for English text
   return Math.ceil(text.length / 4);
+}
+
+/**
+ * Check if transcript needs chunking based on token limits
+ * @param {Object} transcription - Whisper transcription result
+ * @returns {boolean} - True if chunking is needed
+ */
+function needsChunking(transcription) {
+  const segmentsText = transcription.segments
+    .map(segment => `[${segment.start.toFixed(1)}s-${segment.end.toFixed(1)}s]: ${segment.text}`)
+    .join('\n');
+  
+  // DeepSeek limit: 128K tokens, but we leave buffer for prompt + response
+  const MAX_TOKENS = 100000; // 100K token safety limit
+  const estimatedTokens = estimateTokens(segmentsText);
+  
+  console.log(`📏 [DEEPSEEK] Transcript tokens: ${estimatedTokens}, Limit: ${MAX_TOKENS}`);
+  
+  return estimatedTokens > MAX_TOKENS;
+}
+
+/**
+ * Chunk transcript into overlapping segments for MapReduce analysis
+ * @param {Object} transcription - Whisper transcription result
+ * @param {number} chunkDurationMinutes - Duration per chunk in minutes
+ * @param {number} overlapMinutes - Overlap between chunks in minutes
+ * @returns {Array} - Array of transcript chunks with metadata
+ */
+function chunkTranscript(transcription, chunkDurationMinutes = 30, overlapMinutes = 10) {
+  const chunkDuration = chunkDurationMinutes * 60; // Convert to seconds
+  const overlapDuration = overlapMinutes * 60; // Convert to seconds
+  const totalDuration = transcription.duration;
+  
+  console.log(`✂️ [DEEPSEEK] Chunking ${totalDuration.toFixed(1)}s transcript into ${chunkDurationMinutes}min chunks with ${overlapMinutes}min overlap`);
+  
+  const chunks = [];
+  let currentStart = 0;
+  let chunkIndex = 0;
+  
+  while (currentStart < totalDuration) {
+    const chunkEnd = Math.min(currentStart + chunkDuration, totalDuration);
+    
+    // Find segments that fall within this chunk timeframe
+    const chunkSegments = transcription.segments.filter(segment => {
+      return segment.start >= currentStart && segment.start < chunkEnd;
+    });
+    
+    if (chunkSegments.length === 0) {
+      // No segments in this chunk, move to next
+      currentStart = chunkEnd;
+      continue;
+    }
+    
+    // Create chunk metadata
+    const chunkData = {
+      index: chunkIndex,
+      startTime: currentStart,
+      endTime: chunkEnd,
+      duration: chunkEnd - currentStart,
+      segments: chunkSegments,
+      totalSegments: chunkSegments.length,
+      // Create the formatted text for this chunk
+      segmentsText: chunkSegments
+        .map(segment => `[${segment.start.toFixed(1)}s-${segment.end.toFixed(1)}s]: ${segment.text}`)
+        .join('\n')
+    };
+    
+    // Calculate token estimate for this chunk
+    chunkData.estimatedTokens = estimateTokens(chunkData.segmentsText);
+    
+    chunks.push(chunkData);
+    
+    console.log(`📄 [DEEPSEEK] Chunk ${chunkIndex + 1}: ${currentStart.toFixed(1)}s-${chunkEnd.toFixed(1)}s (${chunkData.totalSegments} segments, ~${chunkData.estimatedTokens} tokens)`);
+    
+    chunkIndex++;
+    
+    // Move to next chunk with overlap
+    // If this is the last possible chunk, break
+    if (chunkEnd >= totalDuration) break;
+    
+    currentStart = chunkEnd - overlapDuration;
+  }
+  
+  console.log(`✅ [DEEPSEEK] Created ${chunks.length} chunks for MapReduce processing`);
+  
+  return chunks;
+}
+
+/**
+ * Analyze single chunk with DeepSeek (MAP phase)
+ * @param {Object} chunk - Transcript chunk data
+ * @param {Object} options - Analysis options
+ * @param {number} chunkIndex - Index of current chunk
+ * @param {number} totalChunks - Total number of chunks
+ * @returns {Promise<Object>} - Chunk analysis result
+ */
+async function analyzeChunkWithDeepSeek(chunk, options, chunkIndex, totalChunks) {
+  const {
+    minClipDuration = 15,
+    maxClipDuration = 60,
+    maxClips = 10,
+    videoTitle = 'Video',
+    videoType = 'general'
+  } = options;
+
+  console.log(`🧠 [DEEPSEEK-MAP] Analyzing chunk ${chunkIndex + 1}/${totalChunks} (${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s)`);
+
+  // Create chunk-specific analysis prompt
+  const analysisPrompt = `
+<<SYSTEM>>
+You are CLIPMASTER-AI: Elite viral content strategist analyzing CHUNK ${chunkIndex + 1} of ${totalChunks} from a longer video.
+
+<<OBJECTIVE>>
+Find viral clip opportunities in this ${chunk.duration.toFixed(1)}-second segment (${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s).
+Generate TWO text layers per clip:
+- TITLE: SEO-optimized, descriptive (50-80 chars)
+- TEMPLATE HEADER: Viral hook for social overlays (<50 chars)
+
+VIDEO CONTEXT:
+- Title: "${videoTitle}"
+- Type: ${videoType}
+- Chunk: ${chunkIndex + 1}/${totalChunks}
+- Chunk Duration: ${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s
+- Language: ${options.language || 'auto-detected'}
+
+TRANSCRIPTION SEGMENT:
+${chunk.segmentsText}
+
+<<4-D METHODOLOGY>>
+
+🔍 DECONSTRUCT:
+Analyze this chunk for:
+- Emotional peaks: surprise, shock, laughter, anger, revelation
+- Complete thought arcs within this timeframe
+- Speaking patterns: emphasis, pauses, voice changes (implied)
+- Context clues: implied actions, reactions, visual moments
+
+🎯 DIAGNOSE (Viral Triggers):
+HIGH-PRIORITY MOMENTS:
+✅ Emotional explosions (shock, rage, joy, disbelief)
+✅ Contradictions/plot twists ("But then..." moments)
+✅ Universal relatability (everyone's experienced this)
+✅ Quotable wisdom/controversial takes
+✅ "Did they just say that?!" moments
+✅ Educational breakthroughs (lightbulb moments)
+
+⚙️ DEVELOP (Clip Creation):
+TIMING RULES:
+- ${minClipDuration}-${maxClipDuration} seconds only
+- Use EXACT timestamps from transcription
+- Include complete thoughts and context
+- Natural sentence boundaries
+
+TEXT CREATION:
+1. TITLE (SEO-Focused): Keywords + emotion + specificity
+2. TEMPLATE HEADER (Hook-Focused): Emotion + curiosity gap
+
+VIRALITY SCORING:
+- 90-100: Instant shareability, meme potential
+- 80-89: High engagement, strong hook
+- 70-79: Solid content, good retention  
+- 60-69: Good viral potential
+- 50-59: Baseline threshold
+
+📤 DELIVER:
+Return ONLY this JSON array format:
+
+[
+  {
+    "startTime": 1245.2,
+    "endTime": 1267.8,
+    "duration": 22.6,
+    "title": "SEO-optimized descriptive title",
+    "templateHeader": "Punchy viral social media hook",
+    "reason": "Specific viral trigger explanation",
+    "viralityScore": 85,
+    "engagementType": "reaction|educational|funny|dramatic|relatable",
+    "hasSetup": true,
+    "hasPayoff": true,
+    "contentTags": ["emotion", "surprise", "quotable"],
+    "chunkIndex": ${chunkIndex}
+  }
+]
+
+<<CONSTRAINTS>>
+- viralityScore ≥ 50 minimum
+- Maximum ${Math.min(maxClips, 5)} clips per chunk (quality over quantity)
+- Timestamps must be within chunk bounds (${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(1)}s)
+- Complete context - don't cut mid-thought
+- JSON format only, no explanations outside array
+
+Focus on finding the BEST viral moments in this specific chunk.
+`;
+
+  try {
+    const startTime = Date.now();
+    const deepseekResponse = await callDeepSeekAPI(analysisPrompt);
+    const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    console.log(`⚡ [DEEPSEEK-MAP] Chunk ${chunkIndex + 1} analyzed in ${processingTime}s`);
+
+    // Parse and validate response
+    let chunkClips;
+    try {
+      chunkClips = JSON.parse(deepseekResponse.content);
+    } catch (parseError) {
+      console.log(`🔄 [DEEPSEEK-MAP] Chunk ${chunkIndex + 1}: Attempting to extract JSON from response...`);
+      const jsonMatch = deepseekResponse.content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        chunkClips = JSON.parse(jsonMatch[0]);
+      } else {
+        console.warn(`❌ [DEEPSEEK-MAP] Chunk ${chunkIndex + 1}: No valid JSON found`);
+        chunkClips = [];
+      }
+    }
+
+    // Validate clips for this chunk
+    const validClips = (chunkClips || [])
+      .filter(clip => {
+        // Basic validation
+        if (!clip.startTime || !clip.endTime || !clip.title) return false;
+        
+        const duration = clip.endTime - clip.startTime;
+        if (duration < minClipDuration || duration > maxClipDuration) return false;
+        
+        // Ensure clip is within chunk bounds
+        if (clip.startTime < chunk.startTime || clip.endTime > chunk.endTime) return false;
+        
+        if (clip.viralityScore < 50) return false;
+        
+        return true;
+      })
+      .map(clip => ({
+        ...clip,
+        duration: parseFloat((clip.endTime - clip.startTime).toFixed(1)),
+        startTime: parseFloat(clip.startTime.toFixed(1)),
+        endTime: parseFloat(clip.endTime.toFixed(1)),
+        chunkIndex: chunkIndex,
+        processingTime: parseFloat(processingTime),
+        source: 'deepseek-v3-chunk'
+      }));
+
+    console.log(`✅ [DEEPSEEK-MAP] Chunk ${chunkIndex + 1}: Found ${validClips.length} valid clips`);
+    
+    return {
+      chunkIndex,
+      chunkStartTime: chunk.startTime,
+      chunkEndTime: chunk.endTime,
+      clips: validClips,
+      processingTime: parseFloat(processingTime),
+      cost: calculateDeepSeekCost(analysisPrompt, deepseekResponse.content),
+      estimatedTokens: chunk.estimatedTokens
+    };
+
+  } catch (error) {
+    console.error(`❌ [DEEPSEEK-MAP] Chunk ${chunkIndex + 1} analysis failed:`, error);
+    return {
+      chunkIndex,
+      chunkStartTime: chunk.startTime,
+      chunkEndTime: chunk.endTime,
+      clips: [],
+      error: error.message,
+      processingTime: 0,
+      cost: 0
+    };
+  }
+}
+
+/**
+ * Merge and deduplicate clips from all chunks (REDUCE phase)
+ * @param {Array} chunkResults - Results from all chunk analyses
+ * @param {Object} options - Analysis options
+ * @returns {Array} - Final merged and deduplicated clips
+ */
+function mergeAndDeduplicateClips(chunkResults, options) {
+  const { maxClips = 10 } = options;
+  
+  console.log(`🔄 [DEEPSEEK-REDUCE] Merging clips from ${chunkResults.length} chunks`);
+  
+  // Collect all clips from all chunks
+  const allClips = [];
+  let totalProcessingTime = 0;
+  let totalCost = 0;
+  
+  chunkResults.forEach(result => {
+    if (result.clips && result.clips.length > 0) {
+      allClips.push(...result.clips);
+      console.log(`📊 [DEEPSEEK-REDUCE] Chunk ${result.chunkIndex + 1}: ${result.clips.length} clips`);
+    }
+    totalProcessingTime += result.processingTime || 0;
+    totalCost += result.cost || 0;
+  });
+  
+  console.log(`📋 [DEEPSEEK-REDUCE] Total clips before deduplication: ${allClips.length}`);
+  
+  if (allClips.length === 0) {
+    console.log(`⚠️ [DEEPSEEK-REDUCE] No clips found in any chunks`);
+    return {
+      clips: [],
+      totalProcessingTime,
+      totalCost,
+      deduplicationStats: { original: 0, duplicates: 0, final: 0 }
+    };
+  }
+  
+  // Sort by virality score (highest first)
+  allClips.sort((a, b) => b.viralityScore - a.viralityScore);
+  
+  // Deduplicate clips that are too close to each other
+  const OVERLAP_THRESHOLD = 5; // seconds
+  const deduplicatedClips = [];
+  
+  for (const clip of allClips) {
+    const isDuplicate = deduplicatedClips.some(existingClip => {
+      // Check if clips overlap significantly
+      const overlapStart = Math.max(clip.startTime, existingClip.startTime);
+      const overlapEnd = Math.min(clip.endTime, existingClip.endTime);
+      const overlapDuration = Math.max(0, overlapEnd - overlapStart);
+      
+      // If overlap is more than threshold, consider it duplicate
+      return overlapDuration > OVERLAP_THRESHOLD;
+    });
+    
+    if (!isDuplicate) {
+      deduplicatedClips.push({
+        ...clip,
+        analyzedAt: new Date().toISOString(),
+        source: 'deepseek-v3-mapreduce'
+      });
+    } else {
+      console.log(`🗑️ [DEEPSEEK-REDUCE] Removed duplicate clip: "${clip.title}" (${clip.startTime}s-${clip.endTime}s)`);
+    }
+  }
+  
+  // Limit to maxClips
+  const finalClips = deduplicatedClips.slice(0, maxClips);
+  
+  console.log(`✅ [DEEPSEEK-REDUCE] Final clips: ${finalClips.length}/${allClips.length} (removed ${allClips.length - deduplicatedClips.length} duplicates, kept top ${finalClips.length})`);
+  
+  // Log final clips
+  finalClips.forEach((clip, index) => {
+    console.log(`  ${index + 1}. "${clip.title}" (${clip.startTime}s-${clip.endTime}s, score: ${clip.viralityScore})`);
+  });
+  
+  return {
+    clips: finalClips,
+    totalProcessingTime,
+    totalCost,
+    deduplicationStats: {
+      original: allClips.length,
+      duplicates: allClips.length - deduplicatedClips.length,
+      final: finalClips.length
+    }
+  };
+}
+
+/**
+ * MapReduce analysis for long transcriptions
+ * @param {Object} transcription - Whisper transcription result
+ * @param {Object} options - Analysis options
+ * @returns {Promise<Object>} - Analysis result
+ */
+async function analyzeWithMapReduce(transcription, options) {
+  console.log(`🗺️ [DEEPSEEK-MAPREDUCE] Starting MapReduce analysis for long transcription`);
+  
+  // Step 1: Chunk the transcript
+  const chunks = chunkTranscript(transcription, 30, 10); // 30min chunks, 10min overlap
+  
+  console.log(`🚀 [DEEPSEEK-MAPREDUCE] MAP Phase: Processing ${chunks.length} chunks in parallel`);
+  
+  // Step 2: MAP Phase - Analyze all chunks in parallel
+  const chunkAnalysisPromises = chunks.map((chunk, index) => 
+    analyzeChunkWithDeepSeek(chunk, options, index, chunks.length)
+  );
+  
+  const chunkResults = await Promise.all(chunkAnalysisPromises);
+  
+  // Step 3: REDUCE Phase - Merge and deduplicate results
+  console.log(`🔄 [DEEPSEEK-MAPREDUCE] REDUCE Phase: Merging results from ${chunkResults.length} chunks`);
+  
+  const mergeResult = mergeAndDeduplicateClips(chunkResults, options);
+  
+  console.log(`🎉 [DEEPSEEK-MAPREDUCE] MapReduce completed: ${mergeResult.clips.length} final clips in ${mergeResult.totalProcessingTime.toFixed(2)}s`);
+  
+  return {
+    success: true,
+    clips: mergeResult.clips,
+    totalClips: mergeResult.clips.length,
+    processingTime: mergeResult.totalProcessingTime,
+    cost: mergeResult.totalCost,
+    metadata: {
+      model: 'deepseek-chat-v3-mapreduce',
+      totalChunks: chunks.length,
+      deduplicationStats: mergeResult.deduplicationStats,
+      cacheHit: false
+    }
+  };
 }
 
 export default {

@@ -346,6 +346,7 @@ export default function ClipperStudio() {
         title: previewMetadata?.title || (uploadedFile ? uploadedFile.name : "Video Processing"),
         status: "processing",
         progress: 0,
+        progressMessage: "we're cooking 👨‍🍳", // Initial GenZ message
         createdAt: new Date(),
         thumbnailUrl: firebaseThumbnailUrl // Use Firebase URL for persistence
       };
@@ -931,6 +932,7 @@ export default function ClipperStudio() {
                     videoTitle={project.title}
                     progress={project.progress}
                     status={project.status}
+                    progressMessage={project.progressMessage} // NEW: Pass GenZ message
                     thumbnailUrl={project.thumbnailUrl} // Pass stored Firebase thumbnail URL
                     hasClips={hasClips}
                     totalClips={projectClips.totalClips}
@@ -1034,6 +1036,7 @@ export default function ClipperStudio() {
 
   // Poll project status for async processing
   function pollProjectStatus(projectId, interval = 5000) { // Poll every 5 seconds for better responsiveness
+    console.log(`🔄 [POLLING] Starting to poll project: ${projectId} every ${interval}ms`);
     
     const pollInterval = setInterval(async () => {
       try {
@@ -1045,6 +1048,13 @@ export default function ClipperStudio() {
         });
         
         if (!response.ok) {
+          if (response.status === 404) {
+            console.error(`❌ [POLLING] Project ${projectId} not found - stopping polling and marking as failed`);
+            clearInterval(pollInterval);
+            updateProjectProgress(projectId, 0, 'failed');
+            return;
+          }
+          
           console.error(`❌ [POLLING] Failed to fetch project status: ${response.statusText}`);
           return;
         }
@@ -1052,12 +1062,23 @@ export default function ClipperStudio() {
         const responseData = await response.json();
         const project = responseData.project; // Extract the nested project data
         
+        // Check if project data exists
+        if (!project) {
+          console.error(`❌ [POLLING] Project ${projectId} data missing - stopping polling and marking as failed`);
+          clearInterval(pollInterval);
+          updateProjectProgress(projectId, 0, 'failed');
+          return;
+        }
+        
         // Debug logging to see what we're getting from the API
         
         if (project.status === 'completed') {
+          console.log(`🎉 [POLLING] Project ${projectId} completed! Stopping polling.`);
           clearInterval(pollInterval);
           updateProjectProgress(projectId, 100, 'completed');
           queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
+          
+          console.log(`✅ [POLLING] Project ${projectId} marked as completed in store`);
           
         } else if (project.status === 'error') {
           console.error(`❌ [POLLING] Project ${projectId} failed: ${project.analytics?.error}`);
@@ -1065,42 +1086,22 @@ export default function ClipperStudio() {
           updateProjectProgress(projectId, 0, 'failed');
           
         } else if (project.status === 'processing') {
-          // Update progress based on processing stage
-          const stage = project.analytics?.processingStage;
-          let progress = 20;
-          let displayStatus = 'processing';
+          // Use actual progress and message from backend
+          const actualProgress = project.progress || 0;
+          const actualStatus = project.status;
+          const actualMessage = project.progressMessage;
           
-          switch (stage) {
-            case 'downloading': 
-              progress = 30; 
-              displayStatus = 'downloading';
-              break;
-            case 'transcribing': 
-              progress = 50; 
-              displayStatus = 'transcribing';
-              break;
-            case 'analyzing': 
-              progress = 70; 
-              displayStatus = 'analyzing';
-              break;
-            case 'saving': 
-              progress = 90; 
-              displayStatus = 'saving';
-              // Backend will automatically mark as completed when clips are ready
-              break;
-            case 'completed': 
-              progress = 100; 
-              displayStatus = 'completed';
-              // Clear polling since we're complete
-              clearInterval(pollInterval);
-              queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
-              break;
-            default: 
-              progress = 20;
-              displayStatus = 'processing';
-          }
+          console.log(`🔄 [POLLING] Project ${projectId} progress: ${actualProgress}% - "${actualMessage}" - status: ${actualStatus}`);
+          console.log(`🔄 [POLLING] Full project data:`, project);
           
-          updateProjectProgress(projectId, progress, displayStatus);
+          // Update with actual backend values instead of hardcoded ones
+          updateProject(projectId, { 
+            progress: actualProgress, 
+            status: actualStatus,
+            progressMessage: actualMessage 
+          });
+          
+          console.log(`✅ [POLLING] Updated project ${projectId} in store`);
         }
         
       } catch (error) {

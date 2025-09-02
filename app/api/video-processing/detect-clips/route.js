@@ -8,12 +8,38 @@ import VideoClip from '@/app/models/VideoClip';
 import connectToMongoose from '@/app/lib/db/mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getRandomProgressMessage } from '@/app/lib/utils/progressMessages';
 
 /**
  * Process video asynchronously for large files
  */
 // Global processing lock to prevent duplicate processing
 const processingLocks = new Set();
+
+/**
+ * Update project progress with GenZ messages
+ * @param {string} projectId - Project ID
+ * @param {string} stage - Processing stage
+ * @param {number} percentage - Progress percentage (0-100)
+ */
+async function updateProjectProgress(projectId, stage, percentage) {
+  const message = getRandomProgressMessage(stage);
+  
+  try {
+    await VideoProject.findByIdAndUpdate(projectId, {
+      $set: {
+        'analytics.processingStage': stage,
+        'analytics.progressPercentage': percentage,
+        'analytics.progressMessage': message,
+        'analytics.lastUpdated': new Date()
+      }
+    });
+    
+    console.log(`📊 [PROGRESS] ${projectId}: ${percentage}% - "${message}"`);
+  } catch (error) {
+    console.error(`❌ [PROGRESS] Failed to update progress for ${projectId}:`, error);
+  }
+}
 
 async function processVideoAsync(url, projectId, options, userId, captionOptions = {}) {
   console.log(`🎬 [ASYNC] Starting async processing for project ${projectId}...`);
@@ -30,54 +56,60 @@ async function processVideoAsync(url, projectId, options, userId, captionOptions
   try {
     await connectToMongoose();
     
-    // Step 1: Download video
+    // Step 1: Download video with granular progress
     console.log(`⬇️ [ASYNC] Downloading video for project ${projectId}...`);
-    await VideoProject.findByIdAndUpdate(projectId, {
-      $set: { 'analytics.processingStage': 'downloading' }
-    });
+    await updateProjectProgress(projectId, 'downloading', 5);
     
     const downloadResult = await downloadVideoWithMetadata(url, {
       quality: 'best[height<=720]', // Keep original quality setting
       outputPath: '/tmp'
     });
     
+    await updateProjectProgress(projectId, 'downloading', 25);
     console.log(`✅ [ASYNC] Video downloaded for project ${projectId}: ${downloadResult.filePath}`);
+    await updateProjectProgress(projectId, 'downloading', 30);
     
-    // Step 2: Transcribe with Whisper
+    // Step 2: Transcribe with Whisper with progress updates
     console.log(`🎤 [ASYNC] Starting transcription for project ${projectId}...`);
-    await VideoProject.findByIdAndUpdate(projectId, {
-      $set: { 'analytics.processingStage': 'transcribing' }
-    });
+    await updateProjectProgress(projectId, 'transcribing', 35);
     
-    const transcriptionResult = await transcribeWithWhisper(downloadResult.filePath, {
-      language: options.language || null,
-      responseFormat: 'verbose_json',
-      temperature: 0
-    });
+    let transcriptionResult;
+    try {
+      console.log(`🎤 [ASYNC] Starting Whisper transcription for 8-hour video...`);
+      transcriptionResult = await transcribeWithWhisper(downloadResult.filePath, {
+        language: options.language || null,
+        responseFormat: 'verbose_json',
+        temperature: 0
+      });
+      console.log(`✅ [ASYNC] Whisper transcription completed successfully`);
+    } catch (transcriptionError) {
+      console.error(`❌ [ASYNC] Whisper transcription failed for project ${projectId}:`, transcriptionError);
+      throw new Error(`Transcription failed: ${transcriptionError.message}`);
+    }
     
+    await updateProjectProgress(projectId, 'transcribing', 55);
     console.log(`✅ [ASYNC] Transcription completed for project ${projectId}`);
+    await updateProjectProgress(projectId, 'transcribing', 60);
     
-    // Step 3: Analyze with DeepSeek
+    // Step 3: Analyze with DeepSeek (MapReduce will handle its own progress)
     console.log(`🧠 [ASYNC] Starting analysis for project ${projectId}...`);
-    await VideoProject.findByIdAndUpdate(projectId, {
-      $set: { 'analytics.processingStage': 'analyzing' }
-    });
+    await updateProjectProgress(projectId, 'analyzing', 65);
     
     const analysisResult = await analyzeContentWithDeepSeek(transcriptionResult, {
       minClipDuration: options.minClipDuration || 15,
       maxClipDuration: options.maxClipDuration || 60,
       maxClips: options.maxClips || 10,
       videoTitle: downloadResult.metadata.title || 'Video',
-      videoType: options.videoType || 'general'
+      videoType: options.videoType || 'general',
+      projectId: projectId // Pass projectId for progress updates
     });
     
+    await updateProjectProgress(projectId, 'analyzing', 85);
     console.log(`✅ [ASYNC] Analysis completed for project ${projectId}: ${analysisResult.clips.length} clips found`);
     
     // Step 4: Save clips to database
     console.log(`💾 [ASYNC] Saving clips for project ${projectId}...`);
-    await VideoProject.findByIdAndUpdate(projectId, {
-      $set: { 'analytics.processingStage': 'saving' }
-    });
+    await updateProjectProgress(projectId, 'saving', 90);
     
     if (analysisResult.clips.length > 0) {
       console.log(`🔍 [DEBUG] Checking DeepSeek titles in analysisResult.clips:`);
@@ -193,6 +225,7 @@ async function processVideoAsync(url, projectId, options, userId, captionOptions
         }
         
         // Now mark project as completed since clips are actually ready
+        await updateProjectProgress(projectId, 'completed', 100);
         await VideoProject.findByIdAndUpdate(projectId, {
           $set: {
             status: 'completed',
@@ -245,17 +278,26 @@ async function processVideoAsync(url, projectId, options, userId, captionOptions
   } catch (error) {
     console.error(`❌ [ASYNC] Processing failed for project ${projectId}:`, error);
     
-    // Update project with error status
-    await VideoProject.findByIdAndUpdate(projectId, {
-      $set: {
-        status: 'error',
-        processingCompleted: new Date(),
-        'analytics.processingStage': 'error',
-        'analytics.error': error.message
-      }
-    });
+    // Update project with error status - DO NOT DELETE, keep for debugging
+    try {
+      await VideoProject.findByIdAndUpdate(projectId, {
+        $set: {
+          status: 'error',
+          processingCompleted: new Date(),
+          'analytics.processingStage': 'error',
+          'analytics.progressPercentage': 0,
+          'analytics.progressMessage': `Error: ${error.message}`,
+          'analytics.error': error.message,
+          'analytics.lastUpdated': new Date()
+        }
+      });
+      console.log(`💾 [ASYNC] Project ${projectId} marked as error in database (NOT deleted)`);
+    } catch (updateError) {
+      console.error(`❌ [ASYNC] Failed to update project error status:`, updateError);
+    }
     
-    throw error;
+    // Don't throw error to prevent deletion
+    console.log(`⚠️ [ASYNC] Processing failed but project ${projectId} preserved for debugging`);
   } finally {
     // Always remove the processing lock when done
     processingLocks.delete(projectId);

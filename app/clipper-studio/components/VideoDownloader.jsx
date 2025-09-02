@@ -10,6 +10,7 @@ export default function ProcessingView({
   videoTitle = "Untitled Video",
   progress = 0,
   status = "processing",
+  progressMessage, // NEW: GenZ progress message from backend
   onClick,
   isClickable = false,
   thumbnailUrl, // Accept thumbnail URL as prop from database
@@ -135,13 +136,16 @@ export default function ProcessingView({
                   </span>
                 </div>
               </div>
-              {/* Status Text */}
+              {/* Status Text - GenZ Messages First! */}
               <p className="text-white text-xs opacity-90">
-                {status === 'downloading' ? 'Downloading video...' :
-                 status === 'transcribing' ? 'Transcribing audio...' :
-                 status === 'analyzing' ? 'AI analyzing content...' :
-                 status === 'saving' ? 'Saving clips...' :
-                 'Processing...'}
+                {progressMessage || (
+                  status === 'downloading' ? 'getting the sauce 🌶️' :
+                  status === 'transcribing' ? 'reading the vibes ✨' :
+                  status === 'analyzing' ? 'hunting viral moments 🎯' :
+                  status === 'saving' ? 'saving your W\'s 💾' :
+                  status === 'completed' ? 'WE DID THAT! 💥' :
+                  'we\'re cooking 👨‍🍳'
+                )}
               </p>
             </div>
           </div>

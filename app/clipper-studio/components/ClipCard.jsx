@@ -580,7 +580,7 @@ export default function ClipCard({
                     <img
                       src={clip.thumbnail}
                       alt="Video thumbnail"
-                      className="max-w-full max-h-full object-contain transition-opacity duration-300"
+                      className="w-auto h-auto max-w-full max-h-full object-contain transition-opacity duration-300"
                       onLoad={() => {
                         setVideoLoaded(true);
                         setIsVideoLoading(false);
@@ -593,7 +593,7 @@ export default function ClipCard({
                     />
                   ) : !isPlaying ? (
                     <video
-                      className="max-w-full max-h-full object-contain"
+                      className="w-auto h-auto max-w-full max-h-full object-contain"
                       preload="metadata"
                       muted
                       playsInline
@@ -611,7 +611,7 @@ export default function ClipCard({
                     </video>
                   ) : (
                     <video
-                      className="max-w-full max-h-full object-contain transition-opacity duration-300"
+                      className="w-auto h-auto max-w-full max-h-full object-contain transition-opacity duration-300"
                       controls
                       playsInline
                       autoPlay
@@ -677,7 +677,7 @@ export default function ClipCard({
                   </div>
                 ) : (
                   <video
-                    className="w-full h-full object-cover transition-opacity duration-300"
+                    className="w-full h-full object-contain transition-opacity duration-300"
                     controls
                     playsInline
                     autoPlay

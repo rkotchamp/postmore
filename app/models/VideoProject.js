@@ -101,6 +101,20 @@ const VideoProjectSchema = new mongoose.Schema(
         enum: ["downloading", "transcribing", "analyzing", "saving", "completed", "error"],
         default: "downloading",
       },
+      progressPercentage: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
+      },
+      progressMessage: {
+        type: String,
+        default: "we're cooking 👨‍🍳"
+      },
+      lastUpdated: {
+        type: Date,
+        default: Date.now
+      },
       error: String, // Error message if processing stage fails
     },
   },
