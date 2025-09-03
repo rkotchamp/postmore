@@ -60,19 +60,15 @@ export async function GET(request) {
     if (!redirectUri) {
       return redirectWithError("Missing TikTok redirect URI configuration.");
     }
-    // Get code_verifier from query params (we'll modify frontend to pass it)
-    const codeVerifier = searchParams.get("code_verifier");
-    
     const tokenParams = {
       client_key: process.env.TIKTOK_CLIENT_ID,
       client_secret: process.env.TIKTOK_CLIENT_SECRET,
       code: code,
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
-      ...(codeVerifier && { code_verifier: codeVerifier })
     };
     
-    console.log("Token params with PKCE:", { ...tokenParams, client_secret: "***REDACTED***", code_verifier: codeVerifier ? "***PROVIDED***" : "MISSING" });
+    console.log("Token params:", { ...tokenParams, client_secret: "***REDACTED***" });
 
     const tokenUrl = "https://open.tiktokapis.com/v2/oauth/token/";
     console.log("Requesting token from TikTok:", tokenUrl);

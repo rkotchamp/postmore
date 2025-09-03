@@ -27,25 +27,16 @@ if (!TIKTOK_CLIENT_ID || !TIKTOK_CLIENT_SECRET || !TIKTOK_REDIRECT_URI) {
 
 /**
  * Get creator info to check posting eligibility and limits
- * In sandbox mode, returns mock data since the endpoint is not available
  *
  * @param {string} accessToken - Valid TikTok access token
- * @returns {Promise<object>} - Creator info from TikTok API or mock data
+ * @returns {Promise<object>} - Creator info from TikTok API
  */
 async function getCreatorInfo(accessToken) {
   console.log("========== TikTok getCreatorInfo Started ==========");
 
-  // Check if we're in sandbox mode
-  const isSandbox =
-    process.env.TIKTOK_SANDBOX_MODE === "true" ||
-    process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
-
-  console.log("TikTok sandbox mode detected:", isSandbox);
-
-  // Try the real API first, even in sandbox mode
   try {
     console.log(
-      "Attempting real TikTok API call for creator info:",
+      "TikTok API call for creator info:",
       `${TIKTOK_API_BASE_URL}/post/publish/creator/info/`
     );
     console.log(
@@ -63,7 +54,6 @@ async function getCreatorInfo(accessToken) {
     );
 
     console.log("TikTok creator info API response status:", response.status);
-    console.log("TikTok creator info API response headers:", response.headers);
     console.log(
       "TikTok creator info API response data:",
       JSON.stringify(response.data, null, 2)
@@ -75,58 +65,10 @@ async function getCreatorInfo(accessToken) {
     }
 
     console.log(
-      "========== TikTok getCreatorInfo Completed Successfully (Real API) =========="
+      "========== TikTok getCreatorInfo Completed Successfully =========="
     );
     return response.data.data;
   } catch (error) {
-    console.error("Real TikTok API failed:", {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      message: error.message,
-    });
-
-    // If we're in sandbox mode and the real API fails, use mock data
-    if (isSandbox) {
-      console.log("Falling back to mock creator info for sandbox mode");
-      console.log(
-        "WARNING: Sandbox mode has limited Content Posting API access"
-      );
-      console.log(
-        "Posts will be restricted to private viewing mode until app audit"
-      );
-
-      // Return mock data for sandbox testing
-      const mockCreatorInfo = {
-        creator_nickname: "TikTok Sandbox User",
-        creator_avatar_url:
-          "https://p16-sign.tiktokcdn-us.com/tos-useast5-avt-0068-tx/default_avatar.webp",
-        creator_username: "sandbox_user",
-        privacy_level_options: [
-          "SELF_ONLY", // Force private posts in sandbox
-          "MUTUAL_FOLLOW_FRIENDS",
-          "PUBLIC_TO_EVERYONE",
-        ],
-        comment_disabled: false,
-        duet_disabled: false,
-        stitch_disabled: false,
-        max_video_post_duration_sec: 300, // Standard 5 minutes
-        can_post: true, // Allow posting in sandbox mode
-        quota_usage: 0,
-        quota_total: 10, // Allow 10 posts per day in sandbox
-      };
-
-      console.log("Returning mock creator info for sandbox mode");
-      console.log(
-        "Note: Posts will attempt to use real TikTok API but may be restricted"
-      );
-      console.log(
-        "========== TikTok getCreatorInfo Completed (Sandbox Fallback) =========="
-      );
-      return mockCreatorInfo;
-    }
-
-    // If not in sandbox mode, throw the error
     console.error("========== TikTok getCreatorInfo Failed ==========");
     console.error(
       "Error fetching creator info:",
@@ -193,16 +135,7 @@ async function post(accountData, postData) {
     const mediaType = determineMediaType(mediaFiles);
 
     // 4. Initialize and publish content
-    const isSandboxMode =
-      process.env.TIKTOK_SANDBOX_MODE === "true" ||
-      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
-
-    console.log("========== TikTok Attempting Real Post ==========");
-    if (isSandboxMode) {
-      console.log("🚨 SANDBOX MODE: Attempting real post with TikTok API");
-      console.log("📋 Note: Posts may be restricted to private viewing only");
-      console.log("⚠️  Content Posting API has limited sandbox support");
-    }
+    console.log("========== TikTok Production Post ==========");
     console.log("Media type:", mediaType);
     console.log("Post data structure:", {
       hasMediaFiles: !!postData.mediaFiles,
@@ -291,7 +224,7 @@ async function initializeAndPublishContent(
           (creatorInfo.privacy_level_options &&
           creatorInfo.privacy_level_options.length > 0
             ? creatorInfo.privacy_level_options[0]
-            : "SELF_ONLY"), // Default to private for sandbox
+            : "PUBLIC_TO_EVERYONE"), // Default to public for production
         disable_comment: postData.disableComment || false,
         disable_duet: postData.disableDuet || false,
         disable_stitch: postData.disableStitch || false,
@@ -317,7 +250,7 @@ async function initializeAndPublishContent(
           (creatorInfo.privacy_level_options &&
           creatorInfo.privacy_level_options.length > 0
             ? creatorInfo.privacy_level_options[0]
-            : "SELF_ONLY"), // Default to private for sandbox
+            : "PUBLIC_TO_EVERYONE"), // Default to public for production
         disable_comment: postData.disableComment || false,
         disable_duet: postData.disableDuet || false,
         disable_stitch: postData.disableStitch || false,
@@ -382,33 +315,6 @@ async function initializeAndPublishContent(
     console.error("Error data:", JSON.stringify(error.response?.data, null, 2));
     console.error("Error message:", error.message);
 
-    const isSandboxMode =
-      process.env.TIKTOK_SANDBOX_MODE === "true" ||
-      process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID?.includes("sbawl");
-
-    if (isSandboxMode) {
-      console.error("🚨 SANDBOX MODE ERROR: This is likely expected");
-      console.error("📋 TikTok Sandbox Limitations:");
-      console.error(
-        "   - Content Posting API has very limited support in sandbox mode"
-      );
-      console.error("   - Video posting endpoints may not be available");
-      console.error(
-        "   - 'Invalid media_type or post_mode' errors are common in sandbox"
-      );
-      console.error(
-        "   - Real posting functionality requires production app approval"
-      );
-      console.error("💡 Next Steps:");
-      console.error(
-        "   - Submit your app for TikTok review to get full API access"
-      );
-      console.error(
-        "   - Use production credentials for real posting functionality"
-      );
-      console.error("   - Current error is expected behavior in sandbox mode");
-    }
-
     console.error("Full error details:", {
       status: error.response?.status,
       statusText: error.response?.statusText,
@@ -421,36 +327,7 @@ async function initializeAndPublishContent(
       error.response?.data?.message ||
       error.message;
 
-    // In sandbox mode, if we get API errors, we can simulate a successful response for testing
-    if (
-      isSandboxMode &&
-      (error.response?.status === 400 || error.response?.status === 404)
-    ) {
-      console.log(
-        "🎭 SANDBOX MODE: Simulating successful post for testing purposes"
-      );
-      console.log(
-        "⚠️  This is a mock response - no actual post was created on TikTok"
-      );
-      console.log(
-        "📱 Your app logic can continue as if the post was successful"
-      );
-
-      // Return a mock successful response to allow app testing
-      return {
-        publish_id: `mock_sandbox_${Date.now()}`,
-        publish_status: "processing",
-        share_url: null,
-        uploaded_bytes: postData.mediaFiles[0]?.size || 0,
-        upload_url: null,
-      };
-    }
-
-    const sandboxNote = isSandboxMode
-      ? " (Note: Sandbox mode has limited Content Posting API support)"
-      : "";
-
-    throw new Error(`Failed to post to TikTok: ${errorMessage}${sandboxNote}`);
+    throw new Error(`Failed to post to TikTok: ${errorMessage}`);
   }
 }
 
