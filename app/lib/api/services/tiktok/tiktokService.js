@@ -37,18 +37,20 @@ async function getCreatorInfo(accessToken) {
   try {
     console.log(
       "TikTok API call for creator info:",
-      `${TIKTOK_API_BASE_URL}/post/publish/creator/info/`
+      `${TIKTOK_API_BASE_URL}/post/publish/creator_info/query/`
     );
     console.log(
       "Making request with access token:",
       accessToken ? `${accessToken.substring(0, 10)}...` : undefined
     );
 
-    const response = await axios.get(
-      `${TIKTOK_API_BASE_URL}/post/publish/creator/info/`,
+    const response = await axios.post(
+      `${TIKTOK_API_BASE_URL}/post/publish/creator_info/query/`,
+      {},
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json; charset=UTF-8",
         },
       }
     );
