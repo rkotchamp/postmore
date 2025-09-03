@@ -8,7 +8,7 @@ import { FAQ } from "@/app/components/HomePage/FAQ";
 import { SupportedPlatforms } from "@/app/components/HomePage/SupportedPlatforms";
 import { CTA } from "@/app/components/HomePage/CTA";
 import { Footer } from "@/app/components/HomePage/Footer";
-
+// Main home
 // Metadata for SEO and social sharing
 export const metadata = {
   title: "PostMoore - Schedule Posts Across Multiple Social Media Platforms",
