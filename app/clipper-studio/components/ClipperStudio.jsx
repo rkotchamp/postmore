@@ -929,11 +929,11 @@ export default function ClipperStudio() {
                     key={project.id}
                     projectId={project.id}
                     videoUrl={project.url}
-                    videoTitle={project.title}
+                    videoTitle={project.originalVideo?.filename || project.title}
                     progress={project.progress}
                     status={project.status}
                     progressMessage={project.progressMessage} // NEW: Pass GenZ message
-                    thumbnailUrl={project.thumbnailUrl} // Pass stored Firebase thumbnail URL
+                    thumbnailUrl={project.originalVideo?.thumbnailUrl} // Pass stored Firebase thumbnail URL from originalVideo
                     hasClips={hasClips}
                     totalClips={projectClips.totalClips}
                     processedClips={projectClips.processedClips}
