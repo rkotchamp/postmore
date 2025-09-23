@@ -15,6 +15,7 @@ import { getThumbnail } from "../../lib/video-processing/utils/thumbnailExtracto
 import { useClipperStudioStore } from "../../lib/store/clipperStudioStore";
 import { useClipperMutations } from "../../hooks/useClipperMutations";
 import { useMultipleProjectClips } from "../hooks/useProjectClips";
+import { useClipperProjects, CLIPPER_QUERY_KEYS } from "../../hooks/useClipperQueries";
 
 export default function ClipperStudio() {
   const queryClient = useQueryClient();
@@ -74,8 +75,18 @@ export default function ClipperStudio() {
     saveProject
   } = useClipperMutations();
 
+  // Fetch projects from server to sync with database
+  const {
+    data: serverProjectsData,
+    isLoading: isLoadingServerProjects,
+    error: serverProjectsError
+  } = useClipperProjects({ includeUnsaved: true });
+
+  // Merge server projects with local cache
+  const allProjects = serverProjectsData?.projects || activeProjects;
+
   // Get all project IDs for fetching clips
-  const projectIds = activeProjects.map(project => project.id).filter(Boolean);
+  const projectIds = allProjects.map(project => project.id).filter(Boolean);
   
   // Fetch clips for all projects
   const { 
@@ -863,7 +874,7 @@ export default function ClipperStudio() {
         </div>
       </div>
       {/* Processing Videos at Bottom with Tabs */}
-      {activeProjects.length > 0 && (
+      {allProjects.length > 0 && (
         <div className="relative z-10 px-4 pb-16">
           <div className="w-full max-w-6xl mx-auto mt-8">
             {/* Tab Headers */}
@@ -876,7 +887,7 @@ export default function ClipperStudio() {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                All projects ({activeProjects.length})
+                All projects ({allProjects.length})
               </button>
               <button
                 onClick={() => setSelectedProjectsTab('saved')}
@@ -886,14 +897,14 @@ export default function ClipperStudio() {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Saved projects ({activeProjects.filter(project => project.saveStatus?.isSaved).length})
+                Saved projects ({allProjects.filter(project => project.saveStatus?.isSaved).length})
               </button>
             </div>
             
             {/* Processing Views Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {(() => {
-                const filteredProjects = activeProjects.filter(project => {
+                const filteredProjects = allProjects.filter(project => {
                   if (selectedProjectsTab === 'saved') {
                     return project.saveStatus?.isSaved === true;
                   }
@@ -1087,19 +1098,36 @@ export default function ClipperStudio() {
           
         } else if (project.status === 'processing') {
           // Use actual progress and message from backend
-          const actualProgress = project.progress || 0;
+          const actualProgress = project.analytics?.progressPercentage || project.progress || 0;
           const actualStatus = project.status;
           const actualMessage = project.progressMessage;
           
           console.log(`🔄 [POLLING] Project ${projectId} progress: ${actualProgress}% - "${actualMessage}" - status: ${actualStatus}`);
-          console.log(`🔄 [POLLING] Full project data:`, project);
-          
+          console.log(`🔄 [POLLING] Raw project data:`, project);
+          console.log(`🔄 [POLLING] Analytics data:`, project.analytics);
+
           // Update with actual backend values instead of hardcoded ones
-          updateProject(projectId, { 
-            progress: actualProgress, 
+          updateProject(projectId, {
+            progress: actualProgress,
             status: actualStatus,
-            progressMessage: actualMessage 
+            progressMessage: actualMessage
           });
+
+          // Also update the server data cache to ensure React Query shows updated data
+          queryClient.setQueryData(
+            [CLIPPER_QUERY_KEYS.projects],
+            (oldData) => {
+              if (!oldData?.projects) return oldData;
+              return {
+                ...oldData,
+                projects: oldData.projects.map(p =>
+                  p.id === projectId
+                    ? { ...p, progress: actualProgress, status: actualStatus, progressMessage: actualMessage }
+                    : p
+                )
+              };
+            }
+          );
           
           console.log(`✅ [POLLING] Updated project ${projectId} in store`);
         }
