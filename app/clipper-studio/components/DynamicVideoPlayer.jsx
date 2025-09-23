@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTemplateStore } from '@/app/lib/store/templateStore';
 
-// Google Fonts configuration (same as previous system)
+// Smart Caption Management - Font configuration
 const CAPTION_FONTS = {
   roboto: {
     name: "Roboto",
@@ -11,7 +11,7 @@ const CAPTION_FONTS = {
   },
   montserrat: {
     name: "Montserrat",
-    family: "Montserrat", 
+    family: "Montserrat",
     weight: "800",
     cssClass: "font-montserrat-caption"
   },
@@ -32,6 +32,25 @@ const CAPTION_FONTS = {
     family: "Noto Sans",
     weight: "700",
     cssClass: "font-noto-sans-caption"
+  },
+  // New Smart Caption Management fonts
+  bebasNeue: {
+    name: "Bebas Neue",
+    family: "Bebas Neue",
+    weight: "400",
+    cssClass: "font-bebas-neue-caption"
+  },
+  anton: {
+    name: "Anton",
+    family: "Anton",
+    weight: "400",
+    cssClass: "font-anton-caption"
+  },
+  oswald: {
+    name: "Oswald",
+    family: "Oswald",
+    weight: "600",
+    cssClass: "font-oswald-caption"
   }
 };
 
@@ -56,6 +75,9 @@ export default function DynamicVideoPlayer({
   // WebVTT track URL for this clip
   const captionUrl = `/api/clipper-studio/captions/${clipId}`;
 
+  console.log(`📝 [VIDEO-PLAYER] Setting up captions for clip ${clipId}`);
+  console.log(`📝 [VIDEO-PLAYER] Caption URL: ${captionUrl}`);
+
   useEffect(() => {
     const video = videoRef.current;
     const track = trackRef.current;
@@ -75,9 +97,10 @@ export default function DynamicVideoPlayer({
     const handleTrackLoad = () => {
       console.log('📝 [VIDEO-PLAYER] Captions loaded successfully');
       setCaptionsLoaded(true);
-      
-      // Set track mode based on showCaptions state
-      track.mode = showCaptions ? 'showing' : 'hidden';
+
+      // Force track to showing mode for Smart Caption Management
+      track.mode = 'showing';
+      console.log(`📝 [VIDEO-PLAYER] Track mode forced to: ${track.mode} for Smart Caption Management`);
     };
 
     const handleTrackError = (e) => {
@@ -106,7 +129,9 @@ export default function DynamicVideoPlayer({
   useEffect(() => {
     const track = trackRef.current;
     if (track && captionsLoaded) {
-      track.mode = showCaptions ? 'showing' : 'hidden';
+      // Force showing for Smart Caption Management
+      track.mode = 'showing';
+      console.log(`📝 [VIDEO-PLAYER] Caption visibility updated: mode=${track.mode} (forced for Smart Caption Management)`);
     }
   }, [showCaptions, captionsLoaded]);
 
@@ -114,6 +139,8 @@ export default function DynamicVideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    console.log(`🎨 [VIDEO-PLAYER] Applying font: ${captionFont}`);
 
     // Remove previous font classes
     Object.values(CAPTION_FONTS).forEach(font => {
@@ -123,6 +150,8 @@ export default function DynamicVideoPlayer({
     // Add current font class
     const currentFont = CAPTION_FONTS[captionFont] || CAPTION_FONTS.roboto;
     video.classList.add(currentFont.cssClass);
+
+    console.log(`🎨 [VIDEO-PLAYER] Font class applied: ${currentFont.cssClass}, Video classes: ${video.className}`);
 
   }, [captionFont]);
 
@@ -159,7 +188,7 @@ export default function DynamicVideoPlayer({
       >
         <source src={videoUrl} type="video/mp4" />
         
-        {/* WebVTT caption track */}
+        {/* WebVTT caption track - Smart Caption Management */}
         <track
           ref={trackRef}
           kind="captions"

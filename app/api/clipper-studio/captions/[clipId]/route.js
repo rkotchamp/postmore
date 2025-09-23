@@ -61,14 +61,24 @@ export async function GET(request, { params }) {
       });
     }
 
+    // Get position from query parameters
+    const url = new URL(request.url);
+    const position = url.searchParams.get('position') || 'bottom';
+
     // Generate WebVTT for this specific clip
+    console.log(`🎬 [CAPTIONS-API] Generating WebVTT for clip ${clipId}:`);
+    console.log(`  - Clip timing: ${clip.startTime}s - ${clip.endTime}s (${clip.endTime - clip.startTime}s duration)`);
+    console.log(`  - Total project segments: ${project.transcription.segments?.length || 0}`);
+    console.log(`  - Position: ${position}`);
+
     const webvttContent = generateClipWebVTT({
       startTime: clip.startTime,
       endTime: clip.endTime,
       projectId: clip.projectId
-    }, project.transcription);
+    }, project.transcription, { position });
 
-    console.log(`✅ [CAPTIONS-API] Generated WebVTT for clip ${clipId}`);
+    console.log(`✅ [CAPTIONS-API] Generated WebVTT for clip ${clipId} (${webvttContent.length} characters)`);
+    console.log(`📝 [CAPTIONS-API] WebVTT preview: ${webvttContent.substring(0, 200)}...`);
 
     // Return WebVTT file with proper headers
     return new Response(webvttContent, {

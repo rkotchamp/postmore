@@ -21,6 +21,7 @@ import {
 import { useTemplateStore } from "@/app/lib/store/templateStore";
 import { useClipsQuery, useBestPreviewVideo } from "@/app/hooks/useClipsQuery";
 import { TemplateCardsSkeletonGrid } from "./TemplateCardSkeleton";
+import FontSelector from "./FontSelector";
 
 // Template Card Component with Video Preview - Memoized to prevent unnecessary re-renders
 const TemplateCard = memo(function TemplateCard({ template, isSelected, onSelect, className, bestPreviewVideo, overlaySettings }) {
@@ -711,7 +712,10 @@ export default function TemplateFloatingSidebar({
           )}>
             {expanded ? (
               <div>
-                <h2 className="text-lg font-semibold text-foreground mb-1">Templates</h2>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-lg font-semibold text-foreground">Templates</h2>
+                  <FontSelector />
+                </div>
                 {/* Instruction text under Templates title */}
                 {selectedTemplate && selectedTemplate !== 'default' && (
                   <p className="text-xs text-muted-foreground mb-4">
@@ -1110,7 +1114,7 @@ export default function TemplateFloatingSidebar({
                 ) : (
                   <>
                     <Palette className="w-3 h-3 mr-2" />
-                    {isTemplateApplied ? 'Update Template' : 'Apply Template'}
+                    {isTemplateApplied ? 'Apply Changes' : 'Apply Changes'}
                   </>
                 )}
               </Button>
@@ -1130,7 +1134,7 @@ export default function TemplateFloatingSidebar({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left">
-                  {isTemplateApplied ? 'Update Template' : 'Apply Template'}
+                  {isTemplateApplied ? 'Apply Changes' : 'Apply Changes'}
                 </TooltipContent>
               </Tooltip>
             )}

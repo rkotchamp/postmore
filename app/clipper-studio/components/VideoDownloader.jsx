@@ -99,7 +99,7 @@ export default function ProcessingView({
         />
 
         {/* Progress Overlay */}
-        {(progress < 100 && status !== 'failed') ? (
+        {(progress < 100 && status !== 'failed' && status !== 'completed') ? (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
             <div className="text-center">
               {/* Circular Progress */}

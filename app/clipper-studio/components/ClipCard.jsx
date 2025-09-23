@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useEffect } from "react";
+import '../styles/captions.css';
 import {
   Download,
   Share2,
@@ -13,6 +14,7 @@ import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Play, User } from "lucide-react";
+import { useTemplateStore } from "@/app/lib/store/templateStore";
 import { useUpdateClip } from '@/app/hooks/useUpdateClip';
 
 export default function ClipCard({
@@ -49,8 +51,46 @@ export default function ClipCard({
   const [selectedText, setSelectedText] = useState('');
   const [selectedTextColor, setSelectedTextColor] = useState('#ffffff');
   const [showTextColorPicker, setShowTextColorPicker] = useState(false);
-  
-  
+
+  // Smart Caption Management - Get settings from template store
+  const captionFont = useTemplateStore((state) => state.captionFont) || 'roboto';
+  const captionSize = useTemplateStore((state) => state.captionSize) || 'medium';
+  const captionPosition = useTemplateStore((state) => state.captionPosition) || 'bottom';
+
+  // Font CSS mapping (same as DynamicVideoPlayer)
+  const CAPTION_FONTS = {
+    roboto: { cssClass: "font-roboto-caption" },
+    montserrat: { cssClass: "font-montserrat-caption" },
+    poppins: { cssClass: "font-poppins-caption" },
+    inter: { cssClass: "font-inter-caption" },
+    notoSans: { cssClass: "font-noto-sans-caption" },
+    bebasNeue: { cssClass: "font-bebas-neue-caption" },
+    anton: { cssClass: "font-anton-caption" },
+    oswald: { cssClass: "font-oswald-caption" }
+  };
+
+  // Get current CSS classes for font, size, and position
+  const currentFontClass = CAPTION_FONTS[captionFont]?.cssClass || CAPTION_FONTS.roboto.cssClass;
+  const currentSizeClass = `caption-size-${captionSize}`;
+  const currentPositionClass = `caption-position-${captionPosition}`;
+  const allCaptionClasses = `${currentFontClass} ${currentSizeClass} ${currentPositionClass}`;
+
+  // Generate dynamic WebVTT URL with position parameter and cache-busting
+  const captionUrl = `/api/clipper-studio/captions/${clip.id}?position=${captionPosition}&t=${Date.now()}`;
+
+  // Debug logging for Smart Caption Management
+  console.log(`🎨 [CLIP-CARD] Caption setup for clip ${clip.id}:`, {
+    captionFont,
+    captionSize,
+    captionPosition,
+    currentFontClass,
+    currentSizeClass,
+    currentPositionClass,
+    allCaptionClasses,
+    captionUrl
+  });
+
+
   // TanStack Query mutation for updating clips
   const updateClipMutation = useUpdateClip(projectId);
 
@@ -580,7 +620,7 @@ export default function ClipCard({
                     <img
                       src={clip.thumbnail}
                       alt="Video thumbnail"
-                      className="w-auto h-auto max-w-full max-h-full object-contain transition-opacity duration-300"
+                      className={`w-auto h-auto max-w-full max-h-full object-contain transition-opacity duration-300 ${allCaptionClasses}`}
                       onLoad={() => {
                         setVideoLoaded(true);
                         setIsVideoLoading(false);
@@ -593,7 +633,7 @@ export default function ClipCard({
                     />
                   ) : !isPlaying ? (
                     <video
-                      className="w-auto h-auto max-w-full max-h-full object-contain"
+                      className={`w-auto h-auto max-w-full max-h-full object-contain ${allCaptionClasses}`}
                       preload="metadata"
                       muted
                       playsInline
@@ -601,17 +641,67 @@ export default function ClipCard({
                         backgroundColor: '#000',
                         filter: getVideoFilter
                       }}
-                      onLoadedMetadata={() => {
+                      onLoadedMetadata={(e) => {
                         setVideoLoaded(true);
                         setIsVideoLoading(false);
+                      }}
+                      onCanPlay={(e) => {
+                        // Force enable captions after video can play - Smart Caption Management
+                        const video = e.target;
+                        console.log(`📺 [CLIP-CARD] Video can play, checking text tracks...`);
+
+                        if (video.textTracks && video.textTracks.length > 0) {
+                          const track = video.textTracks[0];
+                          // Force show captions with Firefox workaround
+                          track.mode = 'showing';
+                          video.textTracks[0].mode = 'showing';
+                          console.log(`📺 [CLIP-CARD] Forced caption track mode to: ${track.mode}`);
+
+                          // Add track event listeners for better debugging
+                          track.addEventListener('load', () => {
+                            console.log(`📺 [CLIP-CARD] Caption track loaded successfully`);
+                            track.mode = 'showing';
+                            // Firefox workaround - set via video.textTracks as well
+                            video.textTracks[0].mode = 'showing';
+                          });
+
+                          track.addEventListener('error', (err) => {
+                            console.error(`📺 [CLIP-CARD] Caption track failed to load:`, err);
+                          });
+                        } else {
+                          console.warn(`📺 [CLIP-CARD] No text tracks found on video element`);
+                        }
+                      }}
+                      onSeeked={(e) => {
+                        // Force captions to reload after seeking - Smart Caption Management
+                        const video = e.target;
+                        console.log(`📺 [CLIP-CARD] Video seeked, forcing caption reload...`);
+
+                        if (video.textTracks && video.textTracks.length > 0) {
+                          const track = video.textTracks[0];
+                          track.mode = 'disabled';
+                          setTimeout(() => {
+                            track.mode = 'showing';
+                            console.log(`📺 [CLIP-CARD] Caption track reloaded after seek`);
+                          }, 100);
+                        }
                       }}
                       onError={() => setVideoError(true)}
                     >
                       <source src={videoUrl} type="video/mp4" />
+                      {/* WebVTT caption track for Smart Caption Management */}
+                      <track
+                        kind="captions"
+                        src={captionUrl}
+                        srcLang="en"
+                        label="English Captions"
+                        default
+                        key={captionUrl}
+                      />
                     </video>
                   ) : (
                     <video
-                      className="w-auto h-auto max-w-full max-h-full object-contain transition-opacity duration-300"
+                      className={`w-auto h-auto max-w-full max-h-full object-contain transition-opacity duration-300 ${allCaptionClasses}`}
                       controls
                       playsInline
                       autoPlay
@@ -629,8 +719,40 @@ export default function ClipCard({
                         setIsVideoLoading(false);
                         setVideoLoaded(true);
                       }}
+                      onCanPlay={(e) => {
+                        // Force enable captions after video can play - Smart Caption Management
+                        const video = e.target;
+                        console.log(`📺 [CLIP-CARD] Autoplay video can play, checking text tracks...`);
+
+                        if (video.textTracks && video.textTracks.length > 0) {
+                          const track = video.textTracks[0];
+                          track.mode = 'showing';
+                          console.log(`📺 [CLIP-CARD] Forced autoplay caption track mode to: ${track.mode}`);
+
+                          // Add track event listeners for better debugging
+                          track.addEventListener('load', () => {
+                            console.log(`📺 [CLIP-CARD] Autoplay caption track loaded successfully`);
+                            track.mode = 'showing';
+                          });
+
+                          track.addEventListener('error', (err) => {
+                            console.error(`📺 [CLIP-CARD] Autoplay caption track failed to load:`, err);
+                          });
+                        } else {
+                          console.warn(`📺 [CLIP-CARD] No text tracks found on autoplay video element`);
+                        }
+                      }}
                     >
                       <source src={videoUrl} type="video/mp4" />
+                      {/* WebVTT caption track for Smart Caption Management */}
+                      <track
+                        kind="captions"
+                        src={captionUrl}
+                        srcLang="en"
+                        label="English Captions"
+                        default
+                        key={captionUrl}
+                      />
                     </video>
                   )}
                 </div>
@@ -658,7 +780,7 @@ export default function ClipCard({
                 ) : !isPlaying ? (
                   <div className="w-full h-full relative">
                     <video
-                      className="w-full h-full object-cover"
+                      className={`w-full h-full object-cover ${allCaptionClasses}`}
                       preload="metadata"
                       muted
                       playsInline
@@ -666,18 +788,68 @@ export default function ClipCard({
                         backgroundColor: '#000',
                         filter: getVideoFilter
                       }}
-                      onLoadedMetadata={() => {
+                      onLoadedMetadata={(e) => {
                         setVideoLoaded(true);
                         setIsVideoLoading(false);
+                      }}
+                      onCanPlay={(e) => {
+                        // Force enable captions after video can play - Smart Caption Management
+                        const video = e.target;
+                        console.log(`📺 [CLIP-CARD] Video can play, checking text tracks...`);
+
+                        if (video.textTracks && video.textTracks.length > 0) {
+                          const track = video.textTracks[0];
+                          // Force show captions with Firefox workaround
+                          track.mode = 'showing';
+                          video.textTracks[0].mode = 'showing';
+                          console.log(`📺 [CLIP-CARD] Forced caption track mode to: ${track.mode}`);
+
+                          // Add track event listeners for better debugging
+                          track.addEventListener('load', () => {
+                            console.log(`📺 [CLIP-CARD] Caption track loaded successfully`);
+                            track.mode = 'showing';
+                            // Firefox workaround - set via video.textTracks as well
+                            video.textTracks[0].mode = 'showing';
+                          });
+
+                          track.addEventListener('error', (err) => {
+                            console.error(`📺 [CLIP-CARD] Caption track failed to load:`, err);
+                          });
+                        } else {
+                          console.warn(`📺 [CLIP-CARD] No text tracks found on video element`);
+                        }
+                      }}
+                      onSeeked={(e) => {
+                        // Force captions to reload after seeking - Smart Caption Management
+                        const video = e.target;
+                        console.log(`📺 [CLIP-CARD] Video seeked, forcing caption reload...`);
+
+                        if (video.textTracks && video.textTracks.length > 0) {
+                          const track = video.textTracks[0];
+                          track.mode = 'disabled';
+                          setTimeout(() => {
+                            track.mode = 'showing';
+                            console.log(`📺 [CLIP-CARD] Caption track reloaded after seek`);
+                          }, 100);
+                        }
                       }}
                       onError={() => setVideoError(true)}
                     >
                       <source src={videoUrl} type="video/mp4" />
+                      {/* WebVTT caption track for Smart Caption Management */}
+                      <track
+                        kind="captions"
+                        src={captionUrl}
+                        srcLang="en"
+                        label="English Captions"
+                        default
+                        key={captionUrl}
+                      />
                     </video>
                   </div>
                 ) : (
                   <video
-                    className="w-full h-full object-contain transition-opacity duration-300"
+                    className={`w-full h-full object-contain transition-opacity duration-300 ${allCaptionClasses}`}
                     controls
                     playsInline
                     autoPlay
@@ -695,8 +867,39 @@ export default function ClipCard({
                       setIsVideoLoading(false);
                       setVideoLoaded(true);
                     }}
+                    onCanPlay={(e) => {
+                      // Force enable captions after video can play - Smart Caption Management
+                      const video = e.target;
+                      console.log(`📺 [CLIP-CARD] Vertical autoplay video can play, checking text tracks...`);
+
+                      if (video.textTracks && video.textTracks.length > 0) {
+                        const track = video.textTracks[0];
+                        track.mode = 'showing';
+                        console.log(`📺 [CLIP-CARD] Forced vertical autoplay caption track mode to: ${track.mode}`);
+
+                        // Add track event listeners for better debugging
+                        track.addEventListener('load', () => {
+                          console.log(`📺 [CLIP-CARD] Vertical autoplay caption track loaded successfully`);
+                          track.mode = 'showing';
+                        });
+
+                        track.addEventListener('error', (err) => {
+                          console.error(`📺 [CLIP-CARD] Vertical autoplay caption track failed to load:`, err);
+                        });
+                      } else {
+                        console.warn(`📺 [CLIP-CARD] No text tracks found on vertical autoplay video element`);
+                      }
+                    }}
                   >
                     <source src={videoUrl} type="video/mp4" />
+                    {/* WebVTT caption track for Smart Caption Management */}
+                    <track
+                      kind="captions"
+                      src={captionUrl}
+                      srcLang="en"
+                      label="English Captions"
+                      default
+                    />
                   </video>
                 )}
               </>

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import puppeteer from "puppeteer";
+import { applyCaptionsWithFont } from "@/app/lib/video-processing/services/captionService";
+import connectToMongoose from "@/app/lib/db/mongoose";
+import VideoClip from "@/app/models/VideoClip";
+import VideoProject from "@/app/models/VideoProject";
 
 /**
  * POST /api/download-video-with-template

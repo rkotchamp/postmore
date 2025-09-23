@@ -17,7 +17,13 @@ export const useTemplateStore = create((set, get) => ({
   selectedText: '',
   selectedTextColor: '#ffffff',
   showTextColorPicker: false,
-  
+
+  // Smart Caption Management
+  captionFont: 'roboto', // Default font for captions
+  captionSize: 'medium', // Font size: small, medium, large
+  captionPosition: 'bottom', // Position: top, center, bottom
+  showCaptions: true, // Whether captions are visible
+
   // UI States
   expanded: false,
   previewCache: {},
@@ -43,7 +49,13 @@ export const useTemplateStore = create((set, get) => ({
   setSelectedText: (selectedText) => set({ selectedText }),
   setSelectedTextColor: (selectedTextColor) => set({ selectedTextColor }),
   setShowTextColorPicker: (show) => set({ showTextColorPicker: show }),
-  
+
+  // Smart Caption Management Actions
+  setCaptionFont: (captionFont) => set({ captionFont }),
+  setCaptionSize: (captionSize) => set({ captionSize }),
+  setCaptionPosition: (captionPosition) => set({ captionPosition }),
+  setShowCaptions: (showCaptions) => set({ showCaptions }),
+
   // UI Actions
   setExpanded: (expanded) => set({ expanded }),
   setPreviewCache: (cache) => set({ previewCache: cache }),
@@ -64,7 +76,11 @@ export const useTemplateStore = create((set, get) => ({
         bwBrightness: currentState.bwBrightness,
         overlayColor: currentState.overlayColor,
         overlayOpacity: currentState.overlayOpacity,
-        textColor: currentState.textColor
+        textColor: currentState.textColor,
+        captionFont: currentState.captionFont, // Include font selection in applied settings
+        captionSize: currentState.captionSize, // Include font size in applied settings
+        captionPosition: currentState.captionPosition, // Include position in applied settings
+        showCaptions: currentState.showCaptions
       },
       isTemplateApplied: true
     });
@@ -94,6 +110,8 @@ export const useTemplateStore = create((set, get) => ({
     selectedText: '',
     selectedTextColor: '#ffffff',
     showTextColorPicker: false,
+    captionFont: 'roboto',
+    showCaptions: true,
     previewCache: {}
   }),
 
@@ -125,6 +143,8 @@ export const useTemplateStore = create((set, get) => ({
     selectedText: '',
     selectedTextColor: '#ffffff',
     showTextColorPicker: false,
+    captionFont: 'roboto',
+    showCaptions: true,
     expanded: false,
     previewCache: {},
     bestPreviewVideo: null,

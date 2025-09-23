@@ -20,7 +20,7 @@ export const cutVideoClip = async (inputVideoPath, startTime, endTime, outputPat
   return new Promise((resolve, reject) => {
     const duration = endTime - startTime;
     const timestamp = Date.now();
-    const { aspectRatio = 'original', platform = 'none', captionData = null, enableCaptions = true, captionPosition = 'bottom' } = options;
+    const { aspectRatio = 'original', platform = 'none', captionData = null, enableCaptions = true, captionPosition = 'bottom', skipCaptionBurning = false } = options;
     
     // Initialize global filter script flags
     global.useFilterScript = false;
@@ -61,8 +61,8 @@ export const cutVideoClip = async (inputVideoPath, startTime, endTime, outputPat
       needsReencoding = true;
     }
     
-    // Add captions if provided and enabled
-    if (enableCaptions && captionData && captionData.captions && captionData.captions.length > 0) {
+    // Add captions if provided and enabled (but not if skipCaptionBurning is true)
+    if (enableCaptions && captionData && captionData.captions && captionData.captions.length > 0 && !skipCaptionBurning) {
       console.log(`📝 [CLIP-CUTTER] Adding captions: ${captionData.captions.length} caption segments`);
       console.log(`🎨 [CLIP-CUTTER] Caption platform: ${captionData.platform || platform}`);
       
@@ -141,6 +141,8 @@ export const cutVideoClip = async (inputVideoPath, startTime, endTime, outputPat
       } else {
         console.log(`⚠️ [CLIP-CUTTER] No caption filters generated (captions may be outside clip duration)`);
       }
+    } else if (enableCaptions && captionData && captionData.captions && captionData.captions.length > 0 && skipCaptionBurning) {
+      console.log(`⏭️ [CLIP-CUTTER] Caption burning skipped for Smart Caption Management - ${captionData.captions.length} captions preserved for later`);
     } else if (enableCaptions && (!captionData || !captionData.captions || captionData.captions.length === 0)) {
       console.log(`⚠️ [CLIP-CUTTER] Captions enabled but no caption data provided`);
     } else {
@@ -549,12 +551,13 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
         clipMeta.startTime,
         clipMeta.endTime,
         '/tmp',
-        { 
-          aspectRatio: '9:16', 
+        {
+          aspectRatio: '9:16',
           platform: captionStyle + '_vertical',
           captionData: captionData,
           enableCaptions: enableCaptions,
-          captionPosition: captionPosition
+          captionPosition: captionPosition,
+          skipCaptionBurning: true // Smart Caption Management - skip burning for post-processing font selection
         }
       );
       
@@ -572,12 +575,13 @@ export const processClipsFromMetadata = async (inputVideoPath, clipsMetadata, pr
         clipMeta.startTime,
         clipMeta.endTime,
         '/tmp',
-        { 
-          aspectRatio: '2.35:1', 
+        {
+          aspectRatio: '2.35:1',
           platform: captionStyle + '_cinematic',
           captionData: captionData,
           enableCaptions: enableCaptions,
-          captionPosition: captionPosition
+          captionPosition: captionPosition,
+          skipCaptionBurning: true // Smart Caption Management - skip burning for post-processing font selection
         }
       );
       

@@ -43,10 +43,20 @@ export function generateWebVTT(segments, options = {}) {
     title = 'Generated Captions',
     language = 'en',
     maxLineLength = 40,
-    maxDuration = 5.0 // Maximum caption display time in seconds
+    maxDuration = 5.0, // Maximum caption display time in seconds
+    position = 'bottom' // Caption position: top, center, bottom
   } = options;
 
-  console.log(`🎬 [WEBVTT] Generating WebVTT for ${segments.length} segments`);
+  console.log(`🎬 [WEBVTT] Generating WebVTT for ${segments.length} segments with position: ${position}`);
+
+  // Position mapping for WebVTT line settings
+  const positionSettings = {
+    top: 'line:10%',
+    center: 'line:50%',
+    bottom: 'line:90%'
+  };
+
+  const linePosition = positionSettings[position] || positionSettings.bottom;
 
   // WebVTT header
   let webvtt = 'WEBVTT\n';
@@ -72,9 +82,9 @@ export function generateWebVTT(segments, options = {}) {
     });
     if (currentLine) lines.push(currentLine);
 
-    // Create cue with optional identifier
+    // Create cue with optional identifier and position setting
     webvtt += `${index + 1}\n`;
-    webvtt += `${startTime} --> ${endTime}\n`;
+    webvtt += `${startTime} --> ${endTime} ${linePosition}\n`;
     webvtt += `${lines.join('\n')}\n\n`;
   });
 
@@ -86,9 +96,10 @@ export function generateWebVTT(segments, options = {}) {
  * Generate WebVTT for a specific clip from project transcription
  * @param {Object} clipData - Clip data with startTime, endTime, projectId
  * @param {Object} projectTranscription - Full project transcription
+ * @param {Object} options - Generation options including position
  * @returns {string} - WebVTT content for this clip
  */
-export function generateClipWebVTT(clipData, projectTranscription) {
+export function generateClipWebVTT(clipData, projectTranscription, options = {}) {
   console.log(`🎬 [WEBVTT] Generating clip WebVTT for ${clipData.startTime}s - ${clipData.endTime}s`);
 
   if (!projectTranscription || !projectTranscription.segments) {
@@ -96,26 +107,65 @@ export function generateClipWebVTT(clipData, projectTranscription) {
     return 'WEBVTT\n\nNOTE No captions available\n\n';
   }
 
-  // Filter segments that fall within clip timespan
+  // Filter segments that overlap with clip timespan (more inclusive)
   const clipSegments = projectTranscription.segments.filter(segment =>
-    segment.start >= clipData.startTime && segment.end <= clipData.endTime
+    segment.start < clipData.endTime && segment.end > clipData.startTime
   );
+
+  console.log(`🎬 [WEBVTT] Found ${clipSegments.length} overlapping segments out of ${projectTranscription.segments.length} total`);
 
   if (clipSegments.length === 0) {
     console.log(`⚠️ [WEBVTT] No segments found for clip timespan`);
     return 'WEBVTT\n\nNOTE No captions available for this clip\n\n';
   }
 
-  // Adjust timestamps relative to clip start (0-duration)
-  const adjustedSegments = clipSegments.map(segment => ({
-    start: segment.start - clipData.startTime,
-    end: segment.end - clipData.startTime,
-    text: segment.text
-  }));
+  // Adjust timestamps relative to clip start and clamp to clip boundaries
+  const adjustedSegments = clipSegments.map(segment => {
+    // Clamp segment times to clip boundaries
+    const clampedStart = Math.max(segment.start, clipData.startTime);
+    const clampedEnd = Math.min(segment.end, clipData.endTime);
+
+    // Adjust relative to clip start (0-duration)
+    const adjustedStart = clampedStart - clipData.startTime;
+    const adjustedEnd = clampedEnd - clipData.startTime;
+
+    return {
+      start: Math.max(0, adjustedStart), // Ensure non-negative
+      end: Math.min(adjustedEnd, clipData.endTime - clipData.startTime), // Ensure within clip duration
+      text: segment.text
+    };
+  }).filter(segment => segment.end > segment.start); // Remove invalid segments
+
+  console.log(`🎬 [WEBVTT] Adjusted ${adjustedSegments.length} segments for clip timing`);
+
+  const clipDuration = clipData.endTime - clipData.startTime;
+  console.log(`🎬 [WEBVTT] Clip duration: ${clipDuration}s`);
+
+  if (adjustedSegments.length > 0) {
+    const lastSegment = adjustedSegments[adjustedSegments.length - 1];
+    const lastCaptionEnd = lastSegment.end;
+
+    console.log(`🎬 [WEBVTT] Last caption ends at: ${lastCaptionEnd}s`);
+    console.log(`🎬 [WEBVTT] Gap after captions: ${clipDuration - lastCaptionEnd}s`);
+
+    // If there's a significant gap (>2s), extend the last caption
+    if (clipDuration - lastCaptionEnd > 2) {
+      console.log(`🎬 [WEBVTT] Extending last caption to fill video duration`);
+      lastSegment.end = clipDuration;
+    }
+  }
+
+  console.log(`🎬 [WEBVTT] First few segments:`, adjustedSegments.slice(0, 3).map(s => ({
+    start: s.start,
+    end: s.end,
+    duration: s.end - s.start,
+    text: s.text.substring(0, 30) + '...'
+  })));
 
   return generateWebVTT(adjustedSegments, {
     title: `Clip ${clipData.startTime}s-${clipData.endTime}s`,
-    language: projectTranscription.language || 'en'
+    language: projectTranscription.language || 'en',
+    position: options.position || 'bottom'
   });
 }
 
