@@ -46,8 +46,17 @@ export function ShareProgressModal() {
 
   // Don't auto-close - wait for user to click "All done!" button
 
+  // Handle modal close
+  const handleClose = () => {
+    // Only allow closing if not currently sharing
+    if (!isSharing) {
+      setShowProgressModal(false);
+      completeSharing();
+    }
+  };
+
   return (
-    <Dialog open={showProgressModal} onOpenChange={() => {}}>
+    <Dialog open={showProgressModal} onOpenChange={handleClose}>
       <DialogContent
         className="max-w-md"
         onPointerDownOutside={(e) => isSharing && e.preventDefault()}
@@ -92,11 +101,8 @@ export function ShareProgressModal() {
           <div className="text-center space-y-3 max-w-sm">
             {!isSharing && completed > 0 ? (
               <button
-                onClick={() => {
-                  setShowProgressModal(false);
-                  completeSharing();
-                }}
-                className="text-lg font-semibold text-foreground hover:text-primary transition-colors px-6 py-2 rounded-lg hover:bg-primary/5"
+                onClick={handleClose}
+                className="text-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition-all px-8 py-3 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
               >
                 {progressMessage}
               </button>
