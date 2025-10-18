@@ -56,6 +56,7 @@ export default function ClipCard({
   const captionFont = useTemplateStore((state) => state.captionFont) || 'roboto';
   const captionSize = useTemplateStore((state) => state.captionSize) || 'medium';
   const captionPosition = useTemplateStore((state) => state.captionPosition) || 'bottom';
+  const captionWeight = useTemplateStore((state) => state.captionWeight) || 'normal';
 
   // Font CSS mapping (same as DynamicVideoPlayer)
   const CAPTION_FONTS = {
@@ -63,29 +64,93 @@ export default function ClipCard({
     montserrat: { cssClass: "font-montserrat-caption" },
     poppins: { cssClass: "font-poppins-caption" },
     inter: { cssClass: "font-inter-caption" },
+    raleway: { cssClass: "font-raleway-caption" },
     notoSans: { cssClass: "font-noto-sans-caption" },
     bebasNeue: { cssClass: "font-bebas-neue-caption" },
     anton: { cssClass: "font-anton-caption" },
     oswald: { cssClass: "font-oswald-caption" }
   };
 
-  // Get current CSS classes for font, size, and position
+  // Get current CSS classes for font, size, position, and weight
   const currentFontClass = CAPTION_FONTS[captionFont]?.cssClass || CAPTION_FONTS.roboto.cssClass;
   const currentSizeClass = `caption-size-${captionSize}`;
   const currentPositionClass = `caption-position-${captionPosition}`;
-  const allCaptionClasses = `${currentFontClass} ${currentSizeClass} ${currentPositionClass}`;
+  const currentWeightClass = `caption-weight-${captionWeight}`;
+  const allCaptionClasses = `${currentFontClass} ${currentSizeClass} ${currentPositionClass} ${currentWeightClass}`;
 
-  // Generate dynamic WebVTT URL with position parameter and cache-busting
-  const captionUrl = `/api/clipper-studio/captions/${clip.id}?position=${captionPosition}&t=${Date.now()}`;
+  // Generate dynamic WebVTT URL with position parameter and stable cache-busting
+  const captionUrl = useMemo(() =>
+    `/api/clipper-studio/captions/${clip.id}?position=${captionPosition}&t=${Math.floor(Date.now() / 1000)}`,
+    [clip.id, captionPosition]
+  );
+
+  // Stable caption track handler
+  const handleCaptionTrack = useCallback((video, context = 'unknown') => {
+    if (!video?.textTracks || video.textTracks.length === 0) {
+      console.warn(`📺 [CLIP-CARD] No text tracks found on ${context} video element`);
+      return;
+    }
+
+    const track = video.textTracks[0];
+    console.log(`📺 [CLIP-CARD] Setting up captions for ${context}, track readyState: ${track.readyState}`);
+
+    // Force show captions immediately
+    track.mode = 'showing';
+
+    // Add one-time load listener if not already added
+    if (!track.hasLoadListener) {
+      track.addEventListener('load', () => {
+        console.log(`📺 [CLIP-CARD] ${context} caption track loaded successfully`);
+        track.mode = 'showing';
+      }, { once: true });
+
+      track.addEventListener('error', (err) => {
+        console.error(`📺 [CLIP-CARD] ${context} caption track failed to load:`, err);
+      }, { once: true });
+
+      track.hasLoadListener = true;
+    }
+
+    console.log(`📺 [CLIP-CARD] Forced ${context} caption track mode to: ${track.mode}`);
+  }, []);
+
+  // Stable event handlers
+  const handleManualCanPlay = useCallback((e) => {
+    handleCaptionTrack(e.target, 'manual');
+  }, [handleCaptionTrack]);
+
+  const handleAutoPlayCanPlay = useCallback((e) => {
+    handleCaptionTrack(e.target, 'autoplay');
+  }, [handleCaptionTrack]);
+
+  const handleVerticalCanPlay = useCallback((e) => {
+    handleCaptionTrack(e.target, 'vertical');
+  }, [handleCaptionTrack]);
+
+  const handleVideoSeeked = useCallback((e) => {
+    const video = e.target;
+    console.log(`📺 [CLIP-CARD] Video seeked, forcing caption reload...`);
+
+    if (video.textTracks && video.textTracks.length > 0) {
+      const track = video.textTracks[0];
+      track.mode = 'disabled';
+      setTimeout(() => {
+        track.mode = 'showing';
+        console.log(`📺 [CLIP-CARD] Caption track reloaded after seek`);
+      }, 100);
+    }
+  }, []);
 
   // Debug logging for Smart Caption Management
   console.log(`🎨 [CLIP-CARD] Caption setup for clip ${clip.id}:`, {
     captionFont,
     captionSize,
     captionPosition,
+    captionWeight,
     currentFontClass,
     currentSizeClass,
     currentPositionClass,
+    currentWeightClass,
     allCaptionClasses,
     captionUrl
   });
@@ -378,7 +443,7 @@ export default function ClipCard({
   const handleDownload = useCallback(async (e) => {
     e.stopPropagation();
     
-    console.log('🔄 [DOWNLOAD] Starting download process for clip:', clip._id);
+    console.log('🔄 [DOWNLOAD] Starting download process for clip:', clip.id);
     console.log('🔄 [DOWNLOAD] Clip data:', {
       title: clip.title,
       videoUrl,
@@ -424,26 +489,123 @@ export default function ClipCard({
           settings: appliedSettings, // Logo already converted to base64 on upload
           aspectRatio: aspectRatio
         };
+
+        // Prepare caption data for burning - fetch from project transcription
+        let captionData = null;
+        let captionSettings = null;
+
+        // Fetch project transcription data
+        console.log('🔍 [CAPTION-BURN] Fetching project transcription for clip burning...');
+        console.log('🔍 [CAPTION-BURN] ProjectId:', projectId);
+
+        if (!projectId) {
+          console.error('❌ [CAPTION-BURN] ProjectId is undefined or null!');
+        } else {
+          try {
+            const projectUrl = `/api/clipper-studio/projects/${projectId}`;
+            console.log('🔍 [CAPTION-BURN] Fetching from:', projectUrl);
+
+            const projectResponse = await fetch(projectUrl);
+            console.log('🔍 [CAPTION-BURN] Response status:', projectResponse.status);
+
+            if (projectResponse.ok) {
+              const response = await projectResponse.json();
+              console.log('🔍 [CAPTION-BURN] Response data:', response);
+              const projectData = response.project; // Extract project from response
+
+              console.log('🔍 [DEBUG] Project transcription data:', {
+                hasTranscription: !!projectData.transcription,
+                hasSegments: !!(projectData.transcription?.segments),
+                segmentsLength: projectData.transcription?.segments?.length || 0
+              });
+
+              // Check if project has valid transcription segments
+              if (projectData.transcription?.segments && projectData.transcription.segments.length > 0) {
+                console.log('🔥 [CAPTION-BURN] Found project transcription, filtering segments for clip timing');
+
+                // Filter segments that overlap with this clip's time range
+                const clipStart = clip.startTime;
+                const clipEnd = clip.endTime;
+
+                const clipSegments = projectData.transcription.segments
+                  .filter(segment => {
+                    // Include segment if it overlaps with clip time range
+                    return segment.start < clipEnd && segment.end > clipStart;
+                  })
+                  .map(segment => {
+                    // Adjust segment timing relative to clip start (0-based)
+                    return {
+                      startTime: Math.max(0, segment.start - clipStart),
+                      endTime: Math.min(clip.duration, segment.end - clipStart),
+                      text: segment.text
+                    };
+                  });
+
+                if (clipSegments.length > 0) {
+                  captionData = {
+                    captions: clipSegments,
+                    totalDuration: clip.duration || 30,
+                    platform: 'tiktok'
+                  };
+
+                  // Get current caption settings from the template store
+                  captionSettings = {
+                    font: captionFont,
+                    size: captionSize,
+                    position: captionPosition,
+                    weight: captionWeight
+                  };
+
+                  console.log('✅ [CAPTION-BURN] Caption data prepared:', {
+                    segmentCount: captionData.captions.length,
+                    totalDuration: captionData.totalDuration,
+                    firstSegment: captionData.captions[0]
+                  });
+                  console.log('✅ [CAPTION-BURN] Caption settings:', captionSettings);
+                } else {
+                  console.log('⚠️ [CAPTION-BURN] No segments found within clip time range');
+                }
+              } else {
+                console.log('⚠️ [CAPTION-BURN] Project has no transcription segments');
+              }
+            } else {
+              console.log('⚠️ [CAPTION-BURN] Failed to fetch project data:', projectResponse.status);
+            }
+          } catch (error) {
+            console.error('❌ [CAPTION-BURN] Error fetching project transcription:', error);
+            console.error('❌ [CAPTION-BURN] Error details:', error.message, error.stack);
+          }
+        }
         
         console.log('🎬 [TEMPLATE-DOWNLOAD] Processing with data:', templateData);
-        console.log('🎬 [TEMPLATE-DOWNLOAD] Request payload:', {
-          clipId: clip._id,
+
+        // Build request payload with optional caption data
+        const requestPayload = {
+          clipId: clip.id,
           videoUrl: videoUrl,
           filename: filename,
           templateData: templateData
-        });
-        
-        setDownloadProgress('Processing video with template...');
-        
+        };
+
+        // Add caption data if available
+        if (captionData && captionSettings) {
+          requestPayload.captionData = captionData;
+          requestPayload.captionSettings = captionSettings;
+          console.log('🔥 [CAPTION-BURN] Including caption burning in request');
+        }
+
+        console.log('🎬 [TEMPLATE-DOWNLOAD] Request payload:', requestPayload);
+
+        if (captionData) {
+          setDownloadProgress(`Processing video with template and ${captionData.captions.length} captions...`);
+        } else {
+          setDownloadProgress('Processing video with template...');
+        }
+
         const response = await fetch('/api/download-video-with-template', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clipId: clip._id,
-            videoUrl: videoUrl,
-            filename: filename,
-            templateData: templateData
-          }),
+          body: JSON.stringify(requestPayload),
         });
         
         console.log('📡 [TEMPLATE-DOWNLOAD] API Response:', {
@@ -645,33 +807,7 @@ export default function ClipCard({
                         setVideoLoaded(true);
                         setIsVideoLoading(false);
                       }}
-                      onCanPlay={(e) => {
-                        // Force enable captions after video can play - Smart Caption Management
-                        const video = e.target;
-                        console.log(`📺 [CLIP-CARD] Video can play, checking text tracks...`);
-
-                        if (video.textTracks && video.textTracks.length > 0) {
-                          const track = video.textTracks[0];
-                          // Force show captions with Firefox workaround
-                          track.mode = 'showing';
-                          video.textTracks[0].mode = 'showing';
-                          console.log(`📺 [CLIP-CARD] Forced caption track mode to: ${track.mode}`);
-
-                          // Add track event listeners for better debugging
-                          track.addEventListener('load', () => {
-                            console.log(`📺 [CLIP-CARD] Caption track loaded successfully`);
-                            track.mode = 'showing';
-                            // Firefox workaround - set via video.textTracks as well
-                            video.textTracks[0].mode = 'showing';
-                          });
-
-                          track.addEventListener('error', (err) => {
-                            console.error(`📺 [CLIP-CARD] Caption track failed to load:`, err);
-                          });
-                        } else {
-                          console.warn(`📺 [CLIP-CARD] No text tracks found on video element`);
-                        }
-                      }}
+                      onCanPlay={handleManualCanPlay}
                       onSeeked={(e) => {
                         // Force captions to reload after seeking - Smart Caption Management
                         const video = e.target;
@@ -792,33 +928,7 @@ export default function ClipCard({
                         setVideoLoaded(true);
                         setIsVideoLoading(false);
                       }}
-                      onCanPlay={(e) => {
-                        // Force enable captions after video can play - Smart Caption Management
-                        const video = e.target;
-                        console.log(`📺 [CLIP-CARD] Video can play, checking text tracks...`);
-
-                        if (video.textTracks && video.textTracks.length > 0) {
-                          const track = video.textTracks[0];
-                          // Force show captions with Firefox workaround
-                          track.mode = 'showing';
-                          video.textTracks[0].mode = 'showing';
-                          console.log(`📺 [CLIP-CARD] Forced caption track mode to: ${track.mode}`);
-
-                          // Add track event listeners for better debugging
-                          track.addEventListener('load', () => {
-                            console.log(`📺 [CLIP-CARD] Caption track loaded successfully`);
-                            track.mode = 'showing';
-                            // Firefox workaround - set via video.textTracks as well
-                            video.textTracks[0].mode = 'showing';
-                          });
-
-                          track.addEventListener('error', (err) => {
-                            console.error(`📺 [CLIP-CARD] Caption track failed to load:`, err);
-                          });
-                        } else {
-                          console.warn(`📺 [CLIP-CARD] No text tracks found on video element`);
-                        }
-                      }}
+                      onCanPlay={handleManualCanPlay}
                       onSeeked={(e) => {
                         // Force captions to reload after seeking - Smart Caption Management
                         const video = e.target;
@@ -867,29 +977,7 @@ export default function ClipCard({
                       setIsVideoLoading(false);
                       setVideoLoaded(true);
                     }}
-                    onCanPlay={(e) => {
-                      // Force enable captions after video can play - Smart Caption Management
-                      const video = e.target;
-                      console.log(`📺 [CLIP-CARD] Vertical autoplay video can play, checking text tracks...`);
-
-                      if (video.textTracks && video.textTracks.length > 0) {
-                        const track = video.textTracks[0];
-                        track.mode = 'showing';
-                        console.log(`📺 [CLIP-CARD] Forced vertical autoplay caption track mode to: ${track.mode}`);
-
-                        // Add track event listeners for better debugging
-                        track.addEventListener('load', () => {
-                          console.log(`📺 [CLIP-CARD] Vertical autoplay caption track loaded successfully`);
-                          track.mode = 'showing';
-                        });
-
-                        track.addEventListener('error', (err) => {
-                          console.error(`📺 [CLIP-CARD] Vertical autoplay caption track failed to load:`, err);
-                        });
-                      } else {
-                        console.warn(`📺 [CLIP-CARD] No text tracks found on vertical autoplay video element`);
-                      }
-                    }}
+                    onCanPlay={handleVerticalCanPlay}
                   >
                     <source src={videoUrl} type="video/mp4" />
                     {/* WebVTT caption track for Smart Caption Management */}

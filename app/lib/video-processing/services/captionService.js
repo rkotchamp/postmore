@@ -273,6 +273,55 @@ function escapeFFmpegText(text) {
 }
 
 /**
+ * Generate WebVTT subtitle file content for burning into video
+ * @param {Object} captionData - Caption data from generateCaptionData
+ * @returns {string} - WebVTT file content
+ */
+export function generateWebVTTContent(captionData) {
+  if (!captionData.captions || captionData.captions.length === 0) {
+    return "";
+  }
+
+  console.log(
+    `📄 [CAPTIONS] Generating WebVTT content for ${captionData.captions.length} captions`
+  );
+
+  let webvttContent = "WEBVTT\n\n";
+
+  captionData.captions.forEach((caption, index) => {
+    const startTime = formatWebVTTTimestamp(caption.startTime);
+    const endTime = formatWebVTTTimestamp(caption.endTime);
+
+    webvttContent += `${index + 1}\n`;
+    webvttContent += `${startTime} --> ${endTime} align:middle\n`;
+    webvttContent += `${caption.text}\n\n`;
+  });
+
+  console.log(
+    `✅ [CAPTIONS] Generated WebVTT content (${webvttContent.length} characters)`
+  );
+  return webvttContent;
+}
+
+/**
+ * Format timestamp for WebVTT format (HH:MM:SS.mmm)
+ * @param {number} seconds - Time in seconds
+ * @returns {string} - Formatted timestamp
+ */
+function formatWebVTTTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const milliseconds = Math.floor((seconds % 1) * 1000);
+
+  return `${hours.toString().padStart(2, "0")}:${minutes
+    .toString()
+    .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${milliseconds
+    .toString()
+    .padStart(3, "0")}`;
+}
+
+/**
  * Generate SRT subtitle file content (for external subtitle support)
  * @param {Object} captionData - Caption data from generateCaptionData
  * @returns {string} - SRT file content
@@ -319,6 +368,159 @@ function formatSRTTimestamp(seconds) {
     .padStart(2, "0")}:${secs.toString().padStart(2, "0")},${milliseconds
     .toString()
     .padStart(3, "0")}`;
+}
+
+/**
+ * Detect video dimensions using ffprobe
+ * @param {string} videoPath - Path to video file
+ * @returns {Promise<{width: number, height: number}>} - Video dimensions
+ */
+async function getVideoDimensions(videoPath) {
+  const { spawn } = require('child_process');
+
+  return new Promise((resolve, reject) => {
+    const ffprobe = spawn('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height',
+      '-of', 'csv=p=0',
+      videoPath
+    ]);
+
+    let stdout = '';
+    let stderr = '';
+
+    ffprobe.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    ffprobe.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    ffprobe.on('close', (code) => {
+      if (code === 0) {
+        const dimensions = stdout.trim().split(',');
+        if (dimensions.length === 2) {
+          const width = parseInt(dimensions[0], 10);
+          const height = parseInt(dimensions[1], 10);
+          console.log(`📐 [VIDEO-DIMENSIONS] Detected: ${width}x${height}`);
+          resolve({ width, height });
+        } else {
+          reject(new Error(`Failed to parse video dimensions: ${stdout}`));
+        }
+      } else {
+        reject(new Error(`ffprobe failed with code ${code}: ${stderr}`));
+      }
+    });
+
+    ffprobe.on('error', (error) => {
+      reject(new Error(`ffprobe spawn error: ${error.message}`));
+    });
+  });
+}
+
+/**
+ * Burn subtitles into video using FFmpeg subtitles filter (preferred method)
+ * @param {string} inputVideoPath - Path to input video
+ * @param {Object} captionData - Caption data with timing
+ * @param {Object} captionSettings - Caption styling settings
+ * @param {string} outputPath - Output video path
+ * @param {Object} options - Additional options
+ * @returns {Promise<string>} - Path to output video
+ */
+export async function burnSubtitlesIntoVideo(inputVideoPath, captionData, captionSettings, outputPath, options = {}) {
+  const { spawn } = require('child_process');
+  const fs = require('fs');
+  const path = require('path');
+
+  try {
+    console.log(`🔥 [SUBTITLE-BURN] Burning subtitles into video with settings:`, captionSettings);
+
+    // Step 1: Detect video dimensions for proper ASS centering
+    const videoDimensions = await getVideoDimensions(inputVideoPath);
+    console.log(`📐 [SUBTITLE-BURN] Video dimensions: ${videoDimensions.width}x${videoDimensions.height}`);
+
+    // Generate WebVTT subtitle file
+    const webvttContent = generateWebVTTContent(captionData);
+    if (!webvttContent) {
+      throw new Error('Failed to generate WebVTT content');
+    }
+
+    // Create temporary WebVTT file
+    const tempDir = options.tempDir || '/tmp';
+    const webvttPath = path.join(tempDir, `subtitles_${Date.now()}.vtt`);
+
+    try {
+      fs.writeFileSync(webvttPath, webvttContent, 'utf8');
+      console.log(`📄 [SUBTITLE-BURN] Created WebVTT file: ${webvttPath}`);
+    } catch (error) {
+      throw new Error(`Failed to create WebVTT file: ${error.message}`);
+    }
+
+    // Generate FFmpeg force_style using fontManager with video dimensions
+    const forceStyle = fontManager.generateFFmpegForceStyle(captionSettings, videoDimensions);
+    const fontsDir = fontManager.getFontsDirectory();
+    console.log(`🎨 [SUBTITLE-BURN] Using force_style: ${forceStyle}`);
+    console.log(`📁 [SUBTITLE-BURN] Using fonts directory: ${fontsDir}`);
+
+    // Build FFmpeg command with subtitles filter and fontsdir
+    const ffmpegArgs = [
+      '-i', inputVideoPath,
+      '-vf', `subtitles=${webvttPath}:fontsdir=${fontsDir}:force_style='${forceStyle}'`,
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      '-preset', 'medium',
+      '-crf', '23',
+      '-y', // Overwrite output
+      outputPath
+    ];
+
+    console.log(`🔧 [SUBTITLE-BURN] FFmpeg command: ffmpeg ${ffmpegArgs.join(' ')}`);
+
+    return new Promise((resolve, reject) => {
+      const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+      let stderr = '';
+
+      ffmpeg.stderr.on('data', (data) => {
+        stderr += data.toString();
+        // Log progress if available
+        const progressMatch = data.toString().match(/time=(\d{2}:\d{2}:\d{2}\.\d{2})/);
+        if (progressMatch) {
+          console.log(`⏳ [SUBTITLE-BURN] Processing: ${progressMatch[1]}`);
+        }
+      });
+
+      ffmpeg.on('close', (code) => {
+        console.log(`🏁 [SUBTITLE-BURN] FFmpeg process exited with code: ${code}`);
+
+        // Cleanup temporary WebVTT file
+        try {
+          if (fs.existsSync(webvttPath)) {
+            fs.unlinkSync(webvttPath);
+            console.log(`🧹 [SUBTITLE-BURN] Cleaned up WebVTT file`);
+          }
+        } catch (cleanupError) {
+          console.warn(`⚠️ [SUBTITLE-BURN] Cleanup warning: ${cleanupError.message}`);
+        }
+
+        if (code === 0) {
+          console.log(`✅ [SUBTITLE-BURN] Successfully burned subtitles into video`);
+          resolve(outputPath);
+        } else {
+          console.error(`❌ [SUBTITLE-BURN] FFmpeg failed with code ${code}:`, stderr.slice(-1000));
+          reject(new Error(`Subtitle burning failed with code ${code}: ${stderr.slice(-500)}`));
+        }
+      });
+
+      ffmpeg.on('error', (error) => {
+        console.error(`❌ [SUBTITLE-BURN] FFmpeg spawn error:`, error);
+        reject(error);
+      });
+    });
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 /**
@@ -442,7 +644,9 @@ export async function applyCaptionsWithFont(inputVideoPath, captionData, fontKey
 export default {
   generateCaptionData,
   generateFFmpegCaptionFilters,
+  generateWebVTTContent,
   generateSRTContent,
+  burnSubtitlesIntoVideo,
   getPlatformStyling,
   escapeFFmpegText,
   applyCaptionsWithFont,

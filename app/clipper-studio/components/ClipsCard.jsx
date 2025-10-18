@@ -2,17 +2,22 @@
 
 import { useState, memo, useCallback } from "react";
 import { useTemplateStore } from "../../lib/store/templateStore";
+import { useShareStore } from "@/app/lib/store/shareStore";
+import { useFetchAllAccountsContext } from "@/app/context/FetchAllAccountsContext";
 import {
   Filter,
   MoreHorizontal,
   ArrowLeft,
   Download,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import ClipCard from "./ClipCard";
 import TemplateFloatingSidebar from "./TemplateFloatingSidebar";
 import DownloadProgressPopup from "./DownloadProgressPopup";
+import { ShareModal } from "@/app/lib/video-sharing/components/ShareModal";
+import { ShareProgressModal } from "@/app/lib/video-sharing/components/ShareProgressModal";
 
 const defaultClips = [
   {
@@ -92,17 +97,27 @@ const ClipsGallery = memo(function ClipsGallery({
   const [selectedClips, setSelectedClips] = useState([]);
   const [selectMode, setSelectMode] = useState(false);
   const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
-  
+
   // Download progress state (global for all clips)
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState('');
 
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [clipsToShare, setClipsToShare] = useState([]);
+
   // Get template state to pass to ClipCards
-  const { 
-    appliedTemplate, 
-    appliedSettings, 
-    isTemplateApplied 
+  const {
+    appliedTemplate,
+    appliedSettings,
+    isTemplateApplied
   } = useTemplateStore();
+
+  // Get authenticated accounts from context
+  const { accounts = [], isLoading: loadingAccounts } = useFetchAllAccountsContext();
+
+  // Get share store methods
+  const { setSelectedClips: setShareStoreClips, setShowShareModal: setShareStoreModal } = useShareStore();
 
   // Moved handleClipSelect logic into the ClipCard component for better encapsulation
 
@@ -236,23 +251,47 @@ const ClipsGallery = memo(function ClipsGallery({
 
   const handleTemplateApply = useCallback(async (templateData) => {
     setIsApplyingTemplate(true);
-    
+
     try {
-      
+
       // TODO: Call template application API
       // For now, just simulate the process
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Show success message
-      
+
       // Optionally refresh clips or update UI state
-      
+
     } catch (error) {
       console.error('❌ [TEMPLATE-APPLY] Failed to apply template:', error);
       // TODO: Show error toast/notification
     } finally {
       setIsApplyingTemplate(false);
     }
+  }, []);
+
+  // Handle individual clip share
+  const handleClipShare = useCallback((clip) => {
+    setClipsToShare([clip]);
+    setShareStoreClips([clip]);
+    setShowShareModal(true);
+  }, [setShareStoreClips]);
+
+  // Handle bulk share
+  const handleBulkShare = useCallback(() => {
+    const clipsToShareList = selectMode && selectedClips.length > 0
+      ? clips.filter(clip => selectedClips.includes(clip.id))
+      : clips;
+
+    setClipsToShare(clipsToShareList);
+    setShareStoreClips(clipsToShareList);
+    setShowShareModal(true);
+  }, [clips, selectedClips, selectMode, setShareStoreClips]);
+
+  // Handle share modal close
+  const handleShareModalClose = useCallback(() => {
+    setShowShareModal(false);
+    setClipsToShare([]);
   }, []);
 
   return (
@@ -303,10 +342,22 @@ const ClipsGallery = memo(function ClipsGallery({
             className="border-border text-foreground hover:bg-muted/50 bg-transparent"
           >
             <Download className="w-4 h-4 mr-2" />
-            {selectMode && selectedClips.length > 0 
-              ? `Bulk Download (${selectedClips.length})` 
+            {selectMode && selectedClips.length > 0
+              ? `Bulk Download (${selectedClips.length})`
               : `Bulk Download (${clips.length})`
             }
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBulkShare}
+            disabled={selectMode && selectedClips.length < 2}
+            className="border-border text-foreground hover:bg-muted/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            {selectMode && selectedClips.length > 0
+              ? `Bulk Share (${selectedClips.length})`
+              : 'Bulk Share'}
           </Button>
           <Button
             variant="outline"
@@ -350,9 +401,7 @@ const ClipsGallery = memo(function ClipsGallery({
                 onClipSelect?.(clipId);
               }
             }}
-            onShare={(clip) => {
-              // Handle share functionality
-            }}
+            onShare={handleClipShare}
             onRemove={(clipId) => {
               // Handle remove functionality
             }}
@@ -409,6 +458,18 @@ const ClipsGallery = memo(function ClipsGallery({
         onTemplateApply={handleTemplateApply}
         isApplying={isApplyingTemplate}
       />
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={handleShareModalClose}
+        clips={clipsToShare}
+        accounts={accounts}
+        projectId={projectId}
+      />
+
+      {/* Share Progress Modal */}
+      <ShareProgressModal />
     </div>
   );
 });

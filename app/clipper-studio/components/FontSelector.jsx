@@ -5,6 +5,18 @@ import { useTemplateStore } from '@/app/lib/store/templateStore';
 // Font options that match our backend font system
 const FONT_OPTIONS = [
   {
+    key: 'raleway',
+    name: 'Raleway',
+    description: 'Elegant & Modern',
+    style: { fontFamily: 'Arial, sans-serif', fontWeight: '500' }
+  },
+  {
+    key: 'inter',
+    name: 'Inter',
+    description: 'Digital & Clean',
+    style: { fontFamily: 'Arial, sans-serif', fontWeight: '600' }
+  },
+  {
     key: 'bebasNeue',
     name: 'Bebas Neue',
     description: 'Bold & Condensed',
@@ -38,6 +50,7 @@ const FONT_OPTIONS = [
 
 // Size options
 const SIZE_OPTIONS = [
+  { key: 'verysmall', name: 'Very Small', description: '1.0rem' },
   { key: 'small', name: 'Small', description: '1.2rem' },
   { key: 'medium', name: 'Medium', description: '1.5rem' },
   { key: 'large', name: 'Large', description: '1.8rem' }
@@ -50,6 +63,16 @@ const POSITION_OPTIONS = [
   { key: 'bottom', name: 'Bottom', description: 'Bottom of video' }
 ];
 
+// Font weight options
+const WEIGHT_OPTIONS = [
+  { key: 'light', name: 'Light', description: '300', weight: '300' },
+  { key: 'normal', name: 'Normal', description: '400', weight: '400' },
+  { key: 'medium', name: 'Medium', description: '500', weight: '500' },
+  { key: 'semibold', name: 'Semibold', description: '600', weight: '600' },
+  { key: 'bold', name: 'Bold', description: '700', weight: '700' },
+  { key: 'extrabold', name: 'Extra Bold', description: '800', weight: '800' }
+];
+
 export default function FontSelector() {
   const [fontOpen, setFontOpen] = useState(false);
   const [sizeOpen, setSizeOpen] = useState(false);
@@ -57,14 +80,17 @@ export default function FontSelector() {
   const [selectedFont, setSelectedFont] = useState('roboto');
   const [selectedSize, setSelectedSize] = useState('medium');
   const [selectedPosition, setSelectedPosition] = useState('bottom');
+  const [selectedWeight, setSelectedWeight] = useState('normal');
 
   // Get caption settings from store
   const captionFont = useTemplateStore((state) => state.captionFont) || 'roboto';
   const captionSize = useTemplateStore((state) => state.captionSize) || 'medium';
   const captionPosition = useTemplateStore((state) => state.captionPosition) || 'bottom';
+  const captionWeight = useTemplateStore((state) => state.captionWeight) || 'normal';
   const setCaptionFont = useTemplateStore((state) => state.setCaptionFont);
   const setCaptionSize = useTemplateStore((state) => state.setCaptionSize);
   const setCaptionPosition = useTemplateStore((state) => state.setCaptionPosition);
+  const setCaptionWeight = useTemplateStore((state) => state.setCaptionWeight);
 
   // Sync with existing caption settings
   useEffect(() => {
@@ -77,7 +103,10 @@ export default function FontSelector() {
     if (captionPosition && captionPosition !== selectedPosition) {
       setSelectedPosition(captionPosition);
     }
-  }, [captionFont, captionSize, captionPosition, selectedFont, selectedSize, selectedPosition]);
+    if (captionWeight && captionWeight !== selectedWeight) {
+      setSelectedWeight(captionWeight);
+    }
+  }, [captionFont, captionSize, captionPosition, captionWeight, selectedFont, selectedSize, selectedPosition, selectedWeight]);
 
   const handleFontChange = (fontKey) => {
     setSelectedFont(fontKey);
@@ -110,13 +139,23 @@ export default function FontSelector() {
     console.log(`📍 [FONT-SELECTOR] Position changed to: ${positionKey}`);
   };
 
+  const handleWeightChange = (weightKey) => {
+    setSelectedWeight(weightKey);
+    if (setCaptionWeight) {
+      setCaptionWeight(weightKey);
+      console.log(`🏋️ [FONT-SELECTOR] Font weight changed to: ${weightKey}`);
+    }
+    setFontOpen(false); // Close the font dropdown since weight is inside it now
+  };
+
   const selectedFontConfig = FONT_OPTIONS.find(f => f.key === selectedFont) || FONT_OPTIONS[4]; // Default to roboto
   const selectedSizeConfig = SIZE_OPTIONS.find(s => s.key === selectedSize) || SIZE_OPTIONS[1]; // Default to medium
   const selectedPositionConfig = POSITION_OPTIONS.find(p => p.key === selectedPosition) || POSITION_OPTIONS[2]; // Default to bottom
+  const selectedWeightConfig = WEIGHT_OPTIONS.find(w => w.key === selectedWeight) || WEIGHT_OPTIONS[1]; // Default to normal
 
   return (
     <div className="flex items-center gap-2">
-      {/* Font Selector */}
+      {/* Font & Weight Selector (Combined) */}
       <div className="relative">
         <button
           onClick={() => setFontOpen(!fontOpen)}
@@ -124,41 +163,81 @@ export default function FontSelector() {
           title="Select Caption Font"
         >
           <Type className="w-3 h-3" />
-          <span className="hidden sm:inline font-medium" style={selectedFontConfig.style}>
-            {selectedFontConfig.name}
+          <span className="hidden sm:inline font-medium" style={{ ...selectedFontConfig.style, fontWeight: selectedWeightConfig.weight }}>
+            {selectedFontConfig.name} <span className="text-xs opacity-70">{selectedWeightConfig.weight}</span>
           </span>
           <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${fontOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {fontOpen && (
-          <div className="absolute top-full right-0 mt-1 bg-background border border-border rounded-lg shadow-lg z-50 min-w-[200px]">
+          <div className="absolute top-full right-0 mt-1 bg-background border border-border rounded-lg shadow-lg z-50 min-w-[280px] lg:min-w-[420px]">
             <div className="p-2">
-              <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
-                Caption Font
-              </div>
-              <div className="space-y-1">
-                {FONT_OPTIONS.map((font) => (
-                  <button
-                    key={font.key}
-                    onClick={() => handleFontChange(font.key)}
-                    className={`w-full text-left px-2 py-2 text-sm rounded-md transition-colors flex flex-col gap-0.5 ${
-                      selectedFont === font.key
-                        ? 'bg-primary text-primary-foreground'
-                        : 'hover:bg-muted/50 text-foreground'
-                    }`}
-                  >
-                    <div className="font-medium" style={font.style}>
-                      {font.name}
-                    </div>
-                    <div className={`text-xs ${
-                      selectedFont === font.key
-                        ? 'text-primary-foreground/70'
-                        : 'text-muted-foreground'
-                    }`}>
-                      {font.description}
-                    </div>
-                  </button>
-                ))}
+              {/* Responsive Layout: Side by side on large screens, stacked on small */}
+              <div className="flex flex-col lg:flex-row lg:gap-4">
+
+                {/* Font Family Section */}
+                <div className="flex-1">
+                  <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
+                    Font Family
+                  </div>
+                  <div className="space-y-1 mb-4 lg:mb-0">
+                    {FONT_OPTIONS.map((font) => (
+                      <button
+                        key={font.key}
+                        onClick={() => handleFontChange(font.key)}
+                        className={`w-full text-left px-2 py-2 text-sm rounded-md transition-colors flex flex-col gap-0.5 ${
+                          selectedFont === font.key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted/50 text-foreground'
+                        }`}
+                      >
+                        <div className="font-medium" style={font.style}>
+                          {font.name}
+                        </div>
+                        <div className={`text-xs ${
+                          selectedFont === font.key
+                            ? 'text-primary-foreground/70'
+                            : 'text-muted-foreground'
+                        }`}>
+                          {font.description}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Divider - horizontal on small screens, vertical on large */}
+                <div className="border-t border-border my-2 lg:border-t-0 lg:border-l lg:my-0 lg:mx-2"></div>
+
+                {/* Font Weight Section */}
+                <div className="flex-1 lg:flex-none lg:w-24">
+                  <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
+                    Weight
+                  </div>
+                  <div className="space-y-1">
+                    {WEIGHT_OPTIONS.map((weight) => (
+                      <button
+                        key={weight.key}
+                        onClick={() => handleWeightChange(weight.key)}
+                        className={`w-full text-left px-2 py-2 text-sm rounded-md transition-colors ${
+                          selectedWeight === weight.key
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted/50 text-foreground'
+                        }`}
+                      >
+                        <div className="flex flex-col items-start gap-0.5">
+                          <div className="font-medium text-xs" style={{ fontWeight: weight.weight }}>
+                            {weight.name}
+                          </div>
+                          <div className="text-xs opacity-60">
+                            {weight.weight}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>

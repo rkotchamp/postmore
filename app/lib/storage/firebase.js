@@ -331,3 +331,67 @@ export const deleteMultipleFiles = async (paths) => {
     throw error;
   }
 };
+
+/**
+ * Upload processed clip video for sharing
+ * Stores processed videos (with templates + captions) before sharing to social media
+ * @param {Blob} videoBlob - Processed video blob from download-with-template API
+ * @param {string} clipId - Clip ID for file naming and tracking
+ * @returns {Promise<string>} - Download URL of uploaded video
+ */
+export const uploadProcessedClip = async (videoBlob, clipId) => {
+  try {
+    console.log('☁️ [FIREBASE] Uploading processed clip:', clipId);
+    console.log('📦 [FIREBASE] Blob size:', videoBlob.size, 'bytes');
+
+    // Generate UUID for the file
+    const uuid = uuidv4();
+    const fileName = `processed_${clipId}_${uuid}.mp4`;
+
+    // Create storage path in dedicated folder for processed videos
+    const storagePath = `processedClips/${fileName}`;
+
+    // Create a storage reference
+    const storageRef = ref(storage, storagePath);
+
+    // Set metadata for video streaming
+    const metadata = {
+      contentType: 'video/mp4',
+      customMetadata: {
+        'Cache-Control': 'public, max-age=31536000', // 1 year cache
+        'clipId': clipId,
+        'processedAt': new Date().toISOString()
+      }
+    };
+
+    // Upload the blob with metadata
+    const uploadTask = uploadBytesResumable(storageRef, videoBlob, metadata);
+
+    // Return a promise that resolves with the download URL
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Track upload progress
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`☁️ [FIREBASE] Upload progress: ${progress.toFixed(1)}%`);
+        },
+        (error) => {
+          // Handle upload errors
+          console.error('❌ [FIREBASE] Upload failed:', error);
+          reject(error);
+        },
+        async () => {
+          // Upload completed successfully, get download URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          console.log('✅ [FIREBASE] Upload complete');
+          console.log('🔗 [FIREBASE] Download URL:', downloadURL);
+          resolve(downloadURL);
+        }
+      );
+    });
+  } catch (error) {
+    console.error('❌ [FIREBASE] Error uploading processed clip:', error);
+    throw error;
+  }
+};

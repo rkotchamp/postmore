@@ -19,9 +19,10 @@ export const useTemplateStore = create((set, get) => ({
   showTextColorPicker: false,
 
   // Smart Caption Management
-  captionFont: 'roboto', // Default font for captions
-  captionSize: 'medium', // Font size: small, medium, large
-  captionPosition: 'bottom', // Position: top, center, bottom
+  captionFont: 'raleway', // Default font for captions
+  captionSize: 'small', // Font size: small, medium, large
+  captionPosition: 'center', // Position: top, center, bottom
+  captionWeight: 'normal', // Font weight: light, normal, medium, semibold, bold, extrabold
   showCaptions: true, // Whether captions are visible
 
   // UI States
@@ -54,6 +55,7 @@ export const useTemplateStore = create((set, get) => ({
   setCaptionFont: (captionFont) => set({ captionFont }),
   setCaptionSize: (captionSize) => set({ captionSize }),
   setCaptionPosition: (captionPosition) => set({ captionPosition }),
+  setCaptionWeight: (captionWeight) => set({ captionWeight }),
   setShowCaptions: (showCaptions) => set({ showCaptions }),
 
   // UI Actions
@@ -80,6 +82,7 @@ export const useTemplateStore = create((set, get) => ({
         captionFont: currentState.captionFont, // Include font selection in applied settings
         captionSize: currentState.captionSize, // Include font size in applied settings
         captionPosition: currentState.captionPosition, // Include position in applied settings
+        captionWeight: currentState.captionWeight, // Include font weight in applied settings
         showCaptions: currentState.showCaptions
       },
       isTemplateApplied: true
@@ -110,7 +113,10 @@ export const useTemplateStore = create((set, get) => ({
     selectedText: '',
     selectedTextColor: '#ffffff',
     showTextColorPicker: false,
-    captionFont: 'roboto',
+    captionFont: 'raleway',
+    captionSize: 'small',
+    captionPosition: 'center',
+    captionWeight: 'normal',
     showCaptions: true,
     previewCache: {}
   }),
@@ -143,7 +149,10 @@ export const useTemplateStore = create((set, get) => ({
     selectedText: '',
     selectedTextColor: '#ffffff',
     showTextColorPicker: false,
-    captionFont: 'roboto',
+    captionFont: 'raleway',
+    captionSize: 'small',
+    captionPosition: 'center',
+    captionWeight: 'normal',
     showCaptions: true,
     expanded: false,
     previewCache: {},

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import puppeteer from "puppeteer";
-import { applyCaptionsWithFont } from "@/app/lib/video-processing/services/captionService";
+import { applyCaptionsWithFont, burnSubtitlesIntoVideo } from "@/app/lib/video-processing/services/captionService";
 import connectToMongoose from "@/app/lib/db/mongoose";
 import VideoClip from "@/app/models/VideoClip";
 import VideoProject from "@/app/models/VideoProject";
@@ -15,7 +15,7 @@ import VideoProject from "@/app/models/VideoProject";
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { videoUrl, filename, templateData } = body;
+    const { videoUrl, filename, templateData, captionData, captionSettings } = body;
 
     if (!videoUrl) {
       return NextResponse.json(
@@ -38,6 +38,16 @@ export async function POST(request) {
     console.log(`🖼️ [TEMPLATE-DOWNLOAD] Settings:`, templateData.settings);
     console.log(`👤 [TEMPLATE-DOWNLOAD] Settings.profilePic:`, templateData.settings?.profilePic);
     console.log(`👤 [TEMPLATE-DOWNLOAD] Settings.username:`, templateData.settings?.username);
+
+    // Log caption burning parameters
+    if (captionData && captionSettings) {
+      console.log(`🔥 [CAPTION-BURN] Caption burning requested`);
+      console.log(`📄 [CAPTION-BURN] Caption data:`, {
+        captionCount: captionData.captions?.length,
+        totalDuration: captionData.totalDuration
+      });
+      console.log(`🎨 [CAPTION-BURN] Caption settings:`, captionSettings);
+    }
 
     // Download the original video first
     console.log(
@@ -110,9 +120,41 @@ export async function POST(request) {
         throw new Error(`Video overlay failed: ${ffmpegError.message}`);
       }
 
+      // Step 2.5: Burn captions into video if caption data provided
+      let finalVideoPath = outputVideoPath;
+      if (captionData && captionSettings) {
+        console.log(`🔥 [CAPTION-BURN] Starting caption burning process...`);
+        console.log(`📄 [CAPTION-BURN] Burning ${captionData.captions?.length || 0} captions with font: ${captionSettings.font}, size: ${captionSettings.size}, position: ${captionSettings.position}`);
+
+        const captionBurnPath = path.join(tempDir, `caption_burned_${timestamp}.mp4`);
+
+        try {
+          await burnSubtitlesIntoVideo(
+            outputVideoPath,
+            captionData,
+            captionSettings,
+            captionBurnPath,
+            { tempDir }
+          );
+          finalVideoPath = captionBurnPath;
+          console.log(`✅ [CAPTION-BURN] Successfully burned ${captionData.captions?.length || 0} captions into video`);
+        } catch (captionError) {
+          console.error(`❌ [CAPTION-BURN] Caption burning failed:`, captionError.message);
+          console.error(`🔍 [CAPTION-BURN] Error details:`, {
+            captionCount: captionData.captions?.length,
+            settings: captionSettings,
+            error: captionError.stack?.substring(0, 500)
+          });
+
+          // Continue without captions rather than failing the entire request
+          console.log(`⚠️ [CAPTION-BURN] Gracefully continuing without burned captions - template overlay will still work`);
+          finalVideoPath = outputVideoPath; // Use original template output
+        }
+      }
+
       // Step 3: Read the processed video as a buffer
-      const videoBuffer = await fs.readFile(outputVideoPath);
-      
+      const videoBuffer = await fs.readFile(finalVideoPath);
+
       // Ensure we have a proper buffer for binary data
       const finalBuffer = Buffer.isBuffer(videoBuffer) ? videoBuffer : Buffer.from(videoBuffer);
 
@@ -120,6 +162,10 @@ export async function POST(request) {
       const filesToClean = [inputVideoPath, outputVideoPath];
       if (!isBlankTemplate) {
         filesToClean.push(overlayImagePath);
+      }
+      // Add caption burned file to cleanup if it was created
+      if (finalVideoPath !== outputVideoPath) {
+        filesToClean.push(finalVideoPath);
       }
       await cleanup(filesToClean);
 

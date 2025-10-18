@@ -5,14 +5,15 @@
  */
 
 /* Import Google Fonts - Extended for Smart Caption Management */
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700;800&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Anton&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@400;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700;800&display=swap");
 
 /* Base caption styling for all video elements */
 video::cue {
@@ -113,6 +114,46 @@ video::cue {
   font-size: 1.5rem;
 }
 
+/* Raleway Font */
+.font-raleway-caption::cue {
+  font-family: "Raleway", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  font-size: 1.5rem;
+}
+
+/* Font Weight Classes - Can be combined with any font */
+
+/* Light weight */
+.caption-weight-light::cue {
+  font-weight: 300 !important;
+}
+
+/* Normal weight */
+.caption-weight-normal::cue {
+  font-weight: 400 !important;
+}
+
+/* Medium weight */
+.caption-weight-medium::cue {
+  font-weight: 500 !important;
+}
+
+/* Semibold weight */
+.caption-weight-semibold::cue {
+  font-weight: 600 !important;
+}
+
+/* Bold weight */
+.caption-weight-bold::cue {
+  font-weight: 700 !important;
+}
+
+/* Extra bold weight */
+.caption-weight-extrabold::cue {
+  font-weight: 800 !important;
+}
+
 /* Responsive caption sizing */
 
 /* Mobile devices (portrait) */
@@ -130,11 +171,17 @@ video::cue {
   .font-noto-sans-caption::cue,
   .font-bebas-neue-caption::cue,
   .font-anton-caption::cue,
-  .font-oswald-caption::cue {
+  .font-oswald-caption::cue,
+  .font-raleway-caption::cue {
     font-size: 1rem;
   }
 
   /* Responsive size adjustments */
+  .caption-size-verysmall::cue {
+    font-size: 0.7rem !important;
+    padding: 0 !important;
+  }
+
   .caption-size-small::cue {
     font-size: 0.8rem !important;
     padding: 0 !important;
@@ -165,7 +212,8 @@ video::cue {
   .font-noto-sans-caption::cue,
   .font-bebas-neue-caption::cue,
   .font-anton-caption::cue,
-  .font-oswald-caption::cue {
+  .font-oswald-caption::cue,
+  .font-raleway-caption::cue {
     font-size: 1.25rem;
   }
 }
@@ -184,12 +232,20 @@ video::cue {
   .font-noto-sans-caption::cue,
   .font-bebas-neue-caption::cue,
   .font-anton-caption::cue,
-  .font-oswald-caption::cue {
+  .font-oswald-caption::cue,
+  .font-raleway-caption::cue {
     font-size: 1.75rem;
   }
 }
 
 /* Caption Size Variants - High Specificity */
+
+/* Very Small size */
+.caption-size-verysmall::cue {
+  font-size: 1.0rem !important;
+  padding: 0.1rem 0.5rem !important;
+  letter-spacing: 0.015em !important;
+}
 
 /* Small size */
 .caption-size-small::cue {
@@ -365,6 +421,12 @@ video::cue {
 }
 
 /* Size Classes - Final Override */
+.caption-size-verysmall::cue {
+  font-size: 1.0rem !important;
+  padding: 0 !important;
+  letter-spacing: 0.015em !important;
+}
+
 .caption-size-small::cue {
   font-size: 1.2rem !important;
   padding: 0 !important;

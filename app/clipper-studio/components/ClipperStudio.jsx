@@ -19,16 +19,19 @@ import { useClipperProjects, CLIPPER_QUERY_KEYS } from "../../hooks/useClipperQu
 
 export default function ClipperStudio() {
   const queryClient = useQueryClient();
-  
+
   // Delete dialog state
   const [deleteDialog, setDeleteDialog] = useState({
     isOpen: false,
     projectId: null,
     projectTitle: null
   });
-  
+
   // Projects tab state
   const [selectedProjectsTab, setSelectedProjectsTab] = useState('all'); // 'all' or 'saved'
+
+  // Transition loading state
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
   // Use Zustand store instead of local state
   const {
@@ -421,22 +424,34 @@ export default function ClipperStudio() {
       console.error('❌ [GALLERY] ProjectId is undefined or null');
       return;
     }
-    
-    const project = activeProjects.find(p => p.id === projectId);
+
+    const project = allProjects.find(p => p.id === projectId);
     const projectClips = allProjectClips[projectId] || { clips: [], totalClips: 0, processedClips: 0 };
-    
-    
+
+    console.log(`🎯 [GALLERY] Clicked project ${projectId}`);
+    console.log(`📊 [GALLERY] Project status:`, project?.status);
+    console.log(`📊 [GALLERY] Project clips:`, projectClips);
+    console.log(`📊 [GALLERY] All project clips keys:`, Object.keys(allProjectClips));
+
     if (project && project.status === "completed") {
       // Only allow clicking if clips have been fully processed
       const hasProcessedClips = projectClips.processedClips > 0;
-      
+
+      console.log(`✅ [GALLERY] Has processed clips: ${hasProcessedClips}`);
+
       if (hasProcessedClips) {
+        console.log(`🚀 [GALLERY] Opening clips gallery for project ${projectId}`);
+        setIsTransitioning(true);
         setCurrentProjectId(projectId);
         setShowClipsGallery(true);
+        // Clear transition state after a short delay
+        setTimeout(() => setIsTransitioning(false), 100);
       } else {
+        console.log(`⚠️ [GALLERY] Project ${projectId} has no processed clips yet`);
       }
       // If not processed, do nothing - processing happens automatically in background
     } else {
+      console.log(`⚠️ [GALLERY] Project ${projectId} is not completed yet (status: ${project?.status})`);
     }
   };
 
@@ -493,8 +508,10 @@ export default function ClipperStudio() {
   }, []);
 
   const handleReturnToStudio = useCallback(() => {
+    setIsTransitioning(true);
     setShowClipsGallery(false);
     setCurrentProjectId(null);
+    setTimeout(() => setIsTransitioning(false), 100);
   }, []);
 
   const handleDeleteProject = (projectId) => {
@@ -592,15 +609,32 @@ export default function ClipperStudio() {
     input.click();
   };
 
+  // Show transitioning state
+  if (isTransitioning) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   // Show clips gallery if processing is complete
+  console.log(`🔍 [RENDER] showClipsGallery: ${showClipsGallery}, currentProjectId: ${currentProjectId}`);
+
   if (showClipsGallery && currentProjectId) {
+    console.log(`🎬 [RENDER] Rendering clips gallery for project ${currentProjectId}`);
+
     const currentProjectData = allProjectClips[currentProjectId];
     const currentProjectClips = currentProjectData?.clips || [];
     const isStillProcessing = currentProjectData?.processedClips === 0 && currentProjectData?.totalClips > 0;
     const expectedClipCount = currentProjectData?.totalClips || 8; // Default to 8 if unknown
-    
+
+    console.log(`📋 [RENDER] Current project data:`, currentProjectData);
+    console.log(`📋 [RENDER] Is still processing: ${isStillProcessing}, Is loading: ${isLoadingClips}`);
+
     // Show skeleton loading if clips are loading or still processing
     if (isLoadingClips || isStillProcessing) {
+      console.log(`⏳ [RENDER] Showing skeleton gallery`);
       return (
         <SkeletonClipsGallery
           expectedClipCount={expectedClipCount}
@@ -610,7 +644,8 @@ export default function ClipperStudio() {
         />
       );
     }
-    
+
+    console.log(`✅ [RENDER] Showing clips gallery with ${currentProjectClips.length} clips`);
     return (
       <ClipsGallery
         clips={currentProjectClips}
@@ -621,6 +656,8 @@ export default function ClipperStudio() {
       />
     );
   }
+
+  console.log(`🏠 [RENDER] Showing main studio interface`);
 
   return (
     <div className="min-h-screen bg-background">

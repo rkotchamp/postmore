@@ -11,17 +11,16 @@ import { generateClipWebVTT, getWebVttMimeType } from '@/app/lib/video-processin
  * GET /api/clipper-studio/captions/[clipId]
  */
 export async function GET(request, { params }) {
-  console.log(`📝 [CAPTIONS-API] Serving WebVTT for clip ${params.clipId}`);
-  
+  // Await params first
+  const { clipId } = await params;
+  console.log(`📝 [CAPTIONS-API] Serving WebVTT for clip ${clipId}`);
+
   try {
     // Get user session
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Parse clipId
-    const { clipId } = params;
     if (!clipId) {
       return NextResponse.json({ error: 'Clip ID is required' }, { status: 400 });
     }
