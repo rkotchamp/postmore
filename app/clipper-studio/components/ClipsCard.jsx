@@ -17,7 +17,6 @@ import ClipCard from "./ClipCard";
 import TemplateFloatingSidebar from "./TemplateFloatingSidebar";
 import DownloadProgressPopup from "./DownloadProgressPopup";
 import { ShareModal } from "@/app/lib/video-sharing/components/ShareModal";
-import { ShareProgressModal } from "@/app/lib/video-sharing/components/ShareProgressModal";
 
 const defaultClips = [
   {
@@ -467,9 +466,6 @@ const ClipsGallery = memo(function ClipsGallery({
         accounts={accounts}
         projectId={projectId}
       />
-
-      {/* Share Progress Modal */}
-      <ShareProgressModal />
     </div>
   );
 });

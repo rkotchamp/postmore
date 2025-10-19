@@ -15,8 +15,7 @@ export function ShareProgressModal() {
     showProgressModal,
     isSharing,
     shareProgress,
-    setShowProgressModal,
-    completeSharing,
+    resetShareState,
   } = useShareStore();
 
   const [progressMessage, setProgressMessage] = useState("Getting ready...");
@@ -46,12 +45,12 @@ export function ShareProgressModal() {
 
   // Don't auto-close - wait for user to click "All done!" button
 
-  // Handle modal close
+  // Handle modal close - fully reset the share state
   const handleClose = () => {
     // Only allow closing if not currently sharing
     if (!isSharing) {
-      setShowProgressModal(false);
-      completeSharing();
+      // Reset the entire share state (closes both modals, resets step to 'accounts', clears all selections)
+      resetShareState();
     }
   };
 

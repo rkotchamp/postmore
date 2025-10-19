@@ -140,6 +140,8 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
     clipCaptions,
     sharingMatrix,
     shareOptions,
+    isSharing,
+    shareProgress,
     setCurrentStep,
     setCaptionMode,
     setSingleCaption,
@@ -157,6 +159,7 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
   const [localAccounts, setLocalAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [sharingComplete, setSharingComplete] = useState(false);
 
   // Schedule state helpers
   const displayDate = useMemo(() => {
@@ -340,12 +343,11 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
     console.log("⏰ [SHARE_MODAL] Timestamp:", new Date().toISOString());
 
     try {
-      // Trigger the sharing process and close this modal
+      // Trigger the sharing process
       const {
         startSharing,
         getEnabledPairs,
         getCaptionForPair,
-        setShowProgressModal,
       } = useShareStore.getState();
 
       const enabledPairs = getEnabledPairs();
@@ -359,12 +361,10 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
         enabledPairs.map((p) => `${p.account.platform} (${p.account.username})`)
       );
 
-      // Close ShareModal and open progress modal
-      onClose();
+      // Start sharing (don't close this modal, just change the view)
       startSharing();
-      setShowProgressModal(true);
 
-      console.log("📤 [SHARE_MODAL] Progress modal opened, preparing data...");
+      console.log("📤 [SHARE_MODAL] Starting share process...");
 
       // Fetch project transcription data FIRST (before creating sharingData)
       let projectTranscription = null;
@@ -575,11 +575,12 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
         console.log("✅ [SHARE_MODAL] Sharing completed successfully!");
         console.log("📊 [SHARE_MODAL] Results:", result.results);
 
-        // Stop the progress modal spinner
+        // Stop the progress modal spinner and show success
         const { completeSharing } = useShareStore.getState();
         completeSharing();
+        setSharingComplete(true);
         console.log(
-          "🛑 [SHARE_MODAL] Called completeSharing() - spinner should stop"
+          "🛑 [SHARE_MODAL] Called completeSharing() and set sharingComplete=true"
         );
 
         const successMessage = result.isScheduled
@@ -643,7 +644,8 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
             </DialogTitle>
           </DialogHeader>
 
-          {/* Progress Bar */}
+          {/* Progress Bar - Hide when showing progress/success view */}
+          {!isSharing && !sharingComplete && (
           <div className="flex items-center gap-2 mb-4">
             <div
               className={`flex-1 h-2 rounded-full ${
@@ -677,9 +679,74 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
               }`}
             />
           </div>
+          )}
 
           {/* Step Content */}
           <div className="flex-1 overflow-y-auto">
+            {/* Progress/Success View - Show when sharing is in progress or complete */}
+            {(() => {
+              const showProgress = isSharing || sharingComplete;
+              console.log('🔍 [SHARE_MODAL] Render check:', {
+                isSharing,
+                sharingComplete,
+                showProgress,
+                currentStep
+              });
+              return showProgress;
+            })() ? (
+              <div className="flex flex-col items-center justify-center py-12 px-6 min-h-[400px]">
+                {/* Loading/Success Icon */}
+                <div className="relative w-32 h-32 mb-8">
+                  {/* Share Icon in Center */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className={`rounded-full p-6 ${isSharing ? 'bg-primary/10' : 'bg-green-500/10'}`}>
+                      <Share2 className={`w-12 h-12 ${isSharing ? 'text-primary' : 'text-green-500'}`} />
+                    </div>
+                  </div>
+
+                  {/* Orbiting Spinner - Only show while sharing */}
+                  {isSharing && (
+                    <div className="absolute inset-0 animate-spin">
+                      <div className="relative w-full h-full">
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-primary rounded-full"></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dynamic Message */}
+                <div className="text-center space-y-3 max-w-sm">
+                  {sharingComplete ? (
+                    <button
+                      onClick={() => {
+                        console.log('🔒 [SHARE_MODAL] Done button clicked - closing and resetting...');
+                        setSharingComplete(false);
+                        resetShareState();
+                        onClose();
+                      }}
+                      className="text-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition-all px-8 py-3 rounded-lg shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 flex items-center gap-2 mx-auto"
+                    >
+                      <Share2 className="w-5 h-5" />
+                      Done
+                    </button>
+                  ) : (
+                    <p className="text-lg font-semibold text-foreground">
+                      {shareProgress.total > 0 && shareProgress.completed < shareProgress.total
+                        ? `Processing ${shareProgress.completed + 1} of ${shareProgress.total}...`
+                        : "Preparing your content..."}
+                    </p>
+                  )}
+
+                  {/* Subtle progress indicator */}
+                  {isSharing && shareProgress.total > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {shareProgress.completed} of {shareProgress.total} {shareProgress.completed === 1 ? 'post' : 'posts'} processed
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Step 1: Select Accounts */}
             {currentStep === "accounts" && (
               <div className="space-y-4">
@@ -1320,8 +1387,12 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
                   )}
               </div>
             )}
+            </>
+            )}
           </div>
 
+          {/* Hide footer when showing progress/success */}
+          {!isSharing && !sharingComplete && (
           <DialogFooter className="flex justify-between mt-4">
             <Button
               variant="outline"
@@ -1344,6 +1415,7 @@ export function ShareModal({ isOpen, onClose, clips = [], accounts = [], project
               </Button>
             )}
           </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </>
