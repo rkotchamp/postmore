@@ -27,6 +27,12 @@ export function SubscriptionGuard({ children }) {
       return;
     }
 
+    // Admin users bypass subscription check
+    if (user?.isAdmin) {
+      setIsChecking(false);
+      return;
+    }
+
     // Check subscription status from user profile
     const subscription = user?.subscription;
 

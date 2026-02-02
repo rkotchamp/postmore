@@ -19,7 +19,7 @@ export async function GET() {
 
     // Find user by email (works for both OAuth and manual users)
     const user = await User.findOne({ email: session.user.email }).select(
-      "name email image authProvider createdAt settings subscription stripeCustomerId"
+      "name email image authProvider createdAt settings subscription stripeCustomerId isAdmin"
     );
 
     if (!user) {
@@ -42,6 +42,7 @@ export async function GET() {
         },
         subscription: user.subscription || null,
         stripeCustomerId: user.stripeCustomerId || null,
+        isAdmin: user.isAdmin || false,
       },
     });
   } catch (error) {
