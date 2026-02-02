@@ -140,6 +140,97 @@ export const uploadVideoThumbnail = async (thumbnailFile, videoId) => {
 };
 
 /**
+ * Upload ClipperStudio project thumbnail
+ * @param {File} thumbnailFile - The thumbnail image file
+ * @param {string} projectId - ID of the project this thumbnail belongs to
+ * @param {string} fileExtension - Optional file extension override (default: auto-detect)
+ * @returns {Promise<object>} - Thumbnail metadata including download URL
+ */
+export const uploadClipperThumbnail = async (thumbnailFile, projectId, fileExtension = null) => {
+  try {
+    // Handle both image thumbnails and video clips
+    const isVideo = fileExtension === 'mp4' || fileExtension === 'webm' || fileExtension === 'mov';
+    const isImage = !isVideo && thumbnailFile.type && thumbnailFile.type.startsWith("image/");
+    
+    // For video files (Buffer data), we don't have a type property
+    const isBufferVideo = !thumbnailFile.type && fileExtension && ['mp4', 'webm', 'mov'].includes(fileExtension);
+    
+    if (!isVideo && !isImage && !isBufferVideo) {
+      throw new Error("File must be an image or video file");
+    }
+
+    // Generate UUID for the file
+    const uuid = uuidv4();
+    const finalExtension = fileExtension || (thumbnailFile.name ? thumbnailFile.name.split(".").pop() : 'mp4');
+    const fileName = `clipper_${projectId}_${uuid}.${finalExtension}`;
+
+    // Create storage path - use different folders for videos vs thumbnails
+    const folder = isVideo || isBufferVideo ? 'clipperVideos' : 'clipperThumbnails';
+    const storagePath = `${folder}/${fileName}`;
+
+    // Create a storage reference
+    const storageRef = ref(storage, storagePath);
+
+    // Handle Buffer data (for video clips) or File objects (for thumbnails)
+    let uploadData;
+    if (Buffer.isBuffer(thumbnailFile)) {
+      // Convert Buffer to Uint8Array for Firebase upload
+      uploadData = new Uint8Array(thumbnailFile);
+    } else {
+      // Regular File object
+      uploadData = thumbnailFile;
+    }
+
+    // Set proper metadata for video files to enable both streaming and downloading
+    const metadata = {};
+    if (isVideo || isBufferVideo) {
+      metadata.contentType = 'video/mp4'; // This enables streaming in browsers
+      metadata.customMetadata = {
+        'Cache-Control': 'public, max-age=31536000' // 1 year cache for better performance
+      };
+    } else if (isImage) {
+      metadata.contentType = thumbnailFile.type || 'image/jpeg';
+    }
+
+    // Upload the file with proper metadata
+    const uploadTask = uploadBytesResumable(storageRef, uploadData, metadata);
+
+    // Return a promise that resolves with the download URL when upload completes
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Optional: Track upload progress
+          // Progress tracking without logging for better performance
+        },
+        (error) => {
+          // Handle upload errors
+          reject(error);
+        },
+        async () => {
+          // Upload completed successfully, get download URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve({
+            url: downloadURL,
+            downloadURL: downloadURL, // Also include downloadURL for compatibility
+            path: storagePath,
+            size: thumbnailFile.size || (Buffer.isBuffer(thumbnailFile) ? thumbnailFile.length : 0),
+            type: thumbnailFile.type || `video/${finalExtension}`,
+            name: fileName,
+            originalName: thumbnailFile.name || `clip.${finalExtension}`,
+            uuid: uuid,
+            projectId: projectId,
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.error("Error uploading clipper thumbnail:", error);
+    throw error;
+  }
+};
+
+/**
  * Upload profile picture
  * @param {File} file - Image file
  * @param {string} userId - User ID
@@ -237,6 +328,70 @@ export const deleteMultipleFiles = async (paths) => {
     return { success: true, message: "All files deleted successfully" };
   } catch (error) {
     console.error("❌ Error deleting multiple files:", error);
+    throw error;
+  }
+};
+
+/**
+ * Upload processed clip video for sharing
+ * Stores processed videos (with templates + captions) before sharing to social media
+ * @param {Blob} videoBlob - Processed video blob from download-with-template API
+ * @param {string} clipId - Clip ID for file naming and tracking
+ * @returns {Promise<string>} - Download URL of uploaded video
+ */
+export const uploadProcessedClip = async (videoBlob, clipId) => {
+  try {
+    console.log('☁️ [FIREBASE] Uploading processed clip:', clipId);
+    console.log('📦 [FIREBASE] Blob size:', videoBlob.size, 'bytes');
+
+    // Generate UUID for the file
+    const uuid = uuidv4();
+    const fileName = `processed_${clipId}_${uuid}.mp4`;
+
+    // Create storage path in dedicated folder for processed videos
+    const storagePath = `processedClips/${fileName}`;
+
+    // Create a storage reference
+    const storageRef = ref(storage, storagePath);
+
+    // Set metadata for video streaming
+    const metadata = {
+      contentType: 'video/mp4',
+      customMetadata: {
+        'Cache-Control': 'public, max-age=31536000', // 1 year cache
+        'clipId': clipId,
+        'processedAt': new Date().toISOString()
+      }
+    };
+
+    // Upload the blob with metadata
+    const uploadTask = uploadBytesResumable(storageRef, videoBlob, metadata);
+
+    // Return a promise that resolves with the download URL
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Track upload progress
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`☁️ [FIREBASE] Upload progress: ${progress.toFixed(1)}%`);
+        },
+        (error) => {
+          // Handle upload errors
+          console.error('❌ [FIREBASE] Upload failed:', error);
+          reject(error);
+        },
+        async () => {
+          // Upload completed successfully, get download URL
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          console.log('✅ [FIREBASE] Upload complete');
+          console.log('🔗 [FIREBASE] Download URL:', downloadURL);
+          resolve(downloadURL);
+        }
+      );
+    });
+  } catch (error) {
+    console.error('❌ [FIREBASE] Error uploading processed clip:', error);
     throw error;
   }
 };

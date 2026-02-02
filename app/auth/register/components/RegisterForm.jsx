@@ -47,6 +47,9 @@ export function RegisterForm() {
   // Get the return URL from search params
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
+  // Get the acquisition source from URL params (trial, upgrade, etc.)
+  const acquisitionSource = searchParams.get("source") || "direct";
+
   const form = useForm({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -65,7 +68,10 @@ export function RegisterForm() {
     try {
       // Prepare registration data
       const registrationData = { ...values };
-      
+
+      // Include acquisition source for tracking
+      registrationData.acquisitionSource = acquisitionSource;
+
       // Include checkout session data if available
       if (isCheckoutFlow && checkoutSession) {
         registrationData.checkoutSession = checkoutSession;
@@ -96,8 +102,10 @@ export function RegisterForm() {
       }
 
       // Successfully registered
-      toast.success("Registration successful!", {
-        description: "Your account has been created.",
+      toast.success("Account created!", {
+        description: acquisitionSource === "trial"
+          ? "Now choose a plan to start your free trial."
+          : "Your account has been created.",
       });
 
       // Store the token in localStorage for future use
@@ -166,8 +174,30 @@ export function RegisterForm() {
           setIsActivatingSubscription(false);
         }
       } else {
-        // Normal registration flow
-        router.push("/auth/login");
+        // Normal registration flow - auto-login and redirect based on source
+        try {
+          const signInResult = await signIn("credentials", {
+            email: values.email,
+            password: values.password,
+            redirect: false,
+          });
+
+          if (signInResult?.ok) {
+            // If user came from "Try for Free" (source=trial), redirect to pricing
+            if (acquisitionSource === "trial") {
+              router.push("/prices?source=trial");
+            } else {
+              // Otherwise go to dashboard
+              router.push("/dashboard");
+            }
+          } else {
+            // If auto-login fails, redirect to login page
+            router.push("/auth/login");
+          }
+        } catch (signInError) {
+          console.error("Auto-login error:", signInError);
+          router.push("/auth/login");
+        }
       }
     } catch (error) {
       console.error("Registration error:", error);

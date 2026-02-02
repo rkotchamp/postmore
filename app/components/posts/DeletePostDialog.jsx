@@ -32,13 +32,13 @@ export function DeletePostDialog({
           <AlertDialogDescription>
             Are you sure you want to delete this post? This action cannot be
             undone.
-            {post?.scheduledDate && (
-              <div className="mt-2 text-sm text-muted-foreground">
-                <strong>Scheduled for:</strong> {post.scheduledDate} at{" "}
-                {post.scheduledTime}
-              </div>
-            )}
           </AlertDialogDescription>
+          {post?.scheduledDate && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              <strong>Scheduled for:</strong> {post.scheduledDate} at{" "}
+              {post.scheduledTime}
+            </div>
+          )}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>

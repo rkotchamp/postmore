@@ -1,0 +1,446 @@
+/**
+ * Dynamic Caption Styles
+ * CSS for HTML5 video caption overlay with Google Fonts
+ * Supports real-time font switching without video re-processing
+ */
+
+/* Import Google Fonts - Extended for Smart Caption Management */
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Anton&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700;800&display=swap");
+
+/* Base caption styling for all video elements */
+video::cue {
+  /* Default positioning */
+  line-height: 1.2;
+  text-align: center;
+
+  /* Visual styling */
+  color: white;
+  text-shadow: none;
+
+  /* Typography */
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+
+  /* Spacing and layout */
+  padding: 0;
+  margin-bottom: 2rem;
+  margin-top: 0;
+
+  /* Clean text with no borders or background */
+  background: transparent;
+  border: none;
+  border-radius: 0;
+
+  /* Animation */
+  transition: all 0.2s ease-in-out;
+}
+
+/* Font-specific caption styles */
+
+/* Roboto Font */
+.font-roboto-caption::cue {
+  font-family: "Roboto", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 1.5rem;
+}
+
+/* Montserrat Font */
+.font-montserrat-caption::cue {
+  font-family: "Montserrat", Arial Black, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  font-size: 1.5rem;
+  text-transform: none;
+}
+
+/* Poppins Font */
+.font-poppins-caption::cue {
+  font-family: "Poppins", Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  font-size: 1.5rem;
+}
+
+/* Inter Font */
+.font-inter-caption::cue {
+  font-family: "Inter", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 1.5rem;
+}
+
+/* Noto Sans Font */
+.font-noto-sans-caption::cue {
+  font-family: "Noto Sans", Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  font-size: 1.5rem;
+}
+
+/* Smart Caption Management - Additional Fonts */
+
+/* Bebas Neue Font */
+.font-bebas-neue-caption::cue {
+  font-family: "Bebas Neue", Impact, Arial Black, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  font-size: 1.6rem;
+  text-transform: uppercase;
+}
+
+/* Anton Font */
+.font-anton-caption::cue {
+  font-family: "Anton", Impact, Arial Black, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-size: 1.5rem;
+}
+
+/* Oswald Font */
+.font-oswald-caption::cue {
+  font-family: "Oswald", Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  font-size: 1.5rem;
+}
+
+/* Raleway Font */
+.font-raleway-caption::cue {
+  font-family: "Raleway", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  font-size: 1.5rem;
+}
+
+/* Font Weight Classes - Can be combined with any font */
+
+/* Light weight */
+.caption-weight-light::cue {
+  font-weight: 300 !important;
+}
+
+/* Normal weight */
+.caption-weight-normal::cue {
+  font-weight: 400 !important;
+}
+
+/* Medium weight */
+.caption-weight-medium::cue {
+  font-weight: 500 !important;
+}
+
+/* Semibold weight */
+.caption-weight-semibold::cue {
+  font-weight: 600 !important;
+}
+
+/* Bold weight */
+.caption-weight-bold::cue {
+  font-weight: 700 !important;
+}
+
+/* Extra bold weight */
+.caption-weight-extrabold::cue {
+  font-weight: 800 !important;
+}
+
+/* Responsive caption sizing */
+
+/* Mobile devices (portrait) */
+@media screen and (max-width: 480px) {
+  video::cue {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .font-roboto-caption::cue,
+  .font-montserrat-caption::cue,
+  .font-poppins-caption::cue,
+  .font-inter-caption::cue,
+  .font-noto-sans-caption::cue,
+  .font-bebas-neue-caption::cue,
+  .font-anton-caption::cue,
+  .font-oswald-caption::cue,
+  .font-raleway-caption::cue {
+    font-size: 1rem;
+  }
+
+  /* Responsive size adjustments */
+  .caption-size-verysmall::cue {
+    font-size: 0.7rem !important;
+    padding: 0 !important;
+  }
+
+  .caption-size-small::cue {
+    font-size: 0.8rem !important;
+    padding: 0 !important;
+  }
+
+  .caption-size-medium::cue {
+    font-size: 1rem !important;
+    padding: 0 !important;
+  }
+
+  .caption-size-large::cue {
+    font-size: 1.2rem !important;
+    padding: 0 !important;
+  }
+}
+
+/* Small tablets */
+@media screen and (min-width: 481px) and (max-width: 768px) {
+  video::cue {
+    font-size: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .font-roboto-caption::cue,
+  .font-montserrat-caption::cue,
+  .font-poppins-caption::cue,
+  .font-inter-caption::cue,
+  .font-noto-sans-caption::cue,
+  .font-bebas-neue-caption::cue,
+  .font-anton-caption::cue,
+  .font-oswald-caption::cue,
+  .font-raleway-caption::cue {
+    font-size: 1.25rem;
+  }
+}
+
+/* Large tablets and desktop */
+@media screen and (min-width: 769px) {
+  video::cue {
+    font-size: 1.75rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .font-roboto-caption::cue,
+  .font-montserrat-caption::cue,
+  .font-poppins-caption::cue,
+  .font-inter-caption::cue,
+  .font-noto-sans-caption::cue,
+  .font-bebas-neue-caption::cue,
+  .font-anton-caption::cue,
+  .font-oswald-caption::cue,
+  .font-raleway-caption::cue {
+    font-size: 1.75rem;
+  }
+}
+
+/* Caption Size Variants - High Specificity */
+
+/* Very Small size */
+.caption-size-verysmall::cue {
+  font-size: 1.0rem !important;
+  padding: 0.1rem 0.5rem !important;
+  letter-spacing: 0.015em !important;
+}
+
+/* Small size */
+.caption-size-small::cue {
+  font-size: 1.2rem !important;
+  padding: 0.2rem 0.6rem !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* Medium size (default) */
+.caption-size-medium::cue {
+  font-size: 1.5rem !important;
+  padding: 0.25rem 0.75rem !important;
+  letter-spacing: 0.025em !important;
+}
+
+/* Large size */
+.caption-size-large::cue {
+  font-size: 1.8rem !important;
+  padding: 0.3rem 0.9rem !important;
+  letter-spacing: 0.03em !important;
+}
+
+/* Caption Position Variants - High Specificity */
+
+/* Top positioning */
+.caption-position-top::cue {
+  margin-top: 2rem !important;
+  margin-bottom: 0 !important;
+}
+
+/* Center positioning */
+.caption-position-center::cue {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Bottom positioning (default) */
+.caption-position-bottom::cue {
+  margin-top: 0 !important;
+  margin-bottom: 2rem !important;
+}
+
+/* Legacy Caption positioning variants (for backward compatibility) */
+
+/* Top positioning */
+.captions-top::cue {
+  margin-top: 2rem;
+  margin-bottom: 0;
+}
+
+/* Center positioning */
+.captions-center::cue {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Bottom positioning (default) */
+.captions-bottom::cue {
+  margin-top: 0;
+  margin-bottom: 2rem;
+}
+
+/* Caption visibility states */
+
+/* Hidden captions */
+.captions-hidden::cue {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Visible captions */
+.captions-visible::cue {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Caption style variants */
+
+/* High contrast style */
+.captions-high-contrast::cue {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.9);
+  text-shadow: none;
+  border: 2px solid #ffffff;
+}
+
+/* Minimal style */
+.captions-minimal::cue {
+  background: none;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.8),
+    1px -1px 2px rgba(0, 0, 0, 0.8), -1px 1px 2px rgba(0, 0, 0, 0.8);
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Outlined style */
+.captions-outlined::cue {
+  background: none;
+  color: white;
+  text-shadow: 3px 3px 0px black, -3px -3px 0px black, 3px -3px 0px black,
+    -3px 3px 0px black, 0px 3px 0px black, 3px 0px 0px black, 0px -3px 0px black,
+    -3px 0px 0px black;
+}
+
+/* Animation effects */
+
+/* Fade in animation */
+@keyframes captionFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.captions-animated::cue {
+  animation: captionFadeIn 0.3s ease-out;
+}
+
+/* Font switching animation */
+.caption-font-transition {
+  transition: font-family 0.2s ease-in-out;
+}
+
+/* Accessibility improvements */
+
+/* High motion preference - disable animations */
+@media (prefers-reduced-motion: reduce) {
+  video::cue {
+    transition: none;
+    animation: none;
+  }
+
+  .captions-animated::cue {
+    animation: none;
+  }
+}
+
+/* High contrast preference */
+@media (prefers-contrast: high) {
+  video::cue {
+    background: rgba(0, 0, 0, 0.95);
+    border: 1px solid white;
+    text-shadow: none;
+  }
+}
+
+/* CRITICAL: Position and Size overrides - MUST come last for highest specificity */
+
+/* Position Classes - Final Override with Viewport-Relative Positioning */
+.caption-position-top::cue {
+  position: relative !important;
+  top: -80% !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.caption-position-center::cue {
+  position: relative !important;
+  top: -40% !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.caption-position-bottom::cue {
+  position: relative !important;
+  top: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 2rem !important;
+}
+
+/* Size Classes - Final Override */
+.caption-size-verysmall::cue {
+  font-size: 1.0rem !important;
+  padding: 0 !important;
+  letter-spacing: 0.015em !important;
+}
+
+.caption-size-small::cue {
+  font-size: 1.2rem !important;
+  padding: 0 !important;
+  letter-spacing: 0.02em !important;
+}
+
+.caption-size-medium::cue {
+  font-size: 1.5rem !important;
+  padding: 0 !important;
+  letter-spacing: 0.025em !important;
+}
+
+.caption-size-large::cue {
+  font-size: 1.8rem !important;
+  padding: 0 !important;
+  letter-spacing: 0.03em !important;
+}

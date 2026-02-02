@@ -19,7 +19,7 @@ export async function GET() {
 
     // Find user by email (works for both OAuth and manual users)
     const user = await User.findOne({ email: session.user.email }).select(
-      "name email image authProvider createdAt settings"
+      "name email image authProvider createdAt settings subscription stripeCustomerId"
     );
 
     if (!user) {
@@ -39,7 +39,9 @@ export async function GET() {
         settings: user.settings || {
           theme: "system",
           scheduledPostsView: "grid",
-        }, // Provide defaults if not set
+        },
+        subscription: user.subscription || null,
+        stripeCustomerId: user.stripeCustomerId || null,
       },
     });
   } catch (error) {
@@ -150,7 +152,7 @@ export async function PUT(request) {
     // Return updated user data
     const updatedUser = await User.findOne({
       email: session.user.email,
-    }).select("name email image authProvider createdAt settings");
+    }).select("name email image authProvider createdAt settings subscription stripeCustomerId");
 
     return NextResponse.json({
       success: true,
@@ -165,7 +167,9 @@ export async function PUT(request) {
         settings: updatedUser.settings || {
           theme: "system",
           scheduledPostsView: "grid",
-        }, // Provide defaults if not set
+        },
+        subscription: updatedUser.subscription || null,
+        stripeCustomerId: updatedUser.stripeCustomerId || null,
       },
     });
   } catch (error) {

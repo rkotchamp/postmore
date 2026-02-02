@@ -104,7 +104,7 @@ export function Hero() {
               </div>
 
               <div className="mt-10 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-                <a href="#pricing">
+                <Link href="/auth/register?source=trial">
                   <Button
                     size="lg"
                     className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 text-base font-semibold shadow-lg"
@@ -112,7 +112,7 @@ export function Hero() {
                     Try it for free
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                </a>
+                </Link>
 
                 <Button
                   variant="outline"

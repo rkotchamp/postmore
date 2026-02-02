@@ -16,7 +16,6 @@ export const useStripeCheckout = () => {
     setError,
     selectPlan,
     setCurrentSubscription,
-    getCurrentPriceId,
   } = useSubscriptionStore();
 
   /**
@@ -35,10 +34,13 @@ export const useStripeCheckout = () => {
         // Select the plan in the store
         selectPlan(planId);
 
-        // Prepare checkout data
+        // Get billing period from store
+        const { billingPeriod } = useSubscriptionStore.getState();
+
+        // Prepare checkout data - let server determine priceId from planId and billingPeriod
         const checkoutData = {
           planId,
-          priceId: getCurrentPriceId(planId), // Use the correct price ID based on billing period
+          billingPeriod, // Send billing period so server can pick correct price
           successUrl:
             options.successUrl ||
             `${window.location.origin}/dashboard?checkout=success`,
@@ -67,7 +69,7 @@ export const useStripeCheckout = () => {
           throw new Error(data.error || "Failed to create checkout session");
         }
 
-        const { sessionId, url } = data;
+        const { url } = data;
 
         // Redirect to Stripe checkout
         if (url) {
