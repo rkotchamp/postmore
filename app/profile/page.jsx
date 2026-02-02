@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useUser } from "@/app/context/UserContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
+import { SubscriptionGuard } from "@/app/components/guards/SubscriptionGuard";
 import {
   Avatar,
   AvatarImage,
@@ -328,15 +329,18 @@ export default function Profile() {
 
   if (isLoadingUser) {
     return (
-      <DashboardLayout>
-        <div className="max-w-2xl mx-auto p-6 space-y-6">
-          <ProfileSkeleton />
-        </div>
-      </DashboardLayout>
+      <SubscriptionGuard>
+        <DashboardLayout>
+          <div className="max-w-2xl mx-auto p-6 space-y-6">
+            <ProfileSkeleton />
+          </div>
+        </DashboardLayout>
+      </SubscriptionGuard>
     );
   }
 
   return (
+    <SubscriptionGuard>
     <DashboardLayout>
       <div className="max-w-2xl mx-auto p-6 space-y-6">
         <h1 className="text-3xl font-bold">Profile Settings</h1>
@@ -624,5 +628,6 @@ export default function Profile() {
         </Card>
       </div>
     </DashboardLayout>
+    </SubscriptionGuard>
   );
 }

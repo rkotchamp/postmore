@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
+import { SubscriptionGuard } from "@/app/components/guards/SubscriptionGuard";
 import { Post } from "@/app/components/posts/Posts";
 import { CalendarDays, ChevronRight, X, Grid3X3 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
@@ -226,6 +227,7 @@ export default function ScheduledPosts() {
   // If loading, show skeleton UI
   if (isLoading) {
     return (
+      <SubscriptionGuard>
       <DashboardLayout>
         <div className="p-3 sm:p-4 md:p-6">
           <div className="flex justify-between items-center mb-4 sm:mb-6">
@@ -291,12 +293,14 @@ export default function ScheduledPosts() {
           </div>
         </div>
       </DashboardLayout>
+      </SubscriptionGuard>
     );
   }
 
   // If error, show error message
   if (error) {
     return (
+      <SubscriptionGuard>
       <DashboardLayout>
         <div className="p-3 sm:p-4 md:p-6">
           <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">
@@ -310,6 +314,7 @@ export default function ScheduledPosts() {
           </div>
         </div>
       </DashboardLayout>
+      </SubscriptionGuard>
     );
   }
 
@@ -318,6 +323,7 @@ export default function ScheduledPosts() {
     const postsForMonth = groupedPosts[selectedMonth] || [];
 
     return (
+      <SubscriptionGuard>
       <DashboardLayout>
         <div className="p-3 sm:p-4 md:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-4 sm:mb-6">
@@ -345,11 +351,13 @@ export default function ScheduledPosts() {
           </div>
         </div>
       </DashboardLayout>
+      </SubscriptionGuard>
     );
   }
 
   // Otherwise show the month groups or all posts depending on isGrouped state
   return (
+    <SubscriptionGuard>
     <DashboardLayout>
       <div className="p-3 sm:p-4 md:p-6">
         <div className="flex justify-between items-center mb-4 sm:mb-6">
@@ -427,5 +435,6 @@ export default function ScheduledPosts() {
         post={editModal.post}
       />
     </DashboardLayout>
+    </SubscriptionGuard>
   );
 }

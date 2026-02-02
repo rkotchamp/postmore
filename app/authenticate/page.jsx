@@ -27,6 +27,7 @@ import {
   AvatarFallback,
 } from "@/app/components/ui/avatar";
 import { DashboardLayout } from "@/app/dashboard/components/dashboard-layout";
+import { SubscriptionGuard } from "@/app/components/guards/SubscriptionGuard";
 import { Alert, AlertTitle, AlertDescription } from "@/app/components/ui/alert";
 import { DisconnectDialog } from "./components/DisconnectDialog";
 import Spinner from "@/app/components/ui/Spinner";
@@ -671,6 +672,7 @@ export default function Authenticate() {
   // Remove the dependency on loading state - let the page load regardless
 
   return (
+    <SubscriptionGuard>
     <DashboardLayout>
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6 max-w-4xl mx-auto">
@@ -863,5 +865,6 @@ export default function Authenticate() {
         />
       </div>
     </DashboardLayout>
+    </SubscriptionGuard>
   );
 }
