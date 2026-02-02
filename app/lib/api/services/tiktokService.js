@@ -171,18 +171,14 @@ async function post(accountData, postData) {
       process.env.NODE_ENV === "development";
 
     if (isSandbox) {
-      console.log("🧪 TikTok SANDBOX MODE: Simulating post creation");
-
-      // Return mock success response for sandbox
-      return {
-        success: true,
-        postId: `sandbox_${Date.now()}`,
-        status: "published",
-        url: `https://tiktok.com/@sandbox_user/video/${Date.now()}`,
-        mediaType: mappedPostData.mediaType,
-        privacyLevel: mappedPostData.privacyLevel,
-        message: "Posted to TikTok (sandbox simulation)",
-      };
+      console.log("🧪 TikTok SANDBOX MODE: Making real API calls");
+      console.log("📋 Note: Posts will be restricted to SELF_ONLY (private) viewing");
+      console.log("⚠️  Account must be set to private in TikTok app");
+      
+      // Force privacy to SELF_ONLY for sandbox (required for unaudited apps)
+      mappedPostData.privacyLevel = "SELF_ONLY";
+      
+      console.log("🔒 Privacy level forced to SELF_ONLY for sandbox compliance");
     }
 
     // Continue with real TikTok API for production...

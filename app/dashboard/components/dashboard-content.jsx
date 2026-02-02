@@ -523,13 +523,26 @@ export function DashboardContent() {
               }, 100);
             } else {
               const failedPlatforms = data.results ? 
-                data.results.filter(r => !r.success).map(r => r.platform) : [];
+                data.results.filter(r => !r.success) : [];
+              
+              // Create detailed error message
+              let errorDescription = "Check your post status for details";
+              if (failedPlatforms.length > 0) {
+                const platformErrors = failedPlatforms.map(r => 
+                  `${r.platform}: ${r.error || 'Unknown error'}`
+                ).join(' | ');
+                errorDescription = `Failed platforms: ${platformErrors}`;
+              }
+              
+              // Also log debug info if available
+              if (data.debug) {
+                console.log("🐛 POST SUBMISSION DEBUG INFO:", data.debug);
+                console.log("📊 Failed Platform Details:", data.debug.failedPlatformDetails);
+              }
               
               toast.error("Post failed on some platforms", {
-                description: failedPlatforms.length > 0 
-                  ? `Failed on: ${failedPlatforms.join(', ')}`
-                  : "Check your post status for details",
-                duration: 7000,
+                description: errorDescription,
+                duration: 10000, // Longer duration for debugging
               });
               
               // Unmount progress modal after error toast appears

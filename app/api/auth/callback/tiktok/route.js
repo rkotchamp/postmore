@@ -67,6 +67,8 @@ export async function GET(request) {
       grant_type: "authorization_code",
       redirect_uri: redirectUri,
     };
+    
+    console.log("Token params:", { ...tokenParams, client_secret: "***REDACTED***" });
 
     const tokenUrl = "https://open.tiktokapis.com/v2/oauth/token/";
     console.log("Requesting token from TikTok:", tokenUrl);

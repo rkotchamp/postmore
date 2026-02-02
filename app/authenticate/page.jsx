@@ -266,6 +266,28 @@ export default function Authenticate() {
             message: "Received TikTok authorization code!",
           });
         }
+      } else if (platform === "threads") {
+        if (success === "true") {
+          const username = params.get("username");
+          setAuthStatus({
+            type: "success",
+            platform: "threads",
+            message: username 
+              ? `Connected to Threads account @${username} successfully!`
+              : "Connected to Threads successfully!",
+          });
+          // Refetch accounts to show the new Threads account
+          refetchAccounts();
+        } else if (error) {
+          console.error("Threads authentication error:", error, debug);
+          setAuthStatus({
+            type: "error",
+            platform: "threads",
+            message: error || "Failed to connect to Threads",
+          });
+          // Refetch accounts even on error to ensure TanStack Query state is updated
+          refetchAccounts();
+        }
       }
 
       // Clean up URL parameters after processing
@@ -321,9 +343,36 @@ export default function Authenticate() {
   };
 
   const handleThreadsConnection = async () => {
+    setIsLoadingAuthAction(true);
+    setAuthStatus(null);
+
     // Update platform consent acknowledgment
     await updatePlatformConsent("threads");
-    // Integration code would go here
+
+    try {
+      const response = await fetch("/api/auth/threads/connect");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to get Threads authorization URL"
+        );
+      }
+
+      if (data.authorizeUrl) {
+        window.location.href = data.authorizeUrl;
+      } else {
+        throw new Error("Authorization URL not received from server.");
+      }
+    } catch (error) {
+      console.error("Error initiating Threads connection:", error);
+      setAuthStatus({
+        type: "error",
+        platform: "threads",
+        message: `Failed to connect Threads: ${error.message}`,
+      });
+      setIsLoadingAuthAction(false);
+    }
   };
 
   const handleYtShortsConnection = async () => {
@@ -379,13 +428,17 @@ export default function Authenticate() {
         );
       }
 
+
       const baseUrl = "https://www.tiktok.com/v2/auth/authorize/";
+
+      // Use the registered redirect URI from environment variables
+      const redirectUri = process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI;
 
       const params = {
         client_key: process.env.NEXT_PUBLIC_TIKTOK_CLIENT_ID,
-        redirect_uri: process.env.NEXT_PUBLIC_TIKTOK_REDIRECT_URI,
+        redirect_uri: redirectUri,
         response_type: "code",
-        scope: "user.info.basic,video.list,video.publish",
+        scope: "user.info.basic,video.upload,video.publish",
         state: stateToken,
         prompt: "select_account",
         force_authentication: "true",
@@ -395,6 +448,7 @@ export default function Authenticate() {
 
       const authUrl = `${baseUrl}?${searchParams.toString()}`;
 
+      // Redirect to TikTok OAuth (sensitive params removed from logs for security)
       window.location.href = authUrl;
     } catch (error) {
       console.error("Error initiating TikTok authentication:", error);
@@ -505,6 +559,10 @@ export default function Authenticate() {
     bluesky: handleBlueskyAuth,
     linkedin: handleLinkedInConnection,
   };
+
+  // Debug: Log connection handlers to verify threads is mapped correctly
+  console.log("🔗 Connection handlers:", Object.keys(connectionHandlers));
+  console.log("🧵 Threads handler exists:", !!connectionHandlers.threads);
 
   const PlatformIcon = ({ platform }) => {
     const iconProps = { className: "h-5 w-5" };
@@ -738,14 +796,27 @@ export default function Authenticate() {
 
                     <div className="mt-6">
                       <Button
+                        type="button"
                         className="w-full py-6 text-base flex items-center gap-2"
-                        onClick={connectionHandlers[platform]}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log("🔘 Button clicked for platform:", platform);
+                          console.log("🔘 Handler exists:", !!connectionHandlers[platform]);
+                          console.log("🔘 Handler function:", connectionHandlers[platform]?.name || 'anonymous');
+                          if (connectionHandlers[platform]) {
+                            connectionHandlers[platform]();
+                          } else {
+                            console.error("❌ No handler found for platform:", platform);
+                          }
+                        }}
                         disabled={
                           (isLoadingAuthAction && platform === "tiktok") ||
                           (isLoadingAuthAction && platform === "bluesky") ||
                           (isLoadingAuthAction && platform === "ytShorts") ||
                           (isLoadingAuthAction && platform === "instagram") ||
-                          (isLoadingAuthAction && platform === "linkedin")
+                          (isLoadingAuthAction && platform === "linkedin") ||
+                          (isLoadingAuthAction && platform === "threads")
                         }
                       >
                         <PlatformIcon platform={platform} />
@@ -753,7 +824,8 @@ export default function Authenticate() {
                         (isLoadingAuthAction && platform === "bluesky") ||
                         (isLoadingAuthAction && platform === "ytShorts") ||
                         (isLoadingAuthAction && platform === "instagram") ||
-                        (isLoadingAuthAction && platform === "linkedin")
+                        (isLoadingAuthAction && platform === "linkedin") ||
+                        (isLoadingAuthAction && platform === "threads")
                           ? "Connecting..."
                           : `Connect a ${platformNames[platform]} Account`}
                       </Button>

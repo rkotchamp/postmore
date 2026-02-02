@@ -342,6 +342,17 @@ export async function POST(request) {
         savedPost.status = allSucceeded ? "published" : "failed";
         savedPost.results = results;
         await savedPost.save();
+
+        // Add detailed error information for debugging
+        const failedPlatforms = results.filter(r => !r.success);
+        if (failedPlatforms.length > 0) {
+          console.log("❌ FAILED PLATFORMS DETAILS:");
+          failedPlatforms.forEach(result => {
+            console.log(`Platform: ${result.platform}`);
+            console.log(`Error: ${result.error}`);
+            console.log(`Full result:`, JSON.stringify(result, null, 2));
+          });
+        }
       } catch (postError) {
         console.error(
           "API Route: Error in apiManager.postToMultiplePlatforms:",
@@ -366,10 +377,27 @@ export async function POST(request) {
 
     // Return the post with results
     console.log("API Route: Successfully completed post submission");
+    
+    // Add debugging info for failed platforms
+    const failedPlatforms = results.filter(r => !r.success);
+    const successfulPlatforms = results.filter(r => r.success);
+    
     return NextResponse.json({
       success: true,
       post: savedPost,
       results,
+      // Add debugging information
+      debug: {
+        totalPlatforms: results.length,
+        successful: successfulPlatforms.length,
+        failed: failedPlatforms.length,
+        failedPlatformDetails: failedPlatforms.map(r => ({
+          platform: r.platform,
+          error: r.error,
+          accountId: r.accountId
+        })),
+        allSucceeded: results.every((result) => result.success)
+      }
     });
   } catch (error) {
     console.error("API Route: Unhandled error in POST handler:", error);
