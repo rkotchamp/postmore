@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
@@ -8,9 +9,72 @@ import { PricingCards } from "@/app/prices/components/PricingCards";
 import { BillingToggle } from "@/app/components/ui/BillingToggle";
 import { FAQ } from "@/app/components/HomePage/FAQ";
 
-export default function PricingPage() {
-  const { error, setError, getCurrentPlanDetails } = useSubscriptionStore();
+// Content configuration based on source parameter
+const pageContent = {
+  trial: {
+    title: "Start Your 5-Day Free Trial",
+    description: "Try all features free for 5 days. No charge until your trial ends. Cancel anytime.",
+    badge: "5-day free trial",
+  },
+  upgrade: {
+    title: "Upgrade Your Plan",
+    description: "Unlock more features and take your social media presence to the next level.",
+    badge: "Upgrade available",
+  },
+  profile_upgrade: {
+    title: "Upgrade Your Plan",
+    description: "Unlock more features and take your social media presence to the next level.",
+    badge: "Upgrade available",
+  },
+  default: {
+    title: "Choose Your Perfect Plan",
+    description: "Scale your social media presence with our flexible pricing plans. All plans include a 5-day free trial with no commitment.",
+    badge: "5-day free trial",
+  },
+};
 
+// Structured data for SEO
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "PostMoore Social Media Scheduler",
+  "description": "Professional social media scheduling and content management platform for YouTube, TikTok, Instagram, and more.",
+  "brand": {
+    "@type": "Brand",
+    "name": "PostMoore"
+  },
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Free Plan",
+      "price": "0",
+      "priceCurrency": "USD",
+      "description": "Perfect for getting started with social media scheduling"
+    },
+    {
+      "@type": "Offer",
+      "name": "Pro Plan",
+      "price": "19",
+      "priceCurrency": "USD",
+      "description": "Advanced features for growing businesses and content creators"
+    },
+    {
+      "@type": "Offer",
+      "name": "Business Plan",
+      "price": "49",
+      "priceCurrency": "USD",
+      "description": "Enterprise-level features for teams and agencies"
+    }
+  ]
+};
+
+// Inner component that uses useSearchParams
+function PricingContent() {
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source") || "default";
+  const content = pageContent[source] || pageContent.default;
+
+  const { error, setError, getCurrentPlanDetails } = useSubscriptionStore();
   const currentPlan = getCurrentPlanDetails();
 
   // Clear any previous errors when component mounts
@@ -18,55 +82,13 @@ export default function PricingPage() {
     setError(null);
   }, [setError]);
 
-  // Structured data for SEO
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "name": "PostMoore Social Media Scheduler",
-    "description": "Professional social media scheduling and content management platform for YouTube, TikTok, Instagram, and more.",
-    "brand": {
-      "@type": "Brand",
-      "name": "PostMoore"
-    },
-    "offers": [
-      {
-        "@type": "Offer",
-        "name": "Free Plan",
-        "price": "0",
-        "priceCurrency": "USD",
-        "description": "Perfect for getting started with social media scheduling"
-      },
-      {
-        "@type": "Offer", 
-        "name": "Pro Plan",
-        "price": "19",
-        "priceCurrency": "USD",
-        "description": "Advanced features for growing businesses and content creators"
-      },
-      {
-        "@type": "Offer",
-        "name": "Business Plan", 
-        "price": "49",
-        "priceCurrency": "USD",
-        "description": "Enterprise-level features for teams and agencies"
-      }
-    ]
-  };
-
   return (
     <>
-      {/* Structured Data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
-      />
-      
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="flex items-center gap-2"
             onClick={() => window.history.back()}
           >
@@ -75,7 +97,7 @@ export default function PricingPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">5-day free trial</span>
+            <span className="text-sm font-medium">{content.badge}</span>
           </div>
         </div>
       </div>
@@ -94,11 +116,10 @@ export default function PricingPage() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            Choose Your Perfect Plan
+            {content.title}
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Scale your social media presence with our flexible pricing plans.
-            All plans include a 5-day free trial with no commitment.
+            {content.description}
           </p>
         </div>
 
@@ -117,20 +138,35 @@ export default function PricingPage() {
         <BillingToggle />
 
         {/* Pricing Cards */}
-        <Suspense
-          fallback={
-            <div className="text-center py-12">Loading pricing options...</div>
-          }
-        >
-          <PricingCards mode="pricing" />
-        </Suspense>
+        <PricingCards mode="pricing" />
 
         {/* FAQ Section */}
         <div className="mt-20">
           <FAQ />
         </div>
       </div>
-    </div>
+    </>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <>
+      {/* Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <Suspense fallback={
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div className="text-center">Loading pricing options...</div>
+          </div>
+        }>
+          <PricingContent />
+        </Suspense>
+      </div>
     </>
   );
 }
