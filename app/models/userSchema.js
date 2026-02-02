@@ -78,7 +78,7 @@ const userSchema = new mongoose.Schema({
     id: String, // Stripe subscription ID
     planId: {
       type: String,
-      enum: ["basic", "pro", "premium"],
+      enum: ["basic", "creator", "premium"],
     },
     status: {
       type: String,
@@ -90,8 +90,30 @@ const userSchema = new mongoose.Schema({
       type: Boolean,
       default: false,
     },
+    trialEndingSoon: {
+      type: Boolean,
+      default: false,
+    },
   },
   stripeCustomerId: String, // Stripe customer ID
+  // Acquisition tracking for analytics
+  acquisition: {
+    source: {
+      type: String,
+      enum: ["trial", "upgrade", "profile_upgrade", "direct", "referral"],
+      default: "direct",
+    },
+    initialPlan: {
+      type: String,
+      enum: ["basic", "creator", "premium"],
+    },
+    signupDate: {
+      type: Date,
+      default: Date.now,
+    },
+    firstPurchaseDate: Date,
+    referralCode: String,
+  },
   settings: {
     theme: {
       type: String,
@@ -100,7 +122,7 @@ const userSchema = new mongoose.Schema({
     },
     plan: {
       type: String,
-      enum: ["basic", "pro", "premium"],
+      enum: ["basic", "creator", "premium"],
       default: "basic",
     },
     subscriptionStatus: {

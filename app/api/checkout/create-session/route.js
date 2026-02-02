@@ -16,7 +16,7 @@ export async function POST(request) {
   try {
     // Parse request body first to check metadata
     const body = await request.json();
-    const { planId, priceId, successUrl, cancelUrl, metadata } = body;
+    const { planId, billingPeriod = "monthly", successUrl, cancelUrl, metadata } = body;
 
     // Get the current session
     const session = await getServerSession(authOptions);
@@ -37,35 +37,34 @@ export async function POST(request) {
     }
 
 
-    // Use provided priceId or fallback to legacy plan configuration
-    let selectedPriceId = priceId;
-    
-    if (!selectedPriceId) {
-      // Legacy fallback - plan configuration mapping to your Stripe Price IDs
-      const planConfig = {
-        basic: {
-          name: "Basic",
-          price: 5,
-          priceId: process.env.STRIPE_MONTHLY_BASIC_PRICE_ID || "price_1RndT7GR3RTuDO76YnIS0frc",
-        },
-        creator: {
-          name: "Creator", 
-          price: 9,
-          priceId: process.env.STRIPE_MONTHLY_CREATOR_PRICE_ID || "price_1RndXyGR3RTuDO76l0nsbdWV",
-        },
-        premium: {
-          name: "Premium",
-          price: 19,
-          priceId: process.env.STRIPE_MONTHLY_PREMIUM_PRICE_ID || "price_1RndeEGR3RTuDO76bstknjni",
-        },
-      };
+    // Plan configuration mapping to Stripe Price IDs (from environment variables)
+    const planConfig = {
+      basic: {
+        name: "Basic",
+        monthlyPriceId: process.env.STRIPE_MONTHLY_BASIC_PRICE_ID,
+        yearlyPriceId: process.env.STRIPE_YEARLY_BASIC_PRICE_ID,
+      },
+      creator: {
+        name: "Creator",
+        monthlyPriceId: process.env.STRIPE_MONTHLY_CREATOR_PRICE_ID,
+        yearlyPriceId: process.env.STRIPE_YEARLY_CREATOR_PRICE_ID,
+      },
+      premium: {
+        name: "Premium",
+        monthlyPriceId: process.env.STRIPE_MONTHLY_PREMIUM_PRICE_ID,
+        yearlyPriceId: process.env.STRIPE_YEARLY_PREMIUM_PRICE_ID,
+      },
+    };
 
-      const selectedPlan = planConfig[planId];
-      if (!selectedPlan) {
-        return NextResponse.json({ error: "Invalid plan ID" }, { status: 400 });
-      }
-      selectedPriceId = selectedPlan.priceId;
+    const selectedPlan = planConfig[planId];
+    if (!selectedPlan) {
+      return NextResponse.json({ error: "Invalid plan ID" }, { status: 400 });
     }
+
+    // Select price based on billing period
+    const selectedPriceId = billingPeriod === "yearly"
+      ? selectedPlan.yearlyPriceId
+      : selectedPlan.monthlyPriceId;
 
     if (!selectedPriceId) {
       return NextResponse.json(
@@ -74,6 +73,9 @@ export async function POST(request) {
       );
     }
 
+
+    // Check if this is a trial signup
+    const isTrial = metadata?.source === "trial";
 
     // Create Stripe checkout session configuration
     const checkoutConfig = {
@@ -96,6 +98,13 @@ export async function POST(request) {
           process.env.NEXT_PUBLIC_APP_URL || "https://www.postmoo.re"
         }/prices?checkout=cancelled`,
     };
+
+    // Add 5-day free trial for trial signups
+    if (isTrial) {
+      checkoutConfig.subscription_data = {
+        trial_period_days: 5,
+      };
+    }
 
     // Add user info if authenticated
     if (session?.user) {

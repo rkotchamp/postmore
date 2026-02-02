@@ -18,7 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/app/components/ui/card";
-import { Edit, Camera, Eye, EyeOff, ExternalLink } from "lucide-react";
+import { Edit, Camera, Eye, EyeOff, ExternalLink, CreditCard } from "lucide-react";
 import Link from "next/link";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import Spinner from "@/app/components/ui/Spinner";
@@ -141,6 +141,7 @@ export default function Profile() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [imageUpdateKey, setImageUpdateKey] = useState(0);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
   // Set initial name when user data loads
   useEffect(() => {
@@ -292,6 +293,37 @@ export default function Profile() {
       .join("")
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const handleManageBilling = async () => {
+    try {
+      setIsOpeningPortal(true);
+      const response = await fetch("/api/checkout/create-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          returnUrl: window.location.href,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to open billing portal");
+      }
+
+      // Redirect to Stripe Customer Portal
+      window.location.href = data.url;
+    } catch (error) {
+      console.error("Error opening billing portal:", error);
+      toast.error("Failed to open billing portal", {
+        description: error.message || "Please try again.",
+        duration: 5000,
+      });
+      setIsOpeningPortal(false);
+    }
   };
 
   if (isLoadingUser) {
@@ -544,24 +576,49 @@ export default function Profile() {
               <Label>Current Plan</Label>
               <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center space-x-2">
-                  <span className="text-lg font-semibold text-primary">
-                    Pro Plan
+                  <span className="text-lg font-semibold text-primary capitalize">
+                    {user?.settings?.plan || user?.subscription?.planId || "Basic"} Plan
                   </span>
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                    Active
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    user?.settings?.subscriptionStatus === "active" || user?.subscription?.status === "active"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                      : user?.settings?.subscriptionStatus === "trialing" || user?.subscription?.status === "trialing"
+                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                  }`}>
+                    {user?.settings?.subscriptionStatus || user?.subscription?.status || "Trialing"}
                   </span>
                 </div>
-                <Link href="/prices?source=profile_upgrade">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-1"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Upgrade
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link href="/prices?source=profile_upgrade">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      {user?.settings?.plan === "premium" ? "View Plans" : "Upgrade"}
+                    </Button>
+                  </Link>
+                  {user?.stripeCustomerId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-1"
+                      onClick={handleManageBilling}
+                      disabled={isOpeningPortal}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      {isOpeningPortal ? "Opening..." : "Manage Billing"}
+                    </Button>
+                  )}
+                </div>
               </div>
+              {user?.subscription?.trialEnd && user?.subscription?.status === "trialing" && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Trial ends on {new Date(user.subscription.trialEnd).toLocaleDateString()}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

@@ -125,11 +125,14 @@ export async function POST(request) {
 }
 
 function getPlanIdFromPriceId(priceId) {
-  // Map Stripe price IDs back to plan IDs
+  // Map Stripe price IDs back to plan IDs (supports both monthly and yearly)
   const priceMap = {
-    [process.env.STRIPE_BASIC_PRICE_ID]: "basic",
-    [process.env.STRIPE_PRO_PRICE_ID]: "pro",
-    [process.env.STRIPE_PREMIUM_PRICE_ID]: "premium",
+    [process.env.STRIPE_MONTHLY_BASIC_PRICE_ID]: "basic",
+    [process.env.STRIPE_YEARLY_BASIC_PRICE_ID]: "basic",
+    [process.env.STRIPE_MONTHLY_CREATOR_PRICE_ID]: "creator",
+    [process.env.STRIPE_YEARLY_CREATOR_PRICE_ID]: "creator",
+    [process.env.STRIPE_MONTHLY_PREMIUM_PRICE_ID]: "premium",
+    [process.env.STRIPE_YEARLY_PREMIUM_PRICE_ID]: "premium",
   };
 
   return priceMap[priceId] || "basic";

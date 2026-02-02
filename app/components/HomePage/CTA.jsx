@@ -1,5 +1,6 @@
 import { Button } from "@/app/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export function CTA() {
   return (
@@ -15,14 +16,16 @@ export function CTA() {
             see the difference.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button
-              size="lg"
-              variant="secondary"
-              className="bg-background text-primary hover:bg-background/90 px-8 py-3"
-            >
-              Start 14-Day Free Trial
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            <Link href="/auth/register?source=trial">
+              <Button
+                size="lg"
+                variant="secondary"
+                className="bg-background text-primary hover:bg-background/90 px-8 py-3"
+              >
+                Start 5-Day Free Trial
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
             <Button
               size="lg"
               variant="outline"
