@@ -22,6 +22,7 @@ export function Footer() {
             <div className="flex space-x-4">
               <Link
                 href="https://x.com/postmoore_?s=21"
+                che
                 className="text-gray-400 hover:text-white transition-colors"
               >
                 X

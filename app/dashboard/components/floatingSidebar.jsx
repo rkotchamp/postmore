@@ -17,6 +17,7 @@ import {
   CalendarClock,
   Layers,
   Plus,
+  Scissors,
 } from "lucide-react";
 import { cn } from "@/app/lib/utils";
 import { Sidebar } from "@/app/components/ui/sidebar";
@@ -31,15 +32,17 @@ import { UserNav } from "./userProfile";
 // Custom Bluesky icon component
 
 const navItems = [
-  { icon: Plus, href: "/", label: "Create Post" },
-  { icon: LayoutGrid, href: "/dashboard", label: "New Post" },
+  { id: "create-post", icon: Plus, href: "/dashboard", label: "Create Post" },
+  { id: "new-post", icon: LayoutGrid, href: "/dashboard", label: "New Post" },
+  { id: "clipper-studio", icon: Scissors, href: "/clipper-studio", label: "Clipper Studio" },
   {
+    id: "scheduled-posts",
     icon: CalendarClock,
     href: "/scheduled-posts",
     label: "Scheduled Posts",
   },
-  { icon: Layers, href: "/all-posts", label: "All Posts" },
-  { icon: Network, href: "/authenticate", label: "Authenticate" },
+  { id: "all-posts", icon: Layers, href: "/all-posts", label: "All Posts" },
+  { id: "authenticate", icon: Network, href: "/authenticate", label: "Authenticate" },
 
   // { icon: BarChart3, href: "/analytics", label: "Analytics" },
 ];
@@ -127,7 +130,7 @@ export function FloatingSidebar({ onExpandChange, initialExpanded }) {
           >
             {navItems.map((item) => (
               <NavItem
-                key={item.href}
+                key={item.id}
                 icon={item.icon}
                 href={item.href}
                 label={item.label}

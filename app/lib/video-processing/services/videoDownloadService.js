@@ -1,0 +1,263 @@
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+
+/**
+ * Video Download Service
+ * Downloads videos from various platforms using yt-dlp
+ */
+
+/**
+ * Download video from URL
+ */
+export const downloadVideo = async (url, options = {}) => {
+  const {
+    quality = 'best[height<=1080]',
+    outputPath = '/tmp',
+    format = 'mp4'
+  } = options;
+
+  console.log('🎬 [DOWNLOAD] Starting video download...');
+  console.log('📹 [DOWNLOAD] URL:', url);
+  console.log('⚙️ [DOWNLOAD] Options:', { quality, outputPath, format });
+
+  return new Promise((resolve, reject) => {
+    const platform = detectPlatform(url);
+    const timestamp = Date.now();
+    const filename = `video_${timestamp}.%(ext)s`;
+    const outputTemplate = path.join(outputPath, filename);
+
+    console.log('🎯 [DOWNLOAD] Platform:', platform);
+    console.log('📁 [DOWNLOAD] Output template:', outputTemplate);
+
+    const args = [
+      '--format', quality,
+      '--output', outputTemplate,
+      '--merge-output-format', format,
+      '--no-warnings'
+    ];
+
+    // Platform-specific optimizations
+    if (platform === 'rumble') {
+      args.push('--ignore-errors');
+      args.push('--no-check-certificate');
+      args.push('--extractor-retries', '5');
+    }
+
+    args.push(url);
+
+    console.log('🔧 [DOWNLOAD] Command args:', args);
+    console.log('🚀 [DOWNLOAD] Executing: yt-dlp', args.join(' '));
+
+    const ytdlp = spawn('yt-dlp', args);
+    let stdout = '';
+    let stderr = '';
+    let downloadedFile = null;
+
+    ytdlp.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdout += output;
+      console.log('📺 [DOWNLOAD] stdout:', output.trim());
+      
+      // Extract the actual downloaded filename from yt-dlp output (stdout)
+      const destinationMatch = output.match(/\[download\] Destination: (.+)/);
+      if (destinationMatch) {
+        downloadedFile = destinationMatch[1];
+        console.log('📁 [DOWNLOAD] Detected file:', downloadedFile);
+      }
+    });
+
+    ytdlp.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderr += output;
+      console.log('⚠️ [DOWNLOAD] stderr:', output.trim());
+    });
+
+    ytdlp.on('close', (code) => {
+      console.log(`🏁 [DOWNLOAD] Process exited with code: ${code}`);
+      console.log('📁 [DOWNLOAD] Downloaded file:', downloadedFile);
+      console.log('🔍 [DOWNLOAD] File exists:', downloadedFile ? fs.existsSync(downloadedFile) : 'No file detected');
+      
+      if (code === 0 && downloadedFile && fs.existsSync(downloadedFile)) {
+        console.log('✅ [DOWNLOAD] Success!');
+        resolve({
+          success: true,
+          filePath: downloadedFile,
+          platform,
+          originalUrl: url
+        });
+      } else {
+        console.error('❌ [DOWNLOAD] Failed:', { code, downloadedFile, stderr: stderr.substring(0, 500) });
+        reject(new Error(`Video download failed: ${stderr || 'Unknown error'}`));
+      }
+    });
+
+    ytdlp.on('error', (error) => {
+      console.error('❌ [DOWNLOAD] Process error:', error.message);
+      reject(new Error(`yt-dlp process failed: ${error.message}`));
+    });
+  });
+};
+
+/**
+ * Download video with metadata
+ */
+export const downloadVideoWithMetadata = async (url, options = {}) => {
+  try {
+    // First get metadata
+    const metadata = await getVideoMetadata(url);
+    
+    // Then download video
+    const downloadResult = await downloadVideo(url, options);
+    
+    return {
+      ...downloadResult,
+      metadata
+    };
+  } catch (error) {
+    throw new Error(`Download with metadata failed: ${error.message}`);
+  }
+};
+
+/**
+ * Get video metadata without downloading
+ */
+const getVideoMetadata = async (url) => {
+  console.log('📊 [METADATA] Starting metadata extraction...');
+  console.log('📹 [METADATA] URL:', url);
+  
+  return new Promise((resolve, reject) => {
+    const platform = detectPlatform(url);
+    const args = [
+      '--dump-json',
+      '--no-download',
+      '--no-warnings'
+    ];
+
+    console.log('🎯 [METADATA] Platform:', platform);
+
+    if (platform === 'rumble') {
+      args.push('--ignore-errors');
+      args.push('--no-check-certificate');
+      console.log('🔧 [METADATA] Added Rumble-specific args');
+    }
+
+    args.push(url);
+
+    console.log('🔧 [METADATA] Command args:', args);
+    console.log('🚀 [METADATA] Executing: yt-dlp', args.join(' '));
+
+    const ytdlp = spawn('yt-dlp', args);
+    let stdout = '';
+    let stderr = '';
+
+    ytdlp.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdout += output;
+      console.log('📺 [METADATA] stdout chunk received (length:', output.length, ')');
+    });
+
+    ytdlp.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderr += output;
+      console.log('⚠️ [METADATA] stderr:', output.trim());
+    });
+
+    ytdlp.on('close', (code) => {
+      console.log(`🏁 [METADATA] Process exited with code: ${code}`);
+      console.log('📄 [METADATA] stdout length:', stdout.length);
+      console.log('⚠️ [METADATA] stderr length:', stderr.length);
+      
+      if (code === 0) {
+        try {
+          const metadata = JSON.parse(stdout.trim());
+          console.log('✅ [METADATA] Successfully parsed metadata');
+          console.log('📝 [METADATA] Title:', metadata.title);
+          console.log('⏱️ [METADATA] Duration:', metadata.duration + 's');
+          
+          resolve({
+            title: metadata.title || 'Unknown Title',
+            description: metadata.description || '',
+            duration: metadata.duration || 0,
+            uploader: metadata.uploader || 'Unknown',
+            platform: detectPlatform(url),
+            originalUrl: url,
+            id: metadata.id
+          });
+        } catch (parseError) {
+          console.error('❌ [METADATA] JSON parse error:', parseError.message);
+          console.log('📄 [METADATA] Raw stdout sample:', stdout.substring(0, 200) + '...');
+          reject(new Error(`Failed to parse metadata: ${parseError.message}`));
+        }
+      } else {
+        console.error('❌ [METADATA] Command failed with stderr:', stderr.substring(0, 500));
+        reject(new Error(`Metadata extraction failed: ${stderr}`));
+      }
+    });
+
+    ytdlp.on('error', (error) => {
+      console.error('❌ [METADATA] Process error:', error.message);
+      reject(new Error(`yt-dlp process failed: ${error.message}`));
+    });
+  });
+};
+
+/**
+ * Detect platform from URL
+ */
+const detectPlatform = (url) => {
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+  if (url.includes('twitch.tv')) return 'twitch';
+  if (url.includes('kick.com')) return 'kick';
+  if (url.includes('rumble.com')) return 'rumble';
+  if (url.includes('tiktok.com')) return 'tiktok';
+  if (url.includes('instagram.com')) return 'instagram';
+  if (url.includes('vimeo.com')) return 'vimeo';
+  return 'other';
+};
+
+/**
+ * Clean up downloaded file
+ */
+export const cleanupDownloadedFile = (filePath) => {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error('Failed to cleanup file:', error);
+  }
+};
+
+/**
+ * Get available video formats for a URL
+ */
+export const getAvailableFormats = async (url) => {
+  return new Promise((resolve, reject) => {
+    const args = ['--list-formats', '--no-warnings', url];
+    const ytdlp = spawn('yt-dlp', args);
+    
+    let stdout = '';
+    let stderr = '';
+
+    ytdlp.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    ytdlp.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    ytdlp.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout);
+      } else {
+        reject(new Error(`Failed to get formats: ${stderr}`));
+      }
+    });
+
+    ytdlp.on('error', (error) => {
+      reject(new Error(`yt-dlp process failed: ${error.message}`));
+    });
+  });
+};

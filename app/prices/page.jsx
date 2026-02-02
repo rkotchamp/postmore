@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
@@ -8,7 +9,35 @@ import { PricingCards } from "@/app/prices/components/PricingCards";
 import { BillingToggle } from "@/app/components/ui/BillingToggle";
 import { FAQ } from "@/app/components/HomePage/FAQ";
 
+// Content configuration based on source parameter
+const pageContent = {
+  trial: {
+    title: "Start Your 5-Day Free Trial",
+    description: "Try all features free for 5 days. No charge until your trial ends. Cancel anytime.",
+    badge: "5-day free trial",
+  },
+  upgrade: {
+    title: "Upgrade Your Plan",
+    description: "Unlock more features and take your social media presence to the next level.",
+    badge: "Upgrade available",
+  },
+  profile_upgrade: {
+    title: "Upgrade Your Plan",
+    description: "Unlock more features and take your social media presence to the next level.",
+    badge: "Upgrade available",
+  },
+  default: {
+    title: "Choose Your Perfect Plan",
+    description: "Scale your social media presence with our flexible pricing plans. All plans include a 5-day free trial with no commitment.",
+    badge: "5-day free trial",
+  },
+};
+
 export default function PricingPage() {
+  const searchParams = useSearchParams();
+  const source = searchParams.get("source") || "default";
+  const content = pageContent[source] || pageContent.default;
+
   const { error, setError, getCurrentPlanDetails } = useSubscriptionStore();
 
   const currentPlan = getCurrentPlanDetails();
@@ -75,7 +104,7 @@ export default function PricingPage() {
           </Button>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">5-day free trial</span>
+            <span className="text-sm font-medium">{content.badge}</span>
           </div>
         </div>
       </div>
@@ -94,11 +123,10 @@ export default function PricingPage() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-            Choose Your Perfect Plan
+            {content.title}
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Scale your social media presence with our flexible pricing plans.
-            All plans include a 5-day free trial with no commitment.
+            {content.description}
           </p>
         </div>
 

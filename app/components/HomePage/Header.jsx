@@ -52,7 +52,7 @@ export function Header() {
                 Sign In
               </Button>
             </Link>
-            <Link href="/auth/register">
+            <Link href="/auth/register?source=trial">
               <Button className="bg-primary hover:bg-primary/90">
                 Try it for free
               </Button>
@@ -132,7 +132,7 @@ export function Header() {
 
               {/* Mobile CTA */}
               <div className="p-6 border-t border-gray-300 dark:border-gray-700">
-                <Link href="/auth/register" onClick={() => setMobileMenuOpen(false)}>
+                <Link href="/auth/register?source=trial" onClick={() => setMobileMenuOpen(false)}>
                   <Button className="w-full bg-primary hover:bg-primary/90 text-lg py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 border border-primary/20">
                     Try it for free
                   </Button>

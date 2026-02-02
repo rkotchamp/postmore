@@ -27,9 +27,9 @@ export async function POST(request) {
 
     // Destructure validated data
     const { fullName, email, password } = validation.data;
-    
+
     // Check for checkout session data (for post-payment signup)
-    const { checkoutSession } = body;
+    const { checkoutSession, acquisitionSource } = body;
 
     // Connect to MongoDB using mongoose
     await connectToMongoose();
@@ -51,12 +51,17 @@ export async function POST(request) {
       password, // Pass as "password" to trigger pre-save hook in userSchema
       authProvider: "email",
       image: "",
+      // Add acquisition tracking
+      acquisition: {
+        source: acquisitionSource || "direct",
+        signupDate: new Date(),
+      },
     };
 
     // If there's checkout session data, add subscription info
     if (checkoutSession && checkoutSession.planId) {
       console.log(`Creating user with subscription plan: ${checkoutSession.planId}`);
-      
+
       userData.subscription = {
         // Note: We don't have the actual Stripe subscription ID yet
         // This will be added later when we activate the subscription
@@ -69,6 +74,9 @@ export async function POST(request) {
         plan: checkoutSession.planId,
         subscriptionStatus: "incomplete",
       };
+
+      // Track the initial plan in acquisition data
+      userData.acquisition.initialPlan = checkoutSession.planId;
     }
 
     // Create a new user

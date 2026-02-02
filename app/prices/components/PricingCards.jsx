@@ -61,8 +61,10 @@ export function PricingCards({ mode = "home", className = "" }) {
     }
   }, [mode, isClient, searchParams, plans, selectPlan]);
 
-  // Check if this is a profile upgrade request
-  const isProfileUpgrade = searchParams?.get("source") === "profile_upgrade";
+  // Check the source parameter
+  const sourceParam = searchParams?.get("source");
+  const isProfileUpgrade = sourceParam === "profile_upgrade";
+  const isTrial = sourceParam === "trial";
 
   // Handle automatic checkout after login
   useEffect(() => {
@@ -112,6 +114,10 @@ export function PricingCards({ mode = "home", className = "" }) {
 
       // For non-profile upgrades, allow guest checkout
       if (!isProfileUpgrade && !user) {
+        // Determine the source for guest checkout
+        let guestSource = mode === "home" ? "homepage" : "pricing_page";
+        if (isTrial) guestSource = "trial";
+
         // Proceed with guest checkout
         await initiateCheckout(plan.id, {
           successUrl: `${window.location.origin}/dashboard?checkout=success&plan=${plan.id}`,
@@ -120,11 +126,16 @@ export function PricingCards({ mode = "home", className = "" }) {
               ? `${window.location.origin}/?checkout=cancelled`
               : `${window.location.origin}/prices?checkout=cancelled`,
           metadata: {
-            source: mode === "home" ? "homepage" : "pricing_page",
+            source: guestSource,
           },
         });
         return;
       }
+
+      // Determine the source for metadata
+      let checkoutSource = mode === "home" ? "homepage" : "pricing_page";
+      if (isProfileUpgrade) checkoutSource = "profile_upgrade";
+      if (isTrial) checkoutSource = "trial";
 
       // User is authenticated, proceed with checkout directly
       await initiateCheckout(plan.id, {
@@ -134,9 +145,7 @@ export function PricingCards({ mode = "home", className = "" }) {
             ? `${window.location.origin}/?checkout=cancelled`
             : `${window.location.origin}/prices?checkout=cancelled`,
         metadata: {
-          source: isProfileUpgrade 
-            ? "profile_upgrade" 
-            : mode === "home" ? "homepage" : "pricing_page",
+          source: checkoutSource,
           userEmail: user?.email,
           billingPeriod,
         },

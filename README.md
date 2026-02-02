@@ -47,11 +47,43 @@ PostMoore is a modern social media scheduling platform built with Next.js 15 tha
 
 - 🤖 **Queue Management** - Background job processing with BullMQ
 - 🔐 **OAuth Integration** - Secure authentication with social platforms
-- 💳 **Subscription Management** - Stripe-powered billing system
+- 💳 **Subscription Management** - Stripe-powered billing sydont burn stem
 - 📧 **Email Notifications** - Automated alerts and updates
 - 🌙 **Dark/Light Mode** - Theme customization
 - 📖 **Content Management** - Blog system with Contentful CMS
 - 🔒 **Security** - JWT authentication, CSRF protection, CSP headers
+
+### 🎬 Smart Caption Management (Clipper Studio)
+
+**Status: ✅ COMPLETED - Live Preview Working**
+
+A powerful video caption system for the Clipper Studio that allows users to:
+
+#### ✅ **Completed Features**
+
+- **Live Caption Preview** - Real-time WebVTT caption overlay on videos
+- **Font Selection** - 5 professional fonts (Bebas Neue, Montserrat, Anton, Oswald, Roboto)
+- **Font Size Control** - Small (1.2rem), Medium (1.5rem), Large (1.8rem)
+- **Position Control** - Top, Center, Bottom positioning
+- **Live Preview Updates** - Instant visual feedback when changing settings
+- **Professional Styling** - High-contrast captions with shadows and backgrounds
+- **Responsive Design** - Works across all screen sizes
+- **Cross-browser Support** - HTML5 WebVTT standard implementation
+
+#### 🔧 **Technical Implementation**
+
+- **WebVTT Service** - Dynamic caption generation from transcription data
+- **Template Store Integration** - Zustand state management for caption settings
+- **CSS-based Styling** - `::cue` pseudo-elements for caption appearance
+- **API Endpoint** - `/api/clipper-studio/captions/[clipId]` for WebVTT delivery
+- **Font Management** - Google Fonts integration with system fallbacks
+
+#### 🎯 **Next Steps** (To Be Implemented)
+
+- **Download with Burned Captions** - FFmpeg integration to permanently embed selected fonts
+- **Additional Style Options** - Color themes, outline styles, animation effects
+- **Batch Operations** - Apply caption settings to multiple clips
+- **Export Formats** - SRT, VTT, and other subtitle format exports
 
 ### User Experience
 
