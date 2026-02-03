@@ -26,6 +26,11 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // For admin users, always return active subscription
+    const subscription = user.isAdmin
+      ? { status: "active", planId: "premium" }
+      : (user.subscription || null);
+
     // Return user data
     return NextResponse.json({
       success: true,
@@ -40,7 +45,7 @@ export async function GET() {
           theme: "system",
           scheduledPostsView: "grid",
         },
-        subscription: user.subscription || null,
+        subscription: subscription,
         stripeCustomerId: user.stripeCustomerId || null,
         isAdmin: user.isAdmin || false,
       },
