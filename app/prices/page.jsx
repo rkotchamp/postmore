@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useSubscriptionStore } from "@/app/lib/store/subscriptionStore";
@@ -70,11 +70,22 @@ const structuredData = {
 
 // Inner component that uses useSearchParams
 function PricingContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const source = searchParams.get("source") || "default";
   const content = pageContent[source] || pageContent.default;
 
   const { error, setError, getCurrentPlanDetails } = useSubscriptionStore();
+
+  // Smart back navigation based on where the user came from
+  const handleBack = () => {
+    if (source === "profile_upgrade") {
+      router.push("/profile");
+    } else {
+      // For trial/signup users or default, go to home (public page)
+      router.push("/");
+    }
+  };
   const currentPlan = getCurrentPlanDetails();
 
   // Clear any previous errors when component mounts
@@ -90,7 +101,7 @@ function PricingContent() {
           <Button
             variant="ghost"
             className="flex items-center gap-2"
-            onClick={() => window.history.back()}
+            onClick={handleBack}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
