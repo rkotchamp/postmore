@@ -66,8 +66,8 @@ export const extractVideoThumbnail = async (url) => {
     </svg>`;
     
     return {
-      thumbnail: `data:image/svg+xml;base64,${Buffer.from(placeholderSvg).toString('base64')}`,
-      title: "Video Preview", 
+      thumbnail: `data:image/svg+xml;base64,${btoa(placeholderSvg)}`,
+      title: "Video Preview",
       duration: 0,
       uploader: "Unknown",
       error: error.message,
@@ -172,7 +172,7 @@ export const getThumbnail = async (input) => {
     </svg>`;
     
     return {
-      thumbnail: `data:image/svg+xml;base64,${Buffer.from(errorSvg).toString('base64')}`,
+      thumbnail: `data:image/svg+xml;base64,${btoa(errorSvg)}`,
       title: "Error loading video",
       error: error.message
     };
