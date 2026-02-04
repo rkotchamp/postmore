@@ -17,7 +17,7 @@ export function LoginLayout({ children }) {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         >
-          <source src="/signUpAndLoginBG.webm" type="video/webm" />
+          <source src="/login.webm" type="video/webm" />
         </video>
 
         {/* Gradient overlay for better text readability */}
