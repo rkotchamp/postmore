@@ -8,27 +8,40 @@ export function RegisterLayout({ children }) {
   return (
     <div className="grid min-h-screen w-full lg:grid-cols-2">
       {/* Left panel with logo and design */}
-      <div className="hidden lg:flex flex-col bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-pink-600/20 p-10 text-white dark:border-r relative">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-lg font-bold text-primary hover:opacity-80 transition-opacity"
+      <div className="hidden lg:flex flex-col p-10 text-white dark:border-r relative overflow-hidden">
+        {/* Background video */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
         >
-          <Image
-            src="/PostmooreSvg.svg"
-            alt="PostMoore Logo"
-            width={120}
-            height={32}
-            className="h-8 w-auto object-contain"
-          />
-        </Link>
+          <source src="/signUpAndLoginBG.webm" type="video/webm" />
+        </video>
 
-        {/* Abstract shapes for visual interest */}
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full filter blur-3xl"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-purple-500/10 rounded-full filter blur-3xl"></div>
+        {/* Gradient overlay for better text readability */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/40 via-purple-600/30 to-pink-600/40"></div>
 
-        {/* Testimonial card positioned at the bottom */}
-        <div className="mt-auto mb-10 w-full max-w-md">
-          <RegisterReviews />
+        {/* Content on top of video */}
+        <div className="relative z-10 flex flex-col h-full">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-lg font-bold text-primary hover:opacity-80 transition-opacity"
+          >
+            <Image
+              src="/PostmooreSvg.svg"
+              alt="PostMoore Logo"
+              width={120}
+              height={32}
+              className="h-8 w-auto object-contain"
+            />
+          </Link>
+
+          {/* Testimonial card positioned at the bottom */}
+          <div className="mt-auto mb-10 w-full max-w-md">
+            <RegisterReviews />
+          </div>
         </div>
       </div>
 
