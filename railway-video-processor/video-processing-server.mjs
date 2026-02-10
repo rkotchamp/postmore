@@ -343,6 +343,7 @@ async function getVideoMetadata(url) {
     viewCount: data.view_count || 0,
     likeCount: data.like_count || 0,
     thumbnail: data.thumbnail || null,
+    thumbnails: data.thumbnails || [],
     width: data.width || null,
     height: data.height || null,
     fps: data.fps || null,

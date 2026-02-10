@@ -61,6 +61,7 @@ export async function POST(request) {
         description: railwayMetadata.description || '',
         duration: railwayMetadata.duration || 0,
         thumbnail: railwayMetadata.thumbnail || null,
+        thumbnails: railwayMetadata.thumbnails || [],
         uploader: railwayMetadata.uploader || 'Unknown',
         upload_date: railwayMetadata.uploadDate,
         view_count: railwayMetadata.viewCount,
