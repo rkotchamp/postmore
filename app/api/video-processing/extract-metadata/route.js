@@ -54,14 +54,38 @@ export async function POST(request) {
 
       const result = await callRailwayAPI('/metadata', { url });
       const railwayMetadata = result.metadata;
+      const platform = railwayMetadata.platform || detectPlatform(url);
+
+      // Determine if we need to extract a frame for thumbnail
+      let thumbnail = railwayMetadata.thumbnail || null;
+      const thumbnails = railwayMetadata.thumbnails || [];
+      const needsFrameExtraction = ['kick', 'rumble', 'twitch'].includes(platform);
+      const hasBadThumbnail = !thumbnail || thumbnail.includes('placeholder') || thumbnail.includes('data:image/svg');
+
+      // Extract frame from video if thumbnail is missing or platform needs it
+      if ((needsFrameExtraction || hasBadThumbnail) && !railwayMetadata.is_live) {
+        try {
+          console.log('🎬 [METADATA] Extracting frame for thumbnail...');
+          const frameResult = await callRailwayAPI('/extract-frame', {
+            url,
+            timestamp: Math.min(5, (railwayMetadata.duration || 10) * 0.1)
+          });
+          if (frameResult.success && frameResult.thumbnail) {
+            thumbnail = frameResult.thumbnail;
+            console.log('✅ [METADATA] Frame extracted successfully');
+          }
+        } catch (frameError) {
+          console.warn('⚠️ [METADATA] Frame extraction failed, using original thumbnail:', frameError.message);
+        }
+      }
 
       // Format response to match expected structure
       metadata = {
         title: railwayMetadata.title || 'Unknown Title',
         description: railwayMetadata.description || '',
         duration: railwayMetadata.duration || 0,
-        thumbnail: railwayMetadata.thumbnail || null,
-        thumbnails: railwayMetadata.thumbnails || [],
+        thumbnail: thumbnail,
+        thumbnails: thumbnails,
         uploader: railwayMetadata.uploader || 'Unknown',
         upload_date: railwayMetadata.uploadDate,
         view_count: railwayMetadata.viewCount,
@@ -71,7 +95,7 @@ export async function POST(request) {
         fps: railwayMetadata.fps,
         url: railwayMetadata.originalUrl || url,
         id: railwayMetadata.id,
-        platform: railwayMetadata.platform || detectPlatform(url),
+        platform: platform,
         is_live: false
       };
 

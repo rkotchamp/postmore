@@ -264,6 +264,75 @@ app.post('/formats', async (req, res) => {
 });
 
 // ============================================
+// Extract Frame as Thumbnail (for platforms without good thumbnails)
+// ============================================
+app.post('/extract-frame', async (req, res) => {
+  const { url, timestamp = 5 } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  try {
+    console.log(`[FRAME] Extracting frame from: ${url} at ${timestamp}s`);
+    const platform = detectPlatform(url);
+
+    // First get the direct video URL using yt-dlp
+    const args = ['--no-download', '--get-url', '--format', 'best[height<=720]/best'];
+
+    // Add impersonation for Kick and Rumble
+    if (platform === 'kick' || platform === 'rumble') {
+      args.unshift('--impersonate', 'chrome');
+      args.push('--ignore-errors', '--no-check-certificate');
+    }
+
+    args.push(url);
+
+    const videoUrl = await runCommand(YTDLP_PATH, args);
+    const directUrl = videoUrl.trim().split('\n')[0];
+
+    if (!directUrl) {
+      throw new Error('Could not get direct video URL');
+    }
+
+    console.log(`[FRAME] Got direct URL, extracting frame with FFmpeg...`);
+
+    // Extract frame using FFmpeg
+    const outputPath = path.join(DOWNLOAD_DIR, `frame_${Date.now()}.jpg`);
+    const ffmpegArgs = [
+      '-ss', String(timestamp),
+      '-i', directUrl,
+      '-vframes', '1',
+      '-f', 'image2',
+      '-q:v', '2',
+      '-y',
+      outputPath
+    ];
+
+    await runCommand(FFMPEG_PATH, ffmpegArgs);
+
+    // Read the frame and convert to base64
+    const frameBuffer = fs.readFileSync(outputPath);
+    const base64Frame = frameBuffer.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64Frame}`;
+
+    // Cleanup temp file
+    cleanupFile(outputPath);
+
+    console.log(`[FRAME] Successfully extracted frame`);
+    res.json({
+      success: true,
+      thumbnail: dataUrl,
+      platform
+    });
+
+  } catch (error) {
+    console.error('[FRAME] Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // Cleanup Endpoint (delete temp files)
 // ============================================
 app.post('/cleanup', async (req, res) => {
