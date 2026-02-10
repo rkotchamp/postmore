@@ -1,0 +1,19 @@
+{
+  "name": "railway-video-processor",
+  "version": "1.0.0",
+  "description": "Video processing service using yt-dlp and FFmpeg for Railway deployment",
+  "type": "module",
+  "main": "video-processing-server.mjs",
+  "scripts": {
+    "start": "node video-processing-server.mjs",
+    "dev": "node --watch video-processing-server.mjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
