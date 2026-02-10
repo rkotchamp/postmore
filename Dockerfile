@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install yt-dlp via pip
-RUN pip3 install --break-system-packages yt-dlp
+# Install yt-dlp with curl_cffi for browser impersonation (required for Kick, Rumble)
+RUN pip3 install --break-system-packages "yt-dlp[curl_cffi]"
 
 # Verify installations
 RUN ffmpeg -version && yt-dlp --version

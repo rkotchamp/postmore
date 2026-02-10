@@ -324,8 +324,9 @@ async function getVideoMetadata(url) {
   const platform = detectPlatform(url);
   const args = ['--dump-json', '--no-download', '--no-warnings'];
 
-  // Platform-specific args
-  if (platform === 'rumble') {
+  // Platform-specific args - Kick and Rumble require browser impersonation
+  if (platform === 'kick' || platform === 'rumble') {
+    args.push('--impersonate', 'chrome');
     args.push('--ignore-errors', '--no-check-certificate', '--extractor-retries', '5');
   }
 
@@ -371,8 +372,9 @@ async function downloadVideo(url, options = {}) {
     '--no-playlist'
   ];
 
-  // Platform-specific optimizations
-  if (platform === 'rumble') {
+  // Platform-specific optimizations - Kick and Rumble require browser impersonation
+  if (platform === 'kick' || platform === 'rumble') {
+    args.push('--impersonate', 'chrome');
     args.push('--ignore-errors', '--no-check-certificate', '--extractor-retries', '5');
   }
 
