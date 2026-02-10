@@ -67,3 +67,6 @@ videos/*
 !videos/*.js
 !videos/*.ts
 public/_next-video
+# Firebase Admin SDK (sensitive - never commit)
+postmoore-e0b20-firebase-adminsdk-*.json
+*-firebase-adminsdk-*.json
