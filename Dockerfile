@@ -17,11 +17,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Install yt-dlp with curl_cffi for browser impersonation (required for Kick, Rumble)
-RUN pip3 install --break-system-packages "yt-dlp[curl_cffi]"
+# Install curl_cffi first for browser impersonation (required for Kick, Rumble)
+RUN pip3 install --break-system-packages curl_cffi
 
-# Verify installations
-RUN ffmpeg -version && yt-dlp --version
+# Install yt-dlp with all default deps and curl-cffi impersonation support
+RUN pip3 install --break-system-packages "yt-dlp[default,curl-cffi]"
+
+# Verify installations and confirm impersonation targets are available
+RUN ffmpeg -version && yt-dlp --version && echo "Impersonate targets:" && yt-dlp --list-impersonate-targets 2>&1 | head -10
 
 # Set environment variables for binary paths
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
