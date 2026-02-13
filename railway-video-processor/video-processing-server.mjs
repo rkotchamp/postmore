@@ -387,10 +387,66 @@ function runCommand(cmd, args, options = {}) {
 }
 
 /**
+ * Get Rumble metadata via oEmbed API (fallback when yt-dlp is blocked by Cloudflare)
+ */
+async function getRumbleOEmbedMetadata(url) {
+  console.log(`[RUMBLE-OEMBED] Fetching metadata via oEmbed for: ${url}`);
+  const oembedUrl = `https://rumble.com/api/Media/oembed.json?url=${encodeURIComponent(url)}`;
+
+  const response = await fetch(oembedUrl);
+  if (!response.ok) {
+    throw new Error(`Rumble oEmbed failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log(`[RUMBLE-OEMBED] Got metadata: "${data.title}"`);
+
+  return {
+    title: data.title || 'Unknown Title',
+    description: '',
+    duration: data.duration || 0,
+    uploader: data.author_name || 'Unknown',
+    uploadDate: null,
+    viewCount: 0,
+    likeCount: 0,
+    thumbnail: data.thumbnail_url || null,
+    thumbnails: data.thumbnail_url ? [{ url: data.thumbnail_url, width: data.width, height: data.height }] : [],
+    width: data.width || null,
+    height: data.height || null,
+    fps: null,
+    filesize: null,
+    id: null,
+    originalUrl: url,
+    platform: 'rumble'
+  };
+}
+
+/**
  * Get video metadata using yt-dlp
  */
 async function getVideoMetadata(url) {
   const platform = detectPlatform(url);
+
+  // Try yt-dlp first
+  try {
+    return await getVideoMetadataWithYtdlp(url, platform);
+  } catch (ytdlpError) {
+    console.warn(`[METADATA] yt-dlp failed for ${platform}: ${ytdlpError.message}`);
+
+    // Fallback to oEmbed for Rumble when Cloudflare blocks yt-dlp
+    if (platform === 'rumble') {
+      console.log('[METADATA] Trying Rumble oEmbed fallback...');
+      return await getRumbleOEmbedMetadata(url);
+    }
+
+    throw ytdlpError;
+  }
+}
+
+/**
+ * Get video metadata using yt-dlp (internal)
+ */
+async function getVideoMetadataWithYtdlp(url, platform) {
   const args = ['--dump-json', '--no-download', '--no-warnings'];
 
   // Platform-specific args - Kick and Rumble require browser impersonation
