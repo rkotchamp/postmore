@@ -15,6 +15,7 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import mongoose from 'mongoose';
 import OpenAI from 'openai';
+import puppeteer from 'puppeteer-core';
 
 const execAsync = promisify(exec);
 
@@ -1754,6 +1755,547 @@ app.post('/process-clips-pipeline', async (req, res) => {
 });
 
 // ============================================
+// Font Manager (ported from fontManager.js)
+// ============================================
+const FONTS_DIR = '/app/fonts';
+
+const FONT_WEIGHTS = {
+  light: { weight: '300', bold: '0' },
+  normal: { weight: '400', bold: '0' },
+  medium: { weight: '500', bold: '0' },
+  semibold: { weight: '600', bold: '-1' },
+  bold: { weight: '700', bold: '1' },
+  extrabold: { weight: '800', bold: '1' }
+};
+
+const FONT_SIZES = {
+  verysmall: { size: '27', scale: 1.0 },
+  small: { size: '33', scale: 1.2 },
+  medium: { size: '39', scale: 1.5 },
+  large: { size: '49', scale: 1.8 }
+};
+
+const CAPTION_FONTS = {
+  raleway: { name: 'Raleway', ffmpegFont: 'Raleway', fontFile: 'Raleway-Regular.ttf', boldFile: 'Raleway-Bold.ttf', description: 'Elegant & Modern' },
+  inter: { name: 'Inter', ffmpegFont: 'Inter', fontFile: 'Inter-Regular.ttf', boldFile: 'Inter-Bold.ttf', description: 'Digital & Clean' },
+  bebasNeue: { name: 'Bebas Neue', ffmpegFont: 'Bebas Neue', fontFile: 'BebasNeue-Regular.ttf', boldFile: 'BebasNeue-Regular.ttf', description: 'Bold & Condensed' },
+  montserrat: { name: 'Montserrat', ffmpegFont: 'Montserrat', fontFile: 'Montserrat-Regular.ttf', boldFile: 'Montserrat-Bold.ttf', description: 'Clean & Modern' },
+  anton: { name: 'Anton', ffmpegFont: 'Anton', fontFile: 'Anton-Regular.ttf', boldFile: 'Anton-Regular.ttf', description: 'Heavy & Impactful' },
+  oswald: { name: 'Oswald', ffmpegFont: 'Oswald', fontFile: 'Oswald-Regular.ttf', boldFile: 'Oswald-Bold.ttf', description: 'Tall & Narrow' },
+  roboto: { name: 'Roboto', ffmpegFont: 'Roboto', fontFile: 'Roboto-Regular.ttf', boldFile: 'Roboto-Bold.ttf', description: 'Standard & Reliable' }
+};
+
+function isFontSupported(fontKey) {
+  return Object.prototype.hasOwnProperty.call(CAPTION_FONTS, fontKey);
+}
+
+function getFontConfigForFFmpeg(fontKey) {
+  const font = CAPTION_FONTS[fontKey] || CAPTION_FONTS.roboto;
+  return { fontname: font.ffmpegFont, name: font.name, description: font.description };
+}
+
+function generateFFmpegForceStyle(captionSettings, videoDimensions = { width: 1080, height: 1920 }) {
+  const { font = 'roboto', size = 'medium', weight = 'normal', position = 'bottom' } = captionSettings;
+  const fontConfig = CAPTION_FONTS[font] || CAPTION_FONTS.roboto;
+  const fontWeight = FONT_WEIGHTS[weight] || FONT_WEIGHTS.normal;
+  const fontSize = FONT_SIZES[size] || FONT_SIZES.medium;
+
+  const styleParams = [
+    `PlayResX=${videoDimensions.width}`, `PlayResY=${videoDimensions.height}`,
+    `FontName=${fontConfig.ffmpegFont}`, `FontSize=${fontSize.size}`, `Bold=${fontWeight.bold}`,
+    `PrimaryColour=&Hffffff&`, `OutlineColour=&H000000&`,
+    `Outline=0`, `Shadow=0`, `BorderStyle=0`
+  ];
+
+  if (position === 'top') {
+    styleParams.push('Alignment=2', 'MarginV=1650');
+  } else if (position === 'center') {
+    styleParams.push('Alignment=2', 'MarginV=900');
+  } else {
+    styleParams.push('Alignment=2', 'MarginV=50');
+  }
+
+  return styleParams.join(',');
+}
+
+// ============================================
+// Caption Service (ported from captionService.js)
+// ============================================
+
+function generateCaptionData(words, options = {}) {
+  const { maxWordsPerLine = 3, minDisplayTime = 0.5, platform = 'tiktok', fontSize = 40, fontColor = 'white', outlineColor = 'black', backgroundColor = 'transparent' } = options;
+
+  if (!words || words.length === 0) return { captions: [], totalDuration: 0 };
+
+  const captions = [];
+  let currentCaption = { words: [], startTime: null, endTime: null, text: '' };
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (currentCaption.words.length === 0) {
+      currentCaption.startTime = word.start;
+      currentCaption.words.push(word);
+      currentCaption.text = word.word;
+    } else if (currentCaption.words.length < maxWordsPerLine) {
+      currentCaption.words.push(word);
+      currentCaption.text += ' ' + word.word;
+      currentCaption.endTime = word.end;
+    } else {
+      currentCaption.endTime = currentCaption.words[currentCaption.words.length - 1].end;
+      const displayTime = currentCaption.endTime - currentCaption.startTime;
+      if (displayTime < minDisplayTime) currentCaption.endTime = currentCaption.startTime + minDisplayTime;
+      captions.push({ ...currentCaption });
+      currentCaption = { words: [word], startTime: word.start, endTime: word.end, text: word.word };
+    }
+  }
+
+  if (currentCaption.words.length > 0) {
+    currentCaption.endTime = currentCaption.words[currentCaption.words.length - 1].end;
+    const displayTime = currentCaption.endTime - currentCaption.startTime;
+    if (displayTime < minDisplayTime) currentCaption.endTime = currentCaption.startTime + minDisplayTime;
+    captions.push(currentCaption);
+  }
+
+  const totalDuration = captions.length > 0 ? captions[captions.length - 1].endTime : 0;
+  console.log(`[CAPTIONS] Generated ${captions.length} caption segments, total: ${totalDuration.toFixed(1)}s`);
+
+  return { captions, totalDuration, platform, styling: { fontSize, fontColor, outlineColor, backgroundColor } };
+}
+
+function formatWebVTTTimestamp(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+}
+
+function generateWebVTTContent(captionData) {
+  if (!captionData.captions || captionData.captions.length === 0) return '';
+  let content = 'WEBVTT\n\n';
+  captionData.captions.forEach((caption, index) => {
+    content += `${index + 1}\n${formatWebVTTTimestamp(caption.startTime)} --> ${formatWebVTTTimestamp(caption.endTime)} align:middle\n${caption.text}\n\n`;
+  });
+  return content;
+}
+
+function getPlatformStyling(platform) {
+  const styles = {
+    tiktok: { fontSize: 48, fontColor: 'white', outlineColor: 'black', outlineWidth: 3 },
+    instagram: { fontSize: 44, fontColor: 'white', outlineColor: 'black', outlineWidth: 2 },
+    youtube: { fontSize: 40, fontColor: 'white', outlineColor: 'black', outlineWidth: 2 },
+    default: { fontSize: 42, fontColor: 'white', outlineColor: 'black', outlineWidth: 2 }
+  };
+  return styles[platform] || styles.default;
+}
+
+async function getVideoDimensions(videoPath) {
+  const { stdout } = await execAsync(
+    `${FFPROBE_PATH} -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${videoPath}"`
+  );
+  const dims = stdout.trim().split(',');
+  if (dims.length !== 2) throw new Error(`Failed to parse video dimensions: ${stdout}`);
+  return { width: parseInt(dims[0], 10), height: parseInt(dims[1], 10) };
+}
+
+async function burnSubtitlesIntoVideo(inputVideoPath, captionData, captionSettings, outputPath, options = {}) {
+  const videoDimensions = await getVideoDimensions(inputVideoPath);
+  const webvttContent = generateWebVTTContent(captionData);
+  if (!webvttContent) throw new Error('Failed to generate WebVTT content');
+
+  const tempDir = options.tempDir || PROCESSING_DIR;
+  const webvttPath = path.join(tempDir, `subtitles_${Date.now()}.vtt`);
+  fs.writeFileSync(webvttPath, webvttContent, 'utf8');
+
+  const forceStyle = generateFFmpegForceStyle(captionSettings, videoDimensions);
+  console.log(`[SUBTITLE-BURN] Using force_style: ${forceStyle}`);
+
+  const ffmpegArgs = [
+    '-i', inputVideoPath,
+    '-vf', `subtitles=${webvttPath}:fontsdir=${FONTS_DIR}:force_style='${forceStyle}'`,
+    '-c:v', 'libx264', '-c:a', 'aac', '-preset', 'medium', '-crf', '23',
+    '-y', outputPath
+  ];
+
+  try {
+    await runCommandWithTimeout(FFMPEG_PATH, ffmpegArgs, { timeout: 600000, label: 'Subtitle burn' });
+    console.log(`[SUBTITLE-BURN] Successfully burned subtitles into video`);
+    return outputPath;
+  } finally {
+    try { fs.unlinkSync(webvttPath); } catch (e) { /* ignore */ }
+  }
+}
+
+async function applyCaptionsWithFont(inputVideoPath, captionData, fontKey, outputPath, options = {}) {
+  const fontConfig = getFontConfigForFFmpeg(fontKey);
+  const styling = getPlatformStyling(captionData.platform || 'tiktok');
+  const { position = 'bottom' } = options;
+
+  let yPosition;
+  if (position === 'top') yPosition = '150';
+  else if (position === 'center') yPosition = '(h-text_h)/2';
+  else yPosition = 'h-text_h-150';
+
+  const tempDir = PROCESSING_DIR;
+  const textFiles = [];
+  const filters = [];
+
+  captionData.captions.forEach((caption, index) => {
+    const textFilePath = path.join(tempDir, `caption_${Date.now()}_${index}.txt`);
+    fs.writeFileSync(textFilePath, caption.text.trim(), 'utf8');
+    textFiles.push(textFilePath);
+    filters.push(`drawtext=textfile='${textFilePath}':x=(w-text_w)/2:y=${yPosition}:font='${fontConfig.fontname}':fontsize=${styling.fontSize}:fontcolor=${styling.fontColor}:bordercolor=${styling.outlineColor}:borderw=${styling.outlineWidth}:enable='between(t,${caption.startTime},${caption.endTime})'`);
+  });
+
+  const filterScriptPath = path.join(tempDir, `font_caption_filter_${Date.now()}.txt`);
+  fs.writeFileSync(filterScriptPath, `[0:v]${filters.join(',')}[v]`, 'utf8');
+
+  const ffmpegArgs = [
+    '-i', inputVideoPath,
+    '-filter_complex_script', filterScriptPath,
+    '-map', '[v]', '-map', '0:a',
+    '-c:v', 'libx264', '-c:a', 'aac', '-preset', 'medium', '-crf', '23',
+    '-y', outputPath
+  ];
+
+  try {
+    await runCommandWithTimeout(FFMPEG_PATH, ffmpegArgs, { timeout: 600000, label: `Caption font ${fontKey}` });
+    console.log(`[CAPTIONS] Successfully applied captions with font: ${fontKey}`);
+    return outputPath;
+  } finally {
+    try { fs.unlinkSync(filterScriptPath); } catch (e) { /* ignore */ }
+    textFiles.forEach(f => { try { fs.unlinkSync(f); } catch (e) { /* ignore */ } });
+  }
+}
+
+// ============================================
+// Template Rendering (ported from download-video-with-template/route.js)
+// ============================================
+
+function generateTemplateHTML(templateData) {
+  const { template, title, plainTitle, templateHeader, settings = {} } = templateData;
+  const templatesWithCustomTitles = ['social-profile', 'title-only'];
+  const shouldUseTemplateHeader = templatesWithCustomTitles.includes(template?.toLowerCase());
+
+  let displayText;
+  if (shouldUseTemplateHeader && templateHeader) displayText = templateHeader;
+  else displayText = title || plainTitle || '';
+
+  const textColor = (settings.textColor && settings.textColor !== '') ? settings.textColor : '#ffffff';
+  const username = (settings.username && settings.username.trim()) ? settings.username : 'username';
+  const isBWTemplate = template === 'bw-frame' || template === 'black-and-white' || template === 'bw';
+  const logoSource = isBWTemplate ? settings.customImage : settings.profilePic;
+  const hasCustomLogo = logoSource && logoSource !== '';
+
+  const baseStyle = `body { margin: 0; padding: 0; font-family: "Helvetica Neue", Roboto, "Segoe UI", Arial, sans-serif; } .container { position: relative; width: 100%; height: 100%; overflow: hidden; }`;
+
+  if (template === 'default' || template === 'blank') {
+    return `<html><head><style>${baseStyle}</style></head><body><div class="container"></div></body></html>`;
+  } else if (template === 'social-profile') {
+    return `<html><head><style>${baseStyle}
+      .profile-overlay { position: absolute; top: 50%; left: 24px; right: 24px; transform: translateY(-600%); background: rgba(0,0,0,0); display: flex; flex-direction: column; }
+      .user-info { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+      .user-avatar { width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,1.0); flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      .user-text { display: flex; flex-direction: column; gap: 2px; }
+      .username { color: ${textColor}; font-size: 20px; font-weight: 700; font-family: "Chirp", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.2; display: flex; align-items: center; gap: 6px; }
+      .checkmark { width: 20px; height: 20px; background: #1DA1F2; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .checkmark::after { content: "\\2713"; color: white; font-size: 12px; font-weight: bold; }
+      .handle { color: ${textColor}; font-size: 15px; font-weight: 400; opacity: 0.7; line-height: 1.2; }
+      .title { color: ${textColor}; font-size: 24px; font-weight: 700; line-height: 1.3; text-shadow: 0 2px 4px rgba(0,0,0,0.3); max-width: 100%; word-wrap: break-word; }
+    </style></head><body><div class="container"><div class="profile-overlay">
+      <div class="user-info">
+        <div class="user-avatar">${hasCustomLogo ? `<img src="${logoSource}" alt="Profile" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="color:rgba(255,255,255,0.8);font-size:16px;">&#128100;</div>`}</div>
+        <div class="user-text"><div class="username">${username}<div class="checkmark"></div></div><div class="handle">@${username}</div></div>
+      </div>
+      <div class="title">${displayText}</div>
+    </div></div></body></html>`;
+  } else if (template === 'title-only') {
+    return `<html><head><style>${baseStyle}
+      .title-overlay { position: absolute; top: 50%; left: 24px; right: 24px; transform: translateY(-1300%); background: rgba(0,0,0,0); display: flex; flex-direction: column; }
+      .title { color: ${textColor}; font-size: 28px; font-weight: 700; line-height: 1.3; text-shadow: 0 2px 4px rgba(0,0,0,0.3); max-width: 100%; word-wrap: break-word; text-align: center; }
+    </style></head><body><div class="container"><div class="title-overlay"><div class="title">${displayText}</div></div></div></body></html>`;
+  } else if (template === 'bw-frame') {
+    return `<html><head><style>${baseStyle}
+      .bottom-logo { position: absolute; bottom: 200px; left: 50%; transform: translateX(-50%); }
+      .logo-placeholder { width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.3); color: rgba(255,255,255,0.8); font-size: 32px; font-weight: 600; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+      .logo-image { height: 360px; max-width: 750px; object-fit: contain; }
+    </style></head><body><div class="container"><div class="bottom-logo">
+      ${hasCustomLogo ? `<img src="${logoSource}" alt="Logo" class="logo-image" />` : `<div class="logo-placeholder">logo</div>`}
+    </div></div></body></html>`;
+  }
+
+  // Default fallback
+  return `<html><head><style>${baseStyle}
+    .overlay { position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 12px 20px; border-radius: 8px; }
+    .title { color: white; font-size: 20px; font-weight: bold; text-align: center; }
+  </style></head><body><div class="container"><div class="overlay"><div class="title">${displayText}</div></div></div></body></html>`;
+}
+
+async function renderTemplateToImage(templateData) {
+  console.log(`[PUPPETEER] Launching browser for template rendering...`);
+  const browser = await puppeteer.launch({
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security', '--disable-features=VizDisplayCompositor', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+    const width = templateData.aspectRatio === 'vertical' ? 1080 : 1920;
+    const height = templateData.aspectRatio === 'vertical' ? 1920 : 1080;
+    await page.setViewport({ width, height });
+
+    const html = generateTemplateHTML(templateData);
+    await page.setContent(html, { waitUntil: 'load' });
+
+    const screenshot = await page.screenshot({ type: 'png', omitBackground: true, clip: { x: 0, y: 0, width, height } });
+    console.log(`[PUPPETEER] Template rendered to PNG (${screenshot.length} bytes)`);
+    return screenshot;
+  } finally {
+    await browser.close().catch(e => console.warn('[PUPPETEER] Close warning:', e.message));
+  }
+}
+
+async function overlayImageOnVideo(inputVideoPath, overlayImagePath, outputVideoPath, templateData = {}) {
+  const backgroundColor = (templateData.settings?.overlayColor && templateData.settings.overlayColor !== '') ? templateData.settings.overlayColor : '#000000';
+  const isBlankTemplate = templateData.template === 'default' || templateData.template === 'blank';
+  const isBWTemplate = templateData.template === 'bw-frame' || templateData.template === 'black-and-white' || templateData.template === 'bw';
+  const bwContrast = templateData.settings?.bwContrast || 130;
+  const bwBrightness = templateData.settings?.bwBrightness || 80;
+
+  let filterComplex;
+  if (isBlankTemplate) {
+    filterComplex = `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black[output]`;
+  } else if (isBWTemplate) {
+    filterComplex =
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=${backgroundColor}[scaled_video_temp];` +
+      `[scaled_video_temp]colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3:0:0:0:0:1[bw_temp];` +
+      `[bw_temp]eq=contrast=${bwContrast / 100}:brightness=${(bwBrightness - 100) / 100}[bw_video];` +
+      `[bw_video][1:v]overlay=0:0[output]`;
+  } else {
+    filterComplex =
+      `[0:v]scale=1080:800:force_original_aspect_ratio=increase,crop=1080:800[scaled_video_temp];` +
+      `[scaled_video_temp]pad=1080:1920:0:(oh-ih)/2:color=${backgroundColor}[scaled_video];` +
+      `[scaled_video][1:v]overlay=0:0[output]`;
+  }
+
+  const args = isBlankTemplate
+    ? ['-i', inputVideoPath, '-filter_complex', filterComplex, '-map', '[output]', '-map', '0:a', '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', '-y', outputVideoPath]
+    : ['-i', inputVideoPath, '-i', overlayImagePath, '-filter_complex', filterComplex, '-map', '[output]', '-map', '0:a', '-c:v', 'libx264', '-c:a', 'aac', '-pix_fmt', 'yuv420p', '-y', outputVideoPath];
+
+  await runCommandWithTimeout(FFMPEG_PATH, args, { timeout: 600000, label: 'Template overlay' });
+  console.log(`[TEMPLATE] Video overlay completed successfully`);
+  return outputVideoPath;
+}
+
+// ============================================
+// POST /apply-captions — Apply font captions to a video
+// ============================================
+app.post('/apply-captions', async (req, res) => {
+  const { videoUrl, captionData, fontKey = 'roboto', clipId, position = 'bottom' } = req.body;
+
+  if (!videoUrl) return res.status(400).json({ error: 'videoUrl is required' });
+  if (!captionData?.captions?.length) return res.status(400).json({ error: 'captionData with captions array is required' });
+  if (!isFontSupported(fontKey)) return res.status(400).json({ error: `Unsupported font: ${fontKey}` });
+
+  const timestamp = Date.now();
+  const inputPath = path.join(PROCESSING_DIR, `input_caption_${timestamp}.mp4`);
+  const outputPath = path.join(PROCESSING_DIR, `output_caption_${timestamp}_${fontKey}.mp4`);
+
+  try {
+    // Download video from URL
+    console.log(`[APPLY-CAPTIONS] Downloading video for caption application...`);
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) throw new Error(`Failed to fetch video: ${videoResponse.status}`);
+    const buffer = Buffer.from(await videoResponse.arrayBuffer());
+    fs.writeFileSync(inputPath, buffer);
+    console.log(`[APPLY-CAPTIONS] Downloaded ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
+
+    // Apply captions with selected font
+    await applyCaptionsWithFont(inputPath, captionData, fontKey, outputPath, { position, videoWidth: 1080, videoHeight: 1920 });
+
+    if (!fs.existsSync(outputPath)) throw new Error('Processed video file not found');
+
+    // Upload result to Firebase
+    let resultUrl = null;
+    if (storageBucket) {
+      const uploadResult = await retryWithBackoff(
+        () => uploadClipToFirebase(outputPath, `caption_${clipId || timestamp}_${fontKey}`),
+        { maxRetries: 3, label: 'Firebase caption upload' }
+      );
+      resultUrl = uploadResult.downloadURL;
+      console.log(`[APPLY-CAPTIONS] Uploaded to Firebase: ${resultUrl}`);
+    }
+
+    res.json({ success: true, url: resultUrl, fontKey, clipId });
+  } catch (error) {
+    console.error(`[APPLY-CAPTIONS] Error:`, error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    cleanupFile(inputPath);
+    cleanupFile(outputPath);
+  }
+});
+
+// ============================================
+// POST /process-template — Render template + overlay + optional captions
+// ============================================
+app.post('/process-template', async (req, res) => {
+  const { videoUrl, templateData, captionData, captionSettings } = req.body;
+
+  if (!videoUrl) return res.status(400).json({ error: 'videoUrl is required' });
+  if (!templateData?.template) return res.status(400).json({ error: 'templateData with template is required' });
+
+  const timestamp = Date.now();
+  const inputPath = path.join(PROCESSING_DIR, `input_template_${timestamp}.mp4`);
+  const overlayPath = path.join(PROCESSING_DIR, `overlay_${timestamp}.png`);
+  const outputPath = path.join(PROCESSING_DIR, `output_template_${timestamp}.mp4`);
+  const captionBurnPath = path.join(PROCESSING_DIR, `caption_burned_${timestamp}.mp4`);
+  const filesToCleanup = [inputPath, overlayPath, outputPath, captionBurnPath];
+
+  try {
+    // Download source video
+    console.log(`[PROCESS-TEMPLATE] Downloading source video...`);
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) throw new Error(`Failed to fetch video: ${videoResponse.status}`);
+    const buffer = Buffer.from(await videoResponse.arrayBuffer());
+    fs.writeFileSync(inputPath, buffer);
+    console.log(`[PROCESS-TEMPLATE] Downloaded ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
+
+    const isBlankTemplate = templateData.template === 'default' || templateData.template === 'blank';
+
+    // Render template overlay if not blank
+    if (!isBlankTemplate) {
+      console.log(`[PROCESS-TEMPLATE] Rendering template: ${templateData.template}`);
+      const overlayBuffer = await renderTemplateToImage(templateData);
+      fs.writeFileSync(overlayPath, overlayBuffer);
+    }
+
+    // Overlay template on video
+    console.log(`[PROCESS-TEMPLATE] Applying FFmpeg overlay...`);
+    await overlayImageOnVideo(inputPath, overlayPath, outputPath, templateData);
+
+    // Optionally burn captions
+    let finalVideoPath = outputPath;
+    if (captionData?.captions?.length && captionSettings) {
+      console.log(`[PROCESS-TEMPLATE] Burning ${captionData.captions.length} captions with font: ${captionSettings.font}`);
+      try {
+        await burnSubtitlesIntoVideo(outputPath, captionData, captionSettings, captionBurnPath, { tempDir: PROCESSING_DIR });
+        finalVideoPath = captionBurnPath;
+        console.log(`[PROCESS-TEMPLATE] Captions burned successfully`);
+      } catch (captionError) {
+        console.error(`[PROCESS-TEMPLATE] Caption burning failed:`, captionError.message);
+        // Continue without captions rather than failing entirely
+      }
+    }
+
+    // Upload to Firebase
+    if (storageBucket) {
+      const uploadResult = await retryWithBackoff(
+        () => uploadClipToFirebase(finalVideoPath, `template_${timestamp}`),
+        { maxRetries: 3, label: 'Firebase template upload' }
+      );
+      console.log(`[PROCESS-TEMPLATE] Uploaded to Firebase: ${uploadResult.downloadURL}`);
+      res.json({ success: true, url: uploadResult.downloadURL });
+    } else {
+      // Return video as binary response if no Firebase
+      const videoBuffer = fs.readFileSync(finalVideoPath);
+      res.set({ 'Content-Type': 'video/mp4', 'Content-Length': videoBuffer.length });
+      res.send(videoBuffer);
+    }
+  } catch (error) {
+    console.error(`[PROCESS-TEMPLATE] Error:`, error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    filesToCleanup.forEach(f => cleanupFile(f));
+  }
+});
+
+// ============================================
+// POST /process-video — General FFmpeg operations
+// ============================================
+app.post('/process-video', async (req, res) => {
+  const { videoUrl, operation, options = {} } = req.body;
+
+  if (!videoUrl) return res.status(400).json({ error: 'videoUrl is required' });
+  if (!operation) return res.status(400).json({ error: 'operation is required' });
+
+  const timestamp = Date.now();
+  const inputPath = path.join(PROCESSING_DIR, `input_process_${timestamp}.mp4`);
+  const outputPath = path.join(PROCESSING_DIR, `output_process_${timestamp}.mp4`);
+
+  try {
+    // Download video
+    console.log(`[PROCESS-VIDEO] Downloading video for operation: ${operation}`);
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) throw new Error(`Failed to fetch video: ${videoResponse.status}`);
+    const buffer = Buffer.from(await videoResponse.arrayBuffer());
+    fs.writeFileSync(inputPath, buffer);
+
+    let ffmpegArgs;
+    let finalOutput = outputPath;
+
+    switch (operation) {
+      case 'cut': {
+        const { startTime = 0, endTime, duration } = options;
+        const dur = duration || (endTime ? endTime - startTime : 30);
+        ffmpegArgs = ['-ss', String(startTime), '-i', inputPath, '-t', String(dur), '-c', 'copy', '-y', outputPath];
+        break;
+      }
+      case 'resize': {
+        const { width = 1080, height = 1920, platform } = options;
+        let scale;
+        if (platform === 'tiktok' || platform === 'reels' || platform === 'shorts') scale = '1080:1920';
+        else if (platform === 'twitter') scale = '1280:720';
+        else scale = `${width}:${height}`;
+        ffmpegArgs = ['-i', inputPath, '-vf', `scale=${scale}:force_original_aspect_ratio=decrease,pad=${scale}:(ow-iw)/2:(oh-ih)/2`, '-c:v', 'libx264', '-c:a', 'aac', '-y', outputPath];
+        break;
+      }
+      case 'extract-audio': {
+        finalOutput = outputPath.replace('.mp4', '.mp3');
+        ffmpegArgs = ['-i', inputPath, '-vn', '-acodec', 'libmp3lame', '-ab', '192k', '-y', finalOutput];
+        break;
+      }
+      default:
+        return res.status(400).json({ error: `Unsupported operation: ${operation}` });
+    }
+
+    await runCommandWithTimeout(FFMPEG_PATH, ffmpegArgs, { timeout: 600000, label: `Process-video ${operation}` });
+
+    if (!fs.existsSync(finalOutput)) throw new Error('Output file not created');
+
+    if (storageBucket) {
+      const uploadResult = await retryWithBackoff(
+        () => uploadClipToFirebase(finalOutput, `processed_${operation}_${timestamp}`),
+        { maxRetries: 3, label: 'Firebase process upload' }
+      );
+      res.json({ success: true, url: uploadResult.downloadURL, operation });
+    } else {
+      const videoBuffer = fs.readFileSync(finalOutput);
+      res.set({ 'Content-Type': operation === 'extract-audio' ? 'audio/mpeg' : 'video/mp4', 'Content-Length': videoBuffer.length });
+      res.send(videoBuffer);
+    }
+  } catch (error) {
+    console.error(`[PROCESS-VIDEO] Error:`, error.message);
+    res.status(500).json({ error: error.message });
+  } finally {
+    cleanupFile(inputPath);
+    cleanupFile(outputPath);
+    cleanupFile(outputPath.replace('.mp4', '.mp3'));
+  }
+});
+
+// ============================================
+// GET /fonts — List available fonts
+// ============================================
+app.get('/fonts', (req, res) => {
+  const fonts = Object.entries(CAPTION_FONTS).map(([key, font]) => ({
+    key, name: font.name, description: font.description
+  }));
+  res.json({ fonts, defaultFont: 'roboto', count: fonts.length });
+});
+
+// ============================================
 // Start Server
 // ============================================
 initializeFirebase();
@@ -1781,12 +2323,16 @@ app.listen(PORT, () => {
 
 Endpoints:
   GET  /health                   - Health check
+  GET  /fonts                    - List available caption fonts
   POST /metadata                 - Get video metadata
   POST /download                 - Download video
   POST /download-with-metadata   - Download with metadata
   POST /formats                  - List available formats
   POST /extract-frame            - Extract frame as thumbnail
   POST /process-clips-pipeline   - Full clip detection pipeline
+  POST /apply-captions           - Apply font captions to video
+  POST /process-template         - Template overlay + captions
+  POST /process-video            - General FFmpeg operations
   POST /cleanup                  - Delete temp file
 `);
 });

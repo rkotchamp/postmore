@@ -3,7 +3,7 @@
 
 FROM node:20-slim AS base
 
-# Install system dependencies for video processing
+# Install system dependencies for video processing + Puppeteer/Chromium
 RUN apt-get update && apt-get install -y \
     # FFmpeg for video processing
     ffmpeg \
@@ -13,9 +13,32 @@ RUN apt-get update && apt-get install -y \
     # Network utilities
     curl \
     ca-certificates \
+    # Chromium + Puppeteer dependencies for template rendering
+    chromium \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libxshmfence1 \
+    # Font rendering dependencies
+    fontconfig \
+    fonts-liberation \
     # Cleanup to reduce image size
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Set Puppeteer to use system Chromium instead of downloading its own
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Install curl_cffi first for browser impersonation (required for Kick, Rumble)
 RUN pip3 install --break-system-packages curl_cffi
@@ -43,9 +66,15 @@ RUN npm ci --legacy-peer-deps
 # Copy source code
 COPY . .
 
+# Copy font files for caption rendering
+COPY app/lib/video-processing/fonts/*.ttf /app/fonts/
+
 # Create temp directories for video processing
 RUN mkdir -p /app/temp/downloads /app/temp/processing \
     && chmod -R 755 /app/temp
+
+# Update font cache with custom fonts
+RUN fc-cache -f -v /app/fonts/ 2>/dev/null || true
 
 # Set environment variables
 ENV NODE_ENV=production

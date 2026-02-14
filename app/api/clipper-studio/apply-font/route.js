@@ -1,129 +1,69 @@
 /**
  * API Route: Apply Font to Video Captions
  * POST /api/clipper-studio/apply-font
- *
- * Applies selected font to video captions using Smart Caption Management
- * Takes a clean video (no captions) and applies captions with selected font
+ * Proxies caption font application to Railway server
  */
 
 import { NextResponse } from 'next/server';
-import { applyCaptionsWithFont } from '@/app/lib/video-processing/services/captionService';
-import fontManager from '@/app/lib/video-processing/fonts/fontManager';
-import fs from 'fs';
-import path from 'path';
+
+const RAILWAY_API_URL = process.env.VIDEO_PROCESSING_API_URL || process.env.RAILWAY_VIDEO_API_URL;
+const VIDEO_API_SECRET = process.env.VIDEO_API_SECRET;
 
 export async function POST(request) {
   try {
-    console.log('🎨 [APPLY-FONT-API] Starting font application request');
-
     const body = await request.json();
-    const {
-      videoUrl,
-      captionData,
-      fontKey = 'roboto',
-      clipId,
-      position = 'bottom'
-    } = body;
+    const { videoUrl, captionData, fontKey = 'roboto', clipId, position = 'bottom' } = body;
 
-    // Validate required parameters
     if (!videoUrl) {
-      return NextResponse.json(
-        { error: 'videoUrl is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'videoUrl is required' }, { status: 400 });
     }
 
     if (!captionData || !captionData.captions || captionData.captions.length === 0) {
+      return NextResponse.json({ error: 'captionData with captions array is required' }, { status: 400 });
+    }
+
+    if (!RAILWAY_API_URL) {
+      return NextResponse.json({ error: 'Video processing service not configured' }, { status: 503 });
+    }
+
+    console.log(`[APPLY-FONT-PROXY] Proxying font application to Railway: ${fontKey}`);
+
+    // Call Railway /apply-captions endpoint
+    const railwayResponse = await fetch(`${RAILWAY_API_URL}/apply-captions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${VIDEO_API_SECRET}`
+      },
+      body: JSON.stringify({ videoUrl, captionData, fontKey, clipId, position })
+    });
+
+    if (!railwayResponse.ok) {
+      const errorData = await railwayResponse.json().catch(() => ({}));
+      console.error(`[APPLY-FONT-PROXY] Railway error:`, errorData);
       return NextResponse.json(
-        { error: 'captionData with captions array is required' },
-        { status: 400 }
+        { error: errorData.error || 'Font application failed' },
+        { status: railwayResponse.status }
       );
     }
 
-    if (!fontManager.isFontSupported(fontKey)) {
-      return NextResponse.json(
-        { error: `Unsupported font: ${fontKey}. Available fonts: ${Object.keys(fontManager.CAPTION_FONTS).join(', ')}` },
-        { status: 400 }
-      );
+    const result = await railwayResponse.json();
+
+    if (!result.success || !result.url) {
+      return NextResponse.json({ error: 'Processing failed - no URL returned' }, { status: 500 });
     }
 
-    console.log(`🎬 [APPLY-FONT-API] Processing video with font: ${fontKey}`);
-    console.log(`📝 [APPLY-FONT-API] Caption count: ${captionData.captions.length}`);
-    console.log(`📍 [APPLY-FONT-API] Position: ${position}`);
-
-    // Initialize font system
-    await fontManager.initializeFonts();
-
-    // Create temporary output path
-    const timestamp = Date.now();
-    const outputFileName = `clip_${clipId || timestamp}_font_${fontKey}.mp4`;
-    const outputPath = path.join('/tmp', outputFileName);
-
-    console.log(`📁 [APPLY-FONT-API] Output path: ${outputPath}`);
-
-    // Determine if we need to download the video first
-    let inputVideoPath = videoUrl;
-    let needsCleanup = false;
-
-    // If videoUrl is a URL (not local path), download it first
-    if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) {
-      console.log(`⬇️ [APPLY-FONT-API] Downloading video from URL: ${videoUrl}`);
-
-      const downloadPath = path.join('/tmp', `input_${timestamp}.mp4`);
-
-      // Download video
-      const response = await fetch(videoUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to download video: ${response.statusText}`);
-      }
-
-      const buffer = await response.arrayBuffer();
-      fs.writeFileSync(downloadPath, Buffer.from(buffer));
-
-      inputVideoPath = downloadPath;
-      needsCleanup = true;
-
-      console.log(`✅ [APPLY-FONT-API] Video downloaded to: ${downloadPath}`);
+    // Fetch processed video from Firebase and return as download
+    const videoResponse = await fetch(result.url);
+    if (!videoResponse.ok) {
+      return NextResponse.json({ error: 'Failed to fetch processed video' }, { status: 500 });
     }
 
-    // Apply captions with selected font
-    const resultPath = await applyCaptionsWithFont(
-      inputVideoPath,
-      captionData,
-      fontKey,
-      outputPath,
-      {
-        position: position,
-        videoWidth: 1080,
-        videoHeight: 1920
-      }
-    );
+    const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
+    const outputFileName = `clip_${clipId || Date.now()}_font_${fontKey}.mp4`;
 
-    console.log(`✅ [APPLY-FONT-API] Font application completed: ${resultPath}`);
+    console.log(`[APPLY-FONT-PROXY] Returning ${(videoBuffer.length / 1024 / 1024).toFixed(2)}MB video`);
 
-    // Read the processed video file
-    if (!fs.existsSync(resultPath)) {
-      throw new Error('Processed video file not found');
-    }
-
-    const videoBuffer = fs.readFileSync(resultPath);
-
-    // Cleanup temporary files
-    try {
-      if (needsCleanup && fs.existsSync(inputVideoPath)) {
-        fs.unlinkSync(inputVideoPath);
-        console.log(`🧹 [APPLY-FONT-API] Cleaned up input file: ${inputVideoPath}`);
-      }
-
-      if (fs.existsSync(resultPath)) {
-        fs.unlinkSync(resultPath);
-        console.log(`🧹 [APPLY-FONT-API] Cleaned up output file: ${resultPath}`);
-      }
-    } catch (cleanupError) {
-      console.warn(`⚠️ [APPLY-FONT-API] Cleanup warning: ${cleanupError.message}`);
-    }
-
-    // Return the video file
     return new NextResponse(videoBuffer, {
       status: 200,
       headers: {
@@ -131,57 +71,38 @@ export async function POST(request) {
         'Content-Disposition': `attachment; filename="${outputFileName}"`,
         'Content-Length': videoBuffer.length.toString(),
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
       }
     });
 
   } catch (error) {
-    console.error('❌ [APPLY-FONT-API] Error applying font to video:', error);
-
+    console.error('[APPLY-FONT-PROXY] Error:', error.message);
     return NextResponse.json(
-      {
-        error: 'Failed to apply font to video',
-        details: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
+      { error: 'Failed to apply font to video', details: error.message },
       { status: 500 }
     );
   }
 }
 
-// GET endpoint to list available fonts
+// GET endpoint to list available fonts (proxies to Railway)
 export async function GET(request) {
   try {
-    console.log('📋 [APPLY-FONT-API] Listing available fonts');
+    if (!RAILWAY_API_URL) {
+      return NextResponse.json({ error: 'Video processing service not configured' }, { status: 503 });
+    }
 
-    const fonts = fontManager.getAvailableFonts();
-
-    // Format fonts for frontend consumption
-    const formattedFonts = Object.entries(fonts).map(([key, font]) => ({
-      key,
-      name: font.name,
-      family: font.family,
-      weight: font.weight,
-      description: font.description,
-      systemFont: font.systemFont || font.ffmpegFont
-    }));
-
-    return NextResponse.json({
-      fonts: formattedFonts,
-      defaultFont: fontManager.getDefaultFont(),
-      count: formattedFonts.length
+    const railwayResponse = await fetch(`${RAILWAY_API_URL}/fonts`, {
+      headers: { 'Authorization': `Bearer ${VIDEO_API_SECRET}` }
     });
 
-  } catch (error) {
-    console.error('❌ [APPLY-FONT-API] Error listing fonts:', error);
+    if (!railwayResponse.ok) {
+      return NextResponse.json({ error: 'Failed to fetch fonts' }, { status: railwayResponse.status });
+    }
 
-    return NextResponse.json(
-      {
-        error: 'Failed to list fonts',
-        details: error.message
-      },
-      { status: 500 }
-    );
+    const data = await railwayResponse.json();
+    return NextResponse.json(data);
+
+  } catch (error) {
+    console.error('[APPLY-FONT-PROXY] Error listing fonts:', error.message);
+    return NextResponse.json({ error: 'Failed to list fonts', details: error.message }, { status: 500 });
   }
 }
