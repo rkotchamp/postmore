@@ -1033,7 +1033,7 @@ export default function ClipperStudio() {
           options: {
             minClipDuration: 15,     // AI determines optimal duration (15-60s)
             maxClipDuration: 60,
-            maxClips: 10,            // Let AI find up to 10 quality clips
+            // maxClips omitted — Railway auto-calculates from video duration (5-50 clips)
             language: null,          // Auto-detect language
             videoType: 'general'     // Can be: gaming, tutorial, reaction, etc.
           }

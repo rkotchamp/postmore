@@ -1067,11 +1067,14 @@ async function transcribeSingleFile(filePath, options = {}) {
   };
 }
 
-async function transcribeWithWhisper(filePath, options = {}) {
+async function transcribeWithWhisper(filePath, options = {}, onProgress = null) {
   const chunkResult = await chunkVideoForWhisper(filePath);
 
   if (!chunkResult.needsChunking) {
-    return await transcribeSingleFile(filePath, options);
+    if (onProgress) await onProgress(50); // Single file = halfway through transcription range
+    const result = await transcribeSingleFile(filePath, options);
+    if (onProgress) await onProgress(100);
+    return result;
   }
 
   console.log(`[WHISPER] Large file (${chunkResult.originalSizeMB}MB), processing ${chunkResult.totalChunks} chunks`);
@@ -1080,6 +1083,13 @@ async function transcribeWithWhisper(filePath, options = {}) {
 
   for (let i = 0; i < chunkResult.chunks.length; i++) {
     console.log(`[WHISPER] Processing chunk ${i + 1}/${chunkResult.totalChunks}`);
+
+    // Report per-chunk progress (0-100% of the transcription phase)
+    if (onProgress) {
+      const chunkProgress = Math.round((i / chunkResult.totalChunks) * 100);
+      await onProgress(chunkProgress);
+    }
+
     const chunkTranscription = await transcribeSingleFile(chunkResult.chunks[i], options);
 
     let chunkDuration = 0;
@@ -1099,6 +1109,7 @@ async function transcribeWithWhisper(filePath, options = {}) {
     cumulativeTime += chunkDuration > 0 ? chunkDuration : (10 * 60);
   }
 
+  if (onProgress) await onProgress(100);
   if (chunkResult.chunkDirectory) cleanupChunks(chunkResult.chunkDirectory);
 
   return {
@@ -1174,51 +1185,96 @@ async function callDeepSeekAPI(prompt) {
   return { content: data.choices[0].message.content, usage: data.usage, model: data.model };
 }
 
+function calculateMaxClips(durationSeconds) {
+  const durationMinutes = (durationSeconds || 0) / 60;
+  return Math.min(50, Math.max(5, Math.ceil(durationMinutes / 3)));
+}
+
 function buildAnalysisPrompt(segmentsText, options) {
-  const { minClipDuration = 15, maxClipDuration = 60, maxClips = 10, videoTitle = 'Video', videoType = 'general', language = 'auto-detected', duration = 'unknown' } = options;
-  return `
-<<SYSTEM>>
-You are CLIPMASTER-AI: Elite viral content strategist.
+  const { minClipDuration = 15, maxClipDuration = 60, maxClips = 10,
+    videoTitle = 'Video', videoType = 'general', language = 'auto-detected',
+    duration = 'unknown' } = options;
 
-<<OBJECTIVE>>
-Transform this video transcription into viral clip opportunities. Generate TWO text layers per clip:
-- TITLE: SEO-optimized, descriptive (50-80 chars)
-- TEMPLATE HEADER: Viral hook for social overlays (<50 chars)
+  const minTarget = Math.max(5, Math.ceil(maxClips * 0.6));
 
-VIDEO CONTEXT:
-- Title: "${videoTitle}"
-- Type: ${videoType}
-- Duration: ${duration}s
-- Language: ${language}
+  return `You are an expert short-form content strategist. Your job is to find the most viral, engaging, standalone moments from a long video transcript.
 
-TRANSCRIPTION:
+VIDEO: "${videoTitle}"
+TYPE: ${videoType} | DURATION: ${duration}s | LANGUAGE: ${language}
+
+TRANSCRIPTION (with timestamps):
 ${segmentsText}
 
-<<4-D METHODOLOGY>>
-DECONSTRUCT: Analyze for Setup-Tension-Climax-Resolution, emotional peaks, complete thought arcs.
-DIAGNOSE: Find emotional explosions, contradictions, universal relatability, quotable moments, educational breakthroughs.
-DEVELOP: ${minClipDuration}-${maxClipDuration} seconds, natural sentence boundaries, include setup + payoff. If viral moment is short, EXPAND the timeframe.
-DELIVER: Return ONLY this JSON array:
+RULES FOR FINDING VIRAL CLIPS:
+
+1. STANDALONE TEST (most important): Each clip MUST make complete sense to someone who has NEVER seen the original video. If a clip requires context from earlier in the video to understand, REJECT it.
+
+2. SCROLL-STOP HOOK: The first 2-3 seconds of every clip must contain one of:
+   - A bold or controversial claim ("Most people get this completely wrong...")
+   - A surprising revelation ("I lost $2 million in one day...")
+   - An emotional moment (anger, laughter, shock, vulnerability)
+   - A compelling question ("What would you do if...?")
+   - A direct challenge to the viewer
+
+3. COMPLETE STORY ARC: Every clip must have:
+   - SETUP: Context that makes the viewer understand the situation (2-5 seconds)
+   - DEVELOPMENT: The core content, tension, or argument (main body)
+   - PAYOFF: A conclusion, punchline, lesson, or emotional resolution
+   - NO clip should end mid-sentence or mid-thought
+
+4. NATURAL BOUNDARIES: Start and end on complete sentences. Include 1-2 seconds of buffer before the first word and after the last word.
+
+5. CONTENT SIGNALS TO PRIORITIZE:
+   - Heated disagreements or debates
+   - Personal stories and vulnerable confessions
+   - "Aha moment" explanations that simplify complex topics
+   - Unexpected humor or comedic timing
+   - Quotable one-liners ("That's the thing about...")
+   - Contrarian takes that challenge conventional wisdom
+   - Emotional climaxes (someone getting excited, angry, or moved)
+   - Power dynamics shifting (underdog moments, someone being proven wrong)
+
+SCORING (viralityScore = hook + flow + value + trend):
+- HOOK (0-25): Would someone stop scrolling in the first 3 seconds?
+- FLOW (0-25): Does the clip have clear beginning → middle → end with no confusion?
+- VALUE (0-25): Does it teach, inspire, entertain, or trigger a strong emotion?
+- TREND (0-25): Does it fit short-form content patterns? Is it shareable/quotable?
+- Minimum total: 50. Only include clips you'd genuinely want to share.
+
+OUTPUT FORMAT — Return ONLY a JSON array, no other text:
 [
   {
-    "startTime": 45.2, "endTime": 67.8, "duration": 22.6,
-    "title": "SEO-optimized descriptive title",
-    "templateHeader": "Punchy viral social media hook",
-    "reason": "Specific viral trigger explanation",
+    "startTime": 45.2,
+    "endTime": 72.8,
+    "duration": 27.6,
+    "title": "Descriptive SEO title explaining the clip content (50-80 chars)",
+    "templateHeader": "Scroll-stopping hook text for social overlay (<50 chars)",
+    "reason": "Why this specific moment is viral — what emotion or reaction it triggers",
     "viralityScore": 85,
-    "engagementType": "reaction|educational|funny|dramatic|relatable",
-    "hasSetup": true, "hasPayoff": true,
+    "hookScore": 22,
+    "flowScore": 20,
+    "valueScore": 23,
+    "trendScore": 20,
+    "engagementType": "reaction|educational|funny|dramatic|relatable|inspirational|controversial",
+    "hasSetup": true,
+    "hasPayoff": true,
     "contentTags": ["emotion", "surprise", "quotable"]
   }
 ]
 
-<<CONSTRAINTS>>
+TEMPLATE HEADER EXAMPLES by type:
+- Reaction: "His face when he heard the price"
+- Educational: "This changed how I think about money"
+- Funny: "I can't believe he actually said this"
+- Dramatic: "The moment everything fell apart"
+- Controversial: "Nobody wants to hear this but..."
+
+CONSTRAINTS:
+- Find ${minTarget} to ${maxClips} clips (prioritize quality, but don't leave good moments on the table)
+- Each clip: ${minClipDuration}-${maxClipDuration} seconds
 - viralityScore >= 50 minimum
-- Target: AT LEAST 10 clips when possible
-- Maximum ${maxClips} clips total
-- ALL clips must be ${minClipDuration}-${maxClipDuration} seconds
-- JSON format only, no explanations outside array
-`;
+- Spread clips across the full video — don't cluster all clips in one section
+- JSON array only, no explanations outside the array`;
 }
 
 function validateAndCleanClips(rawClips, options) {
@@ -1260,15 +1316,18 @@ function needsChunking(transcription) {
 
 async function analyzeChunkWithDeepSeek(chunk, options, chunkIndex, totalChunks) {
   console.log(`[DEEPSEEK-MAP] Analyzing chunk ${chunkIndex + 1}/${totalChunks}`);
+  const perChunkMaxClips = Math.ceil((options.maxClips || 10) / totalChunks) + 3;
   const prompt = buildAnalysisPrompt(chunk.segmentsText, {
-    ...options, duration: chunk.duration.toFixed(1),
+    ...options, maxClips: perChunkMaxClips,
+    duration: chunk.duration.toFixed(1),
     language: options.language || 'auto-detected'
   });
-  prompt.replace('<<SYSTEM>>', `<<SYSTEM>>\nYou are analyzing CHUNK ${chunkIndex + 1} of ${totalChunks}.`);
+  const chunkContext = `NOTE: You are analyzing segment ${chunkIndex + 1} of ${totalChunks} from a longer video. Timestamps in this segment range from ${chunk.startTime.toFixed(1)}s to ${chunk.endTime.toFixed(1)}s. Only find clips within this time range.\n\n`;
+  const fullPrompt = chunkContext + prompt;
 
   try {
     const startTime = Date.now();
-    const response = await callDeepSeekAPI(prompt);
+    const response = await callDeepSeekAPI(fullPrompt);
     const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
 
     const rawClips = parseDeepSeekResponse(response.content);
@@ -1608,32 +1667,48 @@ app.post('/process-clips-pipeline', async (req, res) => {
     const platform = detectPlatform(url);
     const metadata = await getVideoMetadata(url);
     console.log(`[PIPELINE] Video: "${metadata.title}" (${metadata.duration}s) from ${platform}`);
-    await updateProjectProgress(projectId, 'downloading', 15);
+    await updateProjectProgress(projectId, 'downloading', 10);
+
+    // Estimate download time and set intermediate progress
+    const isLongVideo = metadata.duration > 600; // > 10 minutes
+    if (isLongVideo) {
+      await updateProjectProgress(projectId, 'downloading', 12);
+    }
 
     const downloadResult = await downloadVideo(url, { quality: 'best[height<=720]/best', platform });
     console.log(`[PIPELINE] Downloaded to: ${downloadResult.filePath}`);
-    await updateProjectProgress(projectId, 'downloading', 30);
+    await updateProjectProgress(projectId, 'downloading', 25);
 
-    // === Step 2: Transcribe with Whisper ===
+    // === Step 2: Audio chunking ===
+    console.log(`[PIPELINE] Preparing audio for transcription...`);
+    await updateProjectProgress(projectId, 'transcribing', 28);
+
+    // === Step 2b: Transcribe with Whisper (with per-chunk progress) ===
     console.log(`[PIPELINE] Starting Whisper transcription...`);
-    await updateProjectProgress(projectId, 'transcribing', 35);
+
+    // Progress callback: maps transcription 0-100% into pipeline 30-58%
+    const transcriptionProgress = async (pct) => {
+      const pipelinePct = Math.round(30 + (pct / 100) * 28); // 30% to 58%
+      await updateProjectProgress(projectId, 'transcribing', pipelinePct);
+    };
 
     const transcriptionResult = await transcribeWithWhisper(downloadResult.filePath, {
       language: options.language || null,
       responseFormat: 'verbose_json',
       temperature: 0
-    });
+    }, transcriptionProgress);
     console.log(`[PIPELINE] Transcription done: ${transcriptionResult.segments?.length || 0} segments`);
     await updateProjectProgress(projectId, 'transcribing', 60);
 
     // === Step 3: Analyze with DeepSeek ===
-    console.log(`[PIPELINE] Starting DeepSeek analysis...`);
-    await updateProjectProgress(projectId, 'analyzing', 65);
+    const autoMaxClips = options.maxClips || calculateMaxClips(metadata.duration);
+    console.log(`[PIPELINE] Starting DeepSeek analysis (maxClips: ${autoMaxClips}, duration: ${Math.round(metadata.duration / 60)}min)...`);
+    await updateProjectProgress(projectId, 'analyzing', 62);
 
     const analysisResult = await analyzeContentWithDeepSeek(transcriptionResult, {
       minClipDuration: options.minClipDuration || 15,
       maxClipDuration: options.maxClipDuration || 60,
-      maxClips: options.maxClips || 10,
+      maxClips: autoMaxClips,
       videoTitle: metadata.title || 'Video',
       videoType: options.videoType || 'general'
     });
@@ -1692,16 +1767,67 @@ app.post('/process-clips-pipeline', async (req, res) => {
 
     // === Step 5: Cut clips and upload to Firebase ===
     console.log(`[PIPELINE] Starting clip cutting for ${savedClips.length} clips...`);
-    await updateProjectProgress(projectId, 'cutting', 85);
+    await updateProjectProgress(projectId, 'cutting', 82);
 
-    const processedClips = await processClipsFromMetadata(
-      downloadResult.filePath,
-      savedClips.map(clip => ({
-        _id: clip._id, startTime: clip.startTime, endTime: clip.endTime,
-        title: clip.title, duration: clip.duration, viralityScore: clip.viralityScore
-      })),
-      projectId, metadata.title || 'Video', PROCESSING_DIR
-    );
+    const clipsList = savedClips.map(clip => ({
+      _id: clip._id, startTime: clip.startTime, endTime: clip.endTime,
+      title: clip.title, duration: clip.duration, viralityScore: clip.viralityScore
+    }));
+
+    // Per-clip progress: maps cutting 0-N into pipeline 82-98%
+    const originalProcessClips = processClipsFromMetadata;
+    const processedClips = [];
+    for (let i = 0; i < clipsList.length; i++) {
+      const clipMeta = clipsList[i];
+      const clipPct = Math.round(82 + ((i + 1) / clipsList.length) * 16); // 82% to 98%
+      console.log(`[PIPELINE] Cutting clip ${i + 1}/${clipsList.length}: ${clipMeta.startTime}s - ${clipMeta.endTime}s`);
+
+      try {
+        // Cut vertical (9:16)
+        const videoResultVertical = await cutVideoClip(downloadResult.filePath, clipMeta.startTime, clipMeta.endTime, PROCESSING_DIR, {
+          aspectRatio: '9:16', platform: 'vertical'
+        });
+        // Cut horizontal (2.35:1)
+        const videoResultHorizontal = await cutVideoClip(downloadResult.filePath, clipMeta.startTime, clipMeta.endTime, PROCESSING_DIR, {
+          aspectRatio: '2.35:1', platform: 'cinematic'
+        });
+        // Extract preview
+        const previewResult = await extractPreviewSegment(
+          downloadResult.filePath, clipMeta.startTime, clipMeta.endTime, clipMeta._id, PROCESSING_DIR
+        );
+        // Upload both clips to Firebase
+        const verticalUpload = await uploadClipToFirebase(
+          videoResultVertical.filePath, `${projectId}_clip_${clipMeta.startTime}s_9x16`
+        );
+        const horizontalUpload = await uploadClipToFirebase(
+          videoResultHorizontal.filePath, `${projectId}_clip_${clipMeta.startTime}s_2.35x1`
+        );
+        // Cleanup local clip files
+        try { fs.unlinkSync(videoResultVertical.filePath); fs.unlinkSync(videoResultHorizontal.filePath); } catch (e) { /* ignore */ }
+
+        processedClips.push({
+          clipId: clipMeta._id, title: clipMeta.title || `${metadata.title} - ${clipMeta.startTime}s`,
+          startTime: clipMeta.startTime, endTime: clipMeta.endTime,
+          duration: clipMeta.duration, viralityScore: clipMeta.viralityScore,
+          generatedVideo: {
+            vertical: { url: verticalUpload.downloadURL, format: 'mp4', size: videoResultVertical.size, duration: videoResultVertical.duration, resolution: '720p', aspectRatio: '9:16' },
+            horizontal: { url: horizontalUpload.downloadURL, format: 'mp4', size: videoResultHorizontal.size, duration: videoResultHorizontal.duration, resolution: '720p', aspectRatio: '2.35:1' },
+            url: verticalUpload.downloadURL, format: 'mp4', size: videoResultVertical.size, duration: videoResultVertical.duration, resolution: '720p'
+          },
+          previewVideo: { url: previewResult.url, format: 'mp4', size: previewResult.size, duration: previewResult.duration }
+        });
+      } catch (error) {
+        console.error(`[PIPELINE] Clip ${i + 1} failed:`, error.message);
+        processedClips.push({
+          clipId: clipMeta._id, title: `Error: ${clipMeta.title || 'Processing failed'}`,
+          startTime: clipMeta.startTime, endTime: clipMeta.endTime,
+          duration: clipMeta.duration, viralityScore: clipMeta.viralityScore,
+          error: error.message, generatedVideo: null
+        });
+      }
+
+      await updateProjectProgress(projectId, 'cutting', clipPct);
+    }
 
     // Update clip records with Firebase URLs
     let successfulUpdates = 0;

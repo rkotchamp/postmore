@@ -188,7 +188,7 @@ const VideoProcessingConfig = {
     defaultClipDuration: 60, // Default target clip length
     overlapTolerance: 5, // Seconds of overlap allowed between clips
     confidenceThreshold: 0.7, // Minimum confidence for GPT clip suggestions
-    maxClipsPerVideo: 10 // Maximum number of clips to generate per video
+    maxClipsPerVideo: 50 // Maximum number of clips to generate per video (auto-scaled by duration)
   },
 
   // Storage Configuration
