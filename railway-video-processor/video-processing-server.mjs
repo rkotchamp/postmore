@@ -6,12 +6,17 @@
 
 import express from 'express';
 import cors from 'cors';
-import { spawn } from 'child_process';
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
+import mongoose from 'mongoose';
+import OpenAI from 'openai';
+
+const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +27,285 @@ const DOWNLOAD_DIR = process.env.VIDEO_DOWNLOAD_DIR || '/app/temp/downloads';
 const API_SECRET = process.env.VIDEO_API_SECRET;
 const YTDLP_PATH = process.env.YTDLP_PATH || 'yt-dlp';
 const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+const FFPROBE_PATH = process.env.FFPROBE_PATH || 'ffprobe';
+const PROCESSING_DIR = process.env.VIDEO_PROCESSING_TEMP_DIR || '/app/temp/processing';
+const MONGODB_URI = process.env.MONGODB_URI;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+
+// ============================================
+// Robustness Utilities
+// ============================================
+
+/**
+ * Retry with exponential backoff for API calls
+ */
+async function retryWithBackoff(fn, { maxRetries = 3, baseDelay = 1000, label = 'operation' } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      // Don't retry on auth or validation errors
+      if (error.status === 400 || error.status === 401 || error.status === 403) throw error;
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+        console.warn(`[RETRY] ${label} attempt ${attempt}/${maxRetries} failed: ${error.message}. Retrying in ${(delay / 1000).toFixed(1)}s`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Run a spawn command with timeout
+ */
+function runCommandWithTimeout(cmd, args, { timeout = 600000, label = 'command' } = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args);
+    let stdout = '';
+    let stderr = '';
+    let killed = false;
+
+    const timer = setTimeout(() => {
+      killed = true;
+      proc.kill('SIGKILL');
+      reject(new Error(`${label} timed out after ${timeout / 1000}s`));
+    }, timeout);
+
+    proc.stdout?.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr?.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (killed) return;
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`${label} failed (code ${code}): ${stderr.substring(0, 500)}`));
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      if (killed) return;
+      reject(new Error(`${label} process error: ${err.message}`));
+    });
+  });
+}
+
+/**
+ * Concurrency semaphore for limiting parallel jobs
+ */
+class Semaphore {
+  constructor(max) {
+    this.max = max;
+    this.current = 0;
+    this.queue = [];
+  }
+
+  async acquire() {
+    if (this.current < this.max) {
+      this.current++;
+      return;
+    }
+    await new Promise(resolve => this.queue.push(resolve));
+    this.current++;
+  }
+
+  release() {
+    this.current--;
+    if (this.queue.length > 0) {
+      const next = this.queue.shift();
+      next();
+    }
+  }
+
+  get active() { return this.current; }
+  get waiting() { return this.queue.length; }
+}
+
+const pipelineSemaphore = new Semaphore(2);  // Max 2 concurrent pipeline jobs
+const ffmpegSemaphore = new Semaphore(3);    // Max 3 concurrent FFmpeg processes
+
+/**
+ * Cleanup old temp files (runs every 30 minutes)
+ */
+function startCleanupCron() {
+  const MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+  setInterval(() => {
+    const dirs = [DOWNLOAD_DIR, PROCESSING_DIR];
+    let cleaned = 0;
+    const now = Date.now();
+
+    for (const dir of dirs) {
+      if (!fs.existsSync(dir)) continue;
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          try {
+            const stat = fs.statSync(fullPath);
+            if (now - stat.mtimeMs > MAX_AGE_MS) {
+              if (entry.isDirectory()) {
+                fs.rmSync(fullPath, { recursive: true, force: true });
+              } else {
+                fs.unlinkSync(fullPath);
+              }
+              cleaned++;
+            }
+          } catch (e) { /* skip files we can't stat */ }
+        }
+      } catch (e) { /* skip dirs we can't read */ }
+    }
+
+    if (cleaned > 0) console.log(`[CLEANUP-CRON] Removed ${cleaned} old temp files/dirs`);
+  }, 30 * 60 * 1000); // Every 30 minutes
+}
+
+// ============================================
+// MongoDB Connection
+// ============================================
+let mongoConnected = false;
+
+async function connectMongo() {
+  if (mongoConnected && mongoose.connection.readyState === 1) return;
+  if (!MONGODB_URI) {
+    console.warn('[MONGO] MONGODB_URI not set - database features disabled');
+    return;
+  }
+  try {
+    await mongoose.connect(MONGODB_URI);
+    mongoConnected = true;
+    console.log(`[MONGO] Connected to ${mongoose.connection.db.databaseName}`);
+  } catch (error) {
+    console.error('[MONGO] Connection failed:', error.message);
+    throw error;
+  }
+}
+
+// ============================================
+// Mongoose Models (inline to avoid import issues)
+// ============================================
+const VideoProjectSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  sourceUrl: { type: String, trim: true },
+  sourceType: { type: String, enum: ['url', 'upload'], required: true },
+  originalVideo: {
+    filename: String, path: String, url: String, duration: Number,
+    size: Number, format: String, resolution: String, thumbnail: String, thumbnailUrl: String
+  },
+  transcription: {
+    text: String, language: String, duration: Number,
+    segments: [{ start: Number, end: Number, text: String }],
+    source: { type: String, enum: ['whisper', 'upload'], default: 'whisper' },
+    processingCost: Number, processedAt: Date
+  },
+  aiAnalysis: {
+    model: String, totalCost: Number, processingTime: Number,
+    promptTokens: Number, responseTokens: Number, analyzedAt: Date
+  },
+  saveStatus: {
+    isSaved: { type: Boolean, default: false }, savedAt: Date,
+    autoDeleteAt: { type: Date, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+  },
+  status: { type: String, enum: ['processing', 'completed', 'failed', 'error'], default: 'processing' },
+  errorMessage: String,
+  processingStarted: Date,
+  processingCompleted: Date,
+  analytics: {
+    totalClipsGenerated: { type: Number, default: 0 },
+    totalDownloads: { type: Number, default: 0 },
+    lastAccessed: Date,
+    processingStage: { type: String, enum: ['downloading', 'transcribing', 'analyzing', 'cutting', 'saving', 'completed', 'error'], default: 'downloading' },
+    progressPercentage: { type: Number, default: 0, min: 0, max: 100 },
+    progressMessage: { type: String, default: "we're cooking" },
+    lastUpdated: { type: Date, default: Date.now },
+    error: String, warning: String
+  }
+}, { timestamps: true });
+
+const VideoClipSchema = new mongoose.Schema({
+  projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'VideoProject', required: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  title: { type: String, required: true, trim: true },
+  templateHeader: { type: String, trim: true },
+  startTime: { type: Number, required: true },
+  endTime: { type: Number, required: true },
+  duration: { type: Number, required: true },
+  templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Template', default: null },
+  templateCustomData: { username: String, profileIcon: String, customTitle: String },
+  templateStatus: { type: String, enum: ['pending', 'ready', 'processing', 'failed'], default: 'pending' },
+  generatedVideo: {
+    vertical: { path: String, url: String, format: String, resolution: String, aspectRatio: { type: String, default: '9:16' }, size: Number },
+    horizontal: { path: String, url: String, format: String, resolution: String, aspectRatio: { type: String, default: '16:9' }, size: Number },
+    url: String, format: String, resolution: String, size: Number
+  },
+  previewVideo: { path: String, url: String, duration: { type: Number, default: 60 }, size: Number },
+  viralityScore: { type: Number, min: 0, max: 100, default: 0 },
+  aiAnalysis: {
+    source: String, reason: String, engagementType: String,
+    contentTags: [String], hasSetup: Boolean, hasPayoff: Boolean, analyzedAt: Date
+  },
+  status: { type: String, enum: ['ready', 'applying_template', 'failed'], default: 'ready' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+VideoClipSchema.index({ projectId: 1, createdAt: -1 });
+
+const VideoProject = mongoose.models.VideoProject || mongoose.model('VideoProject', VideoProjectSchema);
+const VideoClip = mongoose.models.VideoClip || mongoose.model('VideoClip', VideoClipSchema);
+
+// ============================================
+// OpenAI Whisper Client
+// ============================================
+let openaiClient = null;
+function getOpenAI() {
+  if (!openaiClient && OPENAI_API_KEY) {
+    openaiClient = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+      timeout: 300000, // 5 min timeout for large audio
+      maxRetries: 3
+    });
+  }
+  return openaiClient;
+}
+
+// ============================================
+// Progress Messages (GenZ style)
+// ============================================
+const PROGRESS_MESSAGES = {
+  downloading: ["getting the sauce", "downloading fire", "we're cooking", "securing the bag"],
+  transcribing: ["reading the vibes", "decoding chaos", "AI working overtime", "trust the process"],
+  analyzing: ["hunting viral moments", "ranking the clips", "found some heat", "picking the best"],
+  cutting: ["chopping clips", "making magic", "almost there", "crafting content"],
+  saving: ["saving your W's", "uploading to cloud", "final boss mode", "finishing touches"],
+  completed: ["WE DID THAT!", "clips ready to slay", "time to go viral"],
+  error: ["something went wrong", "we'll fix this", "technical difficulties"]
+};
+
+function getRandomProgressMessage(stage) {
+  const messages = PROGRESS_MESSAGES[stage];
+  if (!messages || messages.length === 0) return "processing your content";
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
+async function updateProjectProgress(projectId, stage, percentage) {
+  const message = getRandomProgressMessage(stage);
+  try {
+    await VideoProject.findByIdAndUpdate(projectId, {
+      $set: {
+        'analytics.processingStage': stage,
+        'analytics.progressPercentage': percentage,
+        'analytics.progressMessage': message,
+        'analytics.lastUpdated': new Date()
+      }
+    });
+    console.log(`[PROGRESS] ${projectId}: ${percentage}% - "${message}"`);
+  } catch (error) {
+    console.error(`[PROGRESS] Failed to update for ${projectId}:`, error.message);
+  }
+}
 
 // Initialize Firebase Admin (for uploading processed videos)
 let firebaseApp = null;
@@ -48,9 +332,12 @@ function initializeFirebase() {
   }
 }
 
-// Ensure download directory exists
+// Ensure directories exist
 if (!fs.existsSync(DOWNLOAD_DIR)) {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(PROCESSING_DIR)) {
+  fs.mkdirSync(PROCESSING_DIR, { recursive: true });
 }
 
 // Initialize Express app
@@ -70,12 +357,12 @@ app.use((req, res, next) => {
     return next();
   }
 
-  const authHeader = req.headers.authorization;
   if (!API_SECRET) {
-    console.warn('VIDEO_API_SECRET not set - authentication disabled');
-    return next();
+    console.error('FATAL: VIDEO_API_SECRET not set - rejecting all requests for security');
+    return res.status(503).json({ error: 'Server misconfigured - authentication secret not set' });
   }
 
+  const authHeader = req.headers.authorization;
   if (authHeader !== `Bearer ${API_SECRET}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -633,9 +920,849 @@ function cleanupFile(filePath) {
 }
 
 // ============================================
+// Audio Chunking Service (ported from audioChunkingService.js)
+// ============================================
+const WHISPER_MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
+const CHUNK_DURATION_MINUTES = 10;
+
+async function getAudioDuration(filePath) {
+  const { stdout } = await execAsync(
+    `${FFPROBE_PATH} -v quiet -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`
+  );
+  const duration = parseFloat(stdout.trim());
+  console.log(`[CHUNKING] Audio duration: ${duration.toFixed(2)}s (${(duration / 60).toFixed(1)} minutes)`);
+  return duration;
+}
+
+async function extractAudio(videoPath, outputPath) {
+  console.log(`[CHUNKING] Extracting audio from video...`);
+  await execAsync(
+    `${FFMPEG_PATH} -i "${videoPath}" -vn -acodec libmp3lame -ab 128k -ar 22050 -y "${outputPath}"`
+  );
+  if (!fs.existsSync(outputPath)) throw new Error('Audio extraction failed - output file not created');
+  const stats = fs.statSync(outputPath);
+  console.log(`[CHUNKING] Audio extracted: ${(stats.size / (1024 * 1024)).toFixed(2)}MB`);
+  return outputPath;
+}
+
+async function splitAudioIntoChunks(audioPath, outputDir) {
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+  const duration = await getAudioDuration(audioPath);
+  const chunkDurationSeconds = CHUNK_DURATION_MINUTES * 60;
+  const totalChunks = Math.ceil(duration / chunkDurationSeconds);
+  console.log(`[CHUNKING] Splitting into ${totalChunks} chunks of ${CHUNK_DURATION_MINUTES} minutes each`);
+
+  const chunkPaths = [];
+  for (let i = 0; i < totalChunks; i++) {
+    const startTime = i * chunkDurationSeconds;
+    const chunkPath = path.join(outputDir, `chunk_${i.toString().padStart(3, '0')}.mp3`);
+    console.log(`[CHUNKING] Creating chunk ${i + 1}/${totalChunks} (starting at ${startTime}s)`);
+    await execAsync(
+      `${FFMPEG_PATH} -i "${audioPath}" -ss ${startTime} -t ${chunkDurationSeconds} -acodec libmp3lame -ab 128k -ar 22050 -y "${chunkPath}"`
+    );
+    if (fs.existsSync(chunkPath)) {
+      const chunkStats = fs.statSync(chunkPath);
+      if (chunkStats.size <= WHISPER_MAX_SIZE_BYTES) {
+        chunkPaths.push(chunkPath);
+      } else {
+        console.warn(`[CHUNKING] Chunk ${i + 1} is over 25MB limit (${(chunkStats.size / (1024 * 1024)).toFixed(2)}MB)`);
+        chunkPaths.push(chunkPath); // Still add it, Whisper may handle it
+      }
+    }
+  }
+  return chunkPaths;
+}
+
+async function chunkVideoForWhisper(videoPath) {
+  const stats = fs.statSync(videoPath);
+  const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+  console.log(`[CHUNKING] Video size: ${fileSizeMB}MB`);
+
+  if (stats.size <= WHISPER_MAX_SIZE_BYTES) {
+    return { needsChunking: false, originalPath: videoPath, chunks: [videoPath], totalChunks: 1 };
+  }
+
+  const tempDir = path.dirname(videoPath);
+  const baseName = path.basename(videoPath, path.extname(videoPath));
+  const chunkDir = path.join(tempDir, `${baseName}_chunks`);
+  const audioPath = path.join(tempDir, `${baseName}_audio.mp3`);
+
+  await extractAudio(videoPath, audioPath);
+  const chunkPaths = await splitAudioIntoChunks(audioPath, chunkDir);
+
+  // Clean up temp audio file
+  try { fs.unlinkSync(audioPath); } catch (e) { /* ignore */ }
+
+  console.log(`[CHUNKING] Successfully created ${chunkPaths.length} chunks`);
+  return {
+    needsChunking: true, originalPath: videoPath, chunks: chunkPaths,
+    totalChunks: chunkPaths.length, chunkDirectory: chunkDir,
+    originalSizeMB: parseFloat(fileSizeMB)
+  };
+}
+
+function cleanupChunks(chunkDirectory) {
+  try {
+    if (fs.existsSync(chunkDirectory)) {
+      fs.rmSync(chunkDirectory, { recursive: true, force: true });
+      console.log(`[CHUNKING] Cleaned up chunks directory: ${chunkDirectory}`);
+    }
+  } catch (error) {
+    console.error('[CHUNKING] Cleanup failed:', error.message);
+  }
+}
+
+// ============================================
+// Whisper Transcription Service (ported from openaiWhisperService.js)
+// ============================================
+
+async function transcribeSingleFile(filePath, options = {}) {
+  const { language = null, responseFormat = 'verbose_json', temperature = 0 } = options;
+  const openai = getOpenAI();
+  if (!openai) throw new Error('OpenAI API key not configured');
+
+  console.log(`[WHISPER] Starting transcription for: ${path.basename(filePath)}`);
+  if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+
+  const stats = fs.statSync(filePath);
+  const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+  const estimatedMinutes = Math.ceil(stats.size / (1024 * 1024));
+  const estimatedCost = (estimatedMinutes * 0.006).toFixed(4);
+  console.log(`[WHISPER] File size: ${fileSizeMB}MB, estimated cost: $${estimatedCost}`);
+
+  const requestParams = {
+    file: fs.createReadStream(filePath),
+    model: 'whisper-1',
+    response_format: responseFormat,
+    temperature,
+    timestamp_granularities: ['word', 'segment']
+  };
+  if (language) requestParams.language = language;
+
+  const startTime = Date.now();
+  const transcription = await retryWithBackoff(
+    async () => {
+      // Re-create stream on retry since streams are single-use
+      requestParams.file = fs.createReadStream(filePath);
+      return await openai.audio.transcriptions.create(requestParams);
+    },
+    { maxRetries: 3, baseDelay: 2000, label: 'Whisper API' }
+  );
+
+  const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`[WHISPER] Processing completed in ${processingTime}s`);
+
+  if (responseFormat === 'verbose_json') {
+    return {
+      success: true, text: transcription.text, language: transcription.language,
+      duration: transcription.duration, segments: transcription.segments || [],
+      words: transcription.words || [], processingTime: parseFloat(processingTime),
+      estimatedCost: parseFloat(estimatedCost), fileSizeMB: parseFloat(fileSizeMB)
+    };
+  }
+  return {
+    success: true, text: transcription, processingTime: parseFloat(processingTime),
+    estimatedCost: parseFloat(estimatedCost), fileSizeMB: parseFloat(fileSizeMB)
+  };
+}
+
+async function transcribeWithWhisper(filePath, options = {}) {
+  const chunkResult = await chunkVideoForWhisper(filePath);
+
+  if (!chunkResult.needsChunking) {
+    return await transcribeSingleFile(filePath, options);
+  }
+
+  console.log(`[WHISPER] Large file (${chunkResult.originalSizeMB}MB), processing ${chunkResult.totalChunks} chunks`);
+  const chunkTranscriptions = [];
+  let totalCost = 0, totalProcessingTime = 0, cumulativeTime = 0;
+
+  for (let i = 0; i < chunkResult.chunks.length; i++) {
+    console.log(`[WHISPER] Processing chunk ${i + 1}/${chunkResult.totalChunks}`);
+    const chunkTranscription = await transcribeSingleFile(chunkResult.chunks[i], options);
+
+    let chunkDuration = 0;
+    if (chunkTranscription.segments) {
+      chunkTranscription.segments.forEach(s => { s.start += cumulativeTime; s.end += cumulativeTime; });
+      if (chunkTranscription.segments.length > 0) {
+        chunkDuration = chunkTranscription.segments[chunkTranscription.segments.length - 1].end - cumulativeTime;
+      }
+    }
+    if (chunkTranscription.words) {
+      chunkTranscription.words.forEach(w => { w.start += cumulativeTime; w.end += cumulativeTime; });
+    }
+
+    chunkTranscriptions.push(chunkTranscription);
+    totalCost += chunkTranscription.estimatedCost || 0;
+    totalProcessingTime += chunkTranscription.processingTime || 0;
+    cumulativeTime += chunkDuration > 0 ? chunkDuration : (10 * 60);
+  }
+
+  if (chunkResult.chunkDirectory) cleanupChunks(chunkResult.chunkDirectory);
+
+  return {
+    success: true,
+    text: chunkTranscriptions.map(t => t.text).join(' '),
+    language: chunkTranscriptions[0]?.language || 'unknown',
+    duration: cumulativeTime,
+    segments: chunkTranscriptions.flatMap(t => t.segments || []),
+    words: chunkTranscriptions.flatMap(t => t.words || []),
+    processingTime: totalProcessingTime, estimatedCost: totalCost,
+    fileSizeMB: chunkResult.originalSizeMB, chunked: true,
+    totalChunks: chunkResult.totalChunks
+  };
+}
+
+// ============================================
+// DeepSeek Analysis Service (ported from deepseekAnalysisService.js)
+// ============================================
+
+function estimateTokens(text) { return Math.ceil(text.length / 4); }
+
+function calculateDeepSeekCost(prompt, response) {
+  const inputTokens = estimateTokens(prompt);
+  const outputTokens = estimateTokens(response);
+  return parseFloat(((inputTokens / 1000000) * 0.27 + (outputTokens / 1000000) * 1.10).toFixed(6));
+}
+
+async function callDeepSeekAPI(prompt) {
+  if (!DEEPSEEK_API_KEY) throw new Error('DEEPSEEK_API_KEY not configured');
+
+  const response = await retryWithBackoff(
+    async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+      try {
+        const resp = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              { role: 'system', content: 'You are an expert content curator specializing in viral short-form video content.' },
+              { role: 'user', content: prompt }
+            ],
+            max_tokens: 4000,
+            temperature: 0.7,
+            stream: false
+          }),
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          const error = new Error(`DeepSeek API error: ${resp.status} ${err.error?.message || resp.statusText}`);
+          error.status = resp.status;
+          throw error;
+        }
+        return resp;
+      } catch (e) {
+        clearTimeout(timeout);
+        throw e;
+      }
+    },
+    { maxRetries: 3, baseDelay: 2000, label: 'DeepSeek API' }
+  );
+
+  const data = await response.json();
+  if (!data.choices?.[0]?.message) throw new Error('Invalid response from DeepSeek');
+  return { content: data.choices[0].message.content, usage: data.usage, model: data.model };
+}
+
+function buildAnalysisPrompt(segmentsText, options) {
+  const { minClipDuration = 15, maxClipDuration = 60, maxClips = 10, videoTitle = 'Video', videoType = 'general', language = 'auto-detected', duration = 'unknown' } = options;
+  return `
+<<SYSTEM>>
+You are CLIPMASTER-AI: Elite viral content strategist.
+
+<<OBJECTIVE>>
+Transform this video transcription into viral clip opportunities. Generate TWO text layers per clip:
+- TITLE: SEO-optimized, descriptive (50-80 chars)
+- TEMPLATE HEADER: Viral hook for social overlays (<50 chars)
+
+VIDEO CONTEXT:
+- Title: "${videoTitle}"
+- Type: ${videoType}
+- Duration: ${duration}s
+- Language: ${language}
+
+TRANSCRIPTION:
+${segmentsText}
+
+<<4-D METHODOLOGY>>
+DECONSTRUCT: Analyze for Setup-Tension-Climax-Resolution, emotional peaks, complete thought arcs.
+DIAGNOSE: Find emotional explosions, contradictions, universal relatability, quotable moments, educational breakthroughs.
+DEVELOP: ${minClipDuration}-${maxClipDuration} seconds, natural sentence boundaries, include setup + payoff. If viral moment is short, EXPAND the timeframe.
+DELIVER: Return ONLY this JSON array:
+[
+  {
+    "startTime": 45.2, "endTime": 67.8, "duration": 22.6,
+    "title": "SEO-optimized descriptive title",
+    "templateHeader": "Punchy viral social media hook",
+    "reason": "Specific viral trigger explanation",
+    "viralityScore": 85,
+    "engagementType": "reaction|educational|funny|dramatic|relatable",
+    "hasSetup": true, "hasPayoff": true,
+    "contentTags": ["emotion", "surprise", "quotable"]
+  }
+]
+
+<<CONSTRAINTS>>
+- viralityScore >= 50 minimum
+- Target: AT LEAST 10 clips when possible
+- Maximum ${maxClips} clips total
+- ALL clips must be ${minClipDuration}-${maxClipDuration} seconds
+- JSON format only, no explanations outside array
+`;
+}
+
+function validateAndCleanClips(rawClips, options) {
+  const { minClipDuration = 15, maxClipDuration = 60, videoDuration = Infinity } = options;
+  return rawClips
+    .filter(clip => {
+      if (!clip.startTime || !clip.endTime || !clip.title || !clip.templateHeader) return false;
+      const duration = clip.endTime - clip.startTime;
+      if (duration < minClipDuration || duration > maxClipDuration) return false;
+      if (clip.startTime < 0 || clip.endTime > videoDuration) return false;
+      if (clip.viralityScore < 50) return false;
+      return true;
+    })
+    .map(clip => ({
+      ...clip,
+      duration: parseFloat((clip.endTime - clip.startTime).toFixed(1)),
+      startTime: parseFloat(clip.startTime.toFixed(1)),
+      endTime: parseFloat(clip.endTime.toFixed(1)),
+      viralityScore: Math.min(100, Math.max(0, clip.viralityScore)),
+      analyzedAt: new Date().toISOString(), source: 'deepseek-v3'
+    }))
+    .sort((a, b) => b.viralityScore - a.viralityScore);
+}
+
+function parseDeepSeekResponse(content) {
+  try { return JSON.parse(content); } catch (e) {
+    const match = content.match(/\[[\s\S]*\]/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('DeepSeek response is not valid JSON');
+  }
+}
+
+function needsChunking(transcription) {
+  const segmentsText = transcription.segments
+    .map(s => `[${s.start.toFixed(1)}s-${s.end.toFixed(1)}s]: ${s.text}`)
+    .join('\n');
+  return estimateTokens(segmentsText) > 100000;
+}
+
+async function analyzeChunkWithDeepSeek(chunk, options, chunkIndex, totalChunks) {
+  console.log(`[DEEPSEEK-MAP] Analyzing chunk ${chunkIndex + 1}/${totalChunks}`);
+  const prompt = buildAnalysisPrompt(chunk.segmentsText, {
+    ...options, duration: chunk.duration.toFixed(1),
+    language: options.language || 'auto-detected'
+  });
+  prompt.replace('<<SYSTEM>>', `<<SYSTEM>>\nYou are analyzing CHUNK ${chunkIndex + 1} of ${totalChunks}.`);
+
+  try {
+    const startTime = Date.now();
+    const response = await callDeepSeekAPI(prompt);
+    const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+    const rawClips = parseDeepSeekResponse(response.content);
+    const validClips = (rawClips || [])
+      .filter(clip => {
+        if (!clip.startTime || !clip.endTime || !clip.title) return false;
+        const dur = clip.endTime - clip.startTime;
+        if (dur < (options.minClipDuration || 15) || dur > (options.maxClipDuration || 60)) return false;
+        if (clip.startTime < chunk.startTime || clip.endTime > chunk.endTime) return false;
+        if (clip.viralityScore < 50) return false;
+        return true;
+      })
+      .map(clip => ({
+        ...clip, duration: parseFloat((clip.endTime - clip.startTime).toFixed(1)),
+        startTime: parseFloat(clip.startTime.toFixed(1)), endTime: parseFloat(clip.endTime.toFixed(1)),
+        chunkIndex, processingTime: parseFloat(processingTime), source: 'deepseek-v3-chunk'
+      }));
+
+    console.log(`[DEEPSEEK-MAP] Chunk ${chunkIndex + 1}: Found ${validClips.length} valid clips`);
+    return { chunkIndex, clips: validClips, processingTime: parseFloat(processingTime), cost: calculateDeepSeekCost(prompt, response.content) };
+  } catch (error) {
+    console.error(`[DEEPSEEK-MAP] Chunk ${chunkIndex + 1} failed:`, error.message);
+    return { chunkIndex, clips: [], error: error.message, processingTime: 0, cost: 0 };
+  }
+}
+
+function mergeAndDeduplicateClips(chunkResults, options) {
+  const { maxClips = 10 } = options;
+  const allClips = [];
+  let totalProcessingTime = 0, totalCost = 0;
+
+  chunkResults.forEach(r => {
+    if (r.clips?.length > 0) allClips.push(...r.clips);
+    totalProcessingTime += r.processingTime || 0;
+    totalCost += r.cost || 0;
+  });
+
+  if (allClips.length === 0) return { clips: [], totalProcessingTime, totalCost };
+
+  allClips.sort((a, b) => b.viralityScore - a.viralityScore);
+
+  const deduped = [];
+  for (const clip of allClips) {
+    const isDup = deduped.some(existing => {
+      const overlapStart = Math.max(clip.startTime, existing.startTime);
+      const overlapEnd = Math.min(clip.endTime, existing.endTime);
+      return Math.max(0, overlapEnd - overlapStart) > 5;
+    });
+    if (!isDup) deduped.push({ ...clip, analyzedAt: new Date().toISOString(), source: 'deepseek-v3-mapreduce' });
+  }
+
+  return { clips: deduped.slice(0, maxClips), totalProcessingTime, totalCost };
+}
+
+async function analyzeContentWithDeepSeek(transcription, options = {}) {
+  console.log(`[DEEPSEEK] Starting content analysis for: ${options.videoTitle || 'Video'}`);
+
+  if (needsChunking(transcription)) {
+    console.log(`[DEEPSEEK] Transcript too long, using MapReduce`);
+    // Chunk transcript into 30-min chunks with 10-min overlap
+    const chunkDuration = 30 * 60, overlapDuration = 10 * 60;
+    const totalDuration = transcription.duration;
+    const chunks = [];
+    let currentStart = 0, chunkIndex = 0;
+
+    while (currentStart < totalDuration) {
+      const chunkEnd = Math.min(currentStart + chunkDuration, totalDuration);
+      const chunkSegments = transcription.segments.filter(s => s.start >= currentStart && s.start < chunkEnd);
+      if (chunkSegments.length > 0) {
+        chunks.push({
+          index: chunkIndex, startTime: currentStart, endTime: chunkEnd,
+          duration: chunkEnd - currentStart, segments: chunkSegments,
+          segmentsText: chunkSegments.map(s => `[${s.start.toFixed(1)}s-${s.end.toFixed(1)}s]: ${s.text}`).join('\n')
+        });
+        chunkIndex++;
+      }
+      if (chunkEnd >= totalDuration) break;
+      currentStart = chunkEnd - overlapDuration;
+    }
+
+    console.log(`[DEEPSEEK] MAP Phase: Processing ${chunks.length} chunks in parallel`);
+    const chunkResults = await Promise.all(
+      chunks.map((chunk, i) => analyzeChunkWithDeepSeek(chunk, options, i, chunks.length))
+    );
+
+    const merged = mergeAndDeduplicateClips(chunkResults, options);
+    console.log(`[DEEPSEEK] MapReduce completed: ${merged.clips.length} final clips`);
+    return {
+      success: true, clips: merged.clips, totalClips: merged.clips.length,
+      processingTime: merged.totalProcessingTime, cost: merged.totalCost,
+      metadata: { model: 'deepseek-chat-v3-mapreduce', totalChunks: chunks.length }
+    };
+  }
+
+  // Single analysis for shorter transcripts
+  const segmentsText = transcription.segments
+    .map(s => `[${s.start.toFixed(1)}s-${s.end.toFixed(1)}s]: ${s.text}`)
+    .join('\n');
+
+  const prompt = buildAnalysisPrompt(segmentsText, {
+    ...options, duration: transcription.duration?.toFixed(1) || 'unknown',
+    language: transcription.language || 'auto-detected'
+  });
+
+  const startTime = Date.now();
+  const response = await callDeepSeekAPI(prompt);
+  const processingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+  const rawClips = parseDeepSeekResponse(response.content);
+  const validClips = validateAndCleanClips(rawClips, {
+    ...options, videoDuration: transcription.duration
+  });
+
+  console.log(`[DEEPSEEK] Found ${validClips.length} valid clips in ${processingTime}s`);
+  return {
+    success: true, clips: validClips, totalClips: validClips.length,
+    processingTime: parseFloat(processingTime),
+    cost: calculateDeepSeekCost(prompt, response.content),
+    metadata: { model: 'deepseek-chat-v3', promptTokens: estimateTokens(prompt), responseTokens: estimateTokens(response.content) }
+  };
+}
+
+// ============================================
+// Clip Cutting Service (ported from clipCuttingService.js)
+// ============================================
+
+async function cutVideoClip(inputVideoPath, startTime, endTime, outputDir, options = {}) {
+  await ffmpegSemaphore.acquire();
+  try {
+    const duration = endTime - startTime;
+    const timestamp = Date.now();
+    const { aspectRatio = 'original', platform = 'none' } = options;
+
+    const platformSuffix = platform !== 'none' ? `_${platform}` : '';
+    const outputFileName = `clip_${timestamp}_${startTime}s-${endTime}s${platformSuffix}.mp4`;
+    const outputFilePath = path.join(outputDir, outputFileName);
+
+    console.log(`[CLIP-CUTTER] Cutting clip: ${startTime}s - ${endTime}s (${aspectRatio})`);
+
+    const args = ['-ss', startTime.toString(), '-i', inputVideoPath, '-t', duration.toString()];
+    const videoFilters = [];
+    let needsReencoding = false;
+
+    if (aspectRatio === '9:16' || platform === 'tiktok' || platform === 'reels' || platform === 'shorts') {
+      videoFilters.push('scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920');
+      needsReencoding = true;
+    } else if (aspectRatio === '2.35:1' || platform === 'cinematic_horizontal') {
+      videoFilters.push('scale=2540:1080:force_original_aspect_ratio=decrease,pad=2540:1080:(ow-iw)/2:(oh-ih)/2');
+      needsReencoding = true;
+    }
+
+    if (needsReencoding && videoFilters.length > 0) {
+      args.push('-vf', videoFilters.join(','), '-c:v', 'libx264', '-c:a', 'aac', '-preset', 'medium', '-crf', '23');
+    } else {
+      args.push('-c', 'copy');
+    }
+
+    args.push('-avoid_negative_ts', 'make_zero', '-y', outputFilePath);
+
+    await runCommandWithTimeout(FFMPEG_PATH, args, {
+      timeout: Math.max(300000, duration * 10000), // At least 5 min, or 10x clip duration
+      label: `FFmpeg cut ${startTime}s-${endTime}s`
+    });
+
+    if (!fs.existsSync(outputFilePath)) throw new Error('FFmpeg output file not created');
+    const fileStats = fs.statSync(outputFilePath);
+    console.log(`[CLIP-CUTTER] Clip created: ${outputFileName} (${(fileStats.size / 1024 / 1024).toFixed(2)} MB)`);
+
+    return { success: true, filePath: outputFilePath, fileName: outputFileName, size: fileStats.size, duration };
+  } finally {
+    ffmpegSemaphore.release();
+  }
+}
+
+async function extractPreviewSegment(inputVideoPath, startTime, endTime, clipId, outputDir) {
+  await ffmpegSemaphore.acquire();
+  try {
+    const clipDuration = endTime - startTime;
+    const previewDuration = Math.min(60, clipDuration);
+    const timestamp = Date.now();
+    const outputFileName = `preview_${timestamp}_${clipId}.mp4`;
+    const outputFilePath = path.join(outputDir, outputFileName);
+
+    const args = [
+      '-ss', startTime.toString(), '-i', inputVideoPath,
+      '-t', previewDuration.toString(),
+      '-c:v', 'libx264', '-c:a', 'aac', '-preset', 'ultrafast', '-crf', '28',
+      '-avoid_negative_ts', 'make_zero', '-y', outputFilePath
+    ];
+
+    await runCommandWithTimeout(FFMPEG_PATH, args, { timeout: 300000, label: `FFmpeg preview ${clipId}` });
+
+    if (!fs.existsSync(outputFilePath)) throw new Error('Preview file not created');
+    const fileStats = fs.statSync(outputFilePath);
+
+    // Upload to Firebase
+    let firebaseUrl = null;
+    if (storageBucket) {
+      const videoFile = fs.readFileSync(outputFilePath);
+      const destination = `clipper-previews/${clipId}_preview_${timestamp}.mp4`;
+      const file = storageBucket.file(destination);
+      await file.save(videoFile, { contentType: 'video/mp4' });
+      await file.makePublic();
+      firebaseUrl = `https://storage.googleapis.com/${storageBucket.name}/${destination}`;
+    }
+
+    // Clean up local file
+    try { fs.unlinkSync(outputFilePath); } catch (e) { /* ignore */ }
+
+    return { success: true, url: firebaseUrl, duration: previewDuration, size: fileStats.size };
+  } finally {
+    ffmpegSemaphore.release();
+  }
+}
+
+async function uploadClipToFirebase(filePath, uploadKey) {
+  if (!storageBucket) throw new Error('Firebase Storage not configured');
+  const videoFile = fs.readFileSync(filePath);
+  const destination = `clipper-clips/${uploadKey}_${Date.now()}.mp4`;
+  const file = storageBucket.file(destination);
+  await file.save(videoFile, { contentType: 'video/mp4' });
+  await file.makePublic();
+  const url = `https://storage.googleapis.com/${storageBucket.name}/${destination}`;
+  return { downloadURL: url, name: destination, size: videoFile.length };
+}
+
+async function processClipsFromMetadata(inputVideoPath, clipsMetadata, projectId, originalVideoTitle, outputDir) {
+  console.log(`[CLIP-PROCESSOR] Processing ${clipsMetadata.length} clips for project ${projectId}`);
+  const processedClips = [];
+
+  for (let i = 0; i < clipsMetadata.length; i++) {
+    const clipMeta = clipsMetadata[i];
+    console.log(`[CLIP-PROCESSOR] Processing clip ${i + 1}/${clipsMetadata.length}: ${clipMeta.startTime}s - ${clipMeta.endTime}s`);
+
+    try {
+      // Cut vertical (9:16)
+      const videoResultVertical = await cutVideoClip(inputVideoPath, clipMeta.startTime, clipMeta.endTime, outputDir, {
+        aspectRatio: '9:16', platform: 'vertical'
+      });
+
+      // Cut horizontal (2.35:1)
+      const videoResultHorizontal = await cutVideoClip(inputVideoPath, clipMeta.startTime, clipMeta.endTime, outputDir, {
+        aspectRatio: '2.35:1', platform: 'cinematic'
+      });
+
+      // Extract preview
+      const previewResult = await extractPreviewSegment(
+        inputVideoPath, clipMeta.startTime, clipMeta.endTime, clipMeta._id || clipMeta.id, outputDir
+      );
+
+      // Upload both clips to Firebase
+      const verticalUpload = await uploadClipToFirebase(
+        videoResultVertical.filePath, `${projectId}_clip_${clipMeta.startTime}s_9x16`
+      );
+      const horizontalUpload = await uploadClipToFirebase(
+        videoResultHorizontal.filePath, `${projectId}_clip_${clipMeta.startTime}s_2.35x1`
+      );
+
+      // Cleanup local clip files immediately (progressive cleanup for long videos)
+      try {
+        fs.unlinkSync(videoResultVertical.filePath);
+        fs.unlinkSync(videoResultHorizontal.filePath);
+      } catch (e) { /* ignore */ }
+
+      processedClips.push({
+        clipId: clipMeta._id || clipMeta.id,
+        title: clipMeta.title || `${originalVideoTitle} - ${clipMeta.startTime}s`,
+        startTime: clipMeta.startTime, endTime: clipMeta.endTime,
+        duration: clipMeta.duration, viralityScore: clipMeta.viralityScore,
+        generatedVideo: {
+          vertical: {
+            url: verticalUpload.downloadURL, format: 'mp4',
+            size: videoResultVertical.size, duration: videoResultVertical.duration,
+            resolution: '720p', aspectRatio: '9:16'
+          },
+          horizontal: {
+            url: horizontalUpload.downloadURL, format: 'mp4',
+            size: videoResultHorizontal.size, duration: videoResultHorizontal.duration,
+            resolution: '720p', aspectRatio: '2.35:1'
+          },
+          url: verticalUpload.downloadURL, format: 'mp4',
+          size: videoResultVertical.size, duration: videoResultVertical.duration,
+          resolution: '720p'
+        },
+        previewVideo: { url: previewResult.url, format: 'mp4', size: previewResult.size, duration: previewResult.duration }
+      });
+
+      console.log(`[CLIP-PROCESSOR] Clip ${i + 1} done: "${clipMeta.title}"`);
+    } catch (error) {
+      console.error(`[CLIP-PROCESSOR] Clip ${i + 1} failed:`, error.message);
+      processedClips.push({
+        clipId: clipMeta._id || clipMeta.id,
+        title: `Error: ${clipMeta.title || 'Processing failed'}`,
+        startTime: clipMeta.startTime, endTime: clipMeta.endTime,
+        duration: clipMeta.duration, viralityScore: clipMeta.viralityScore,
+        error: error.message, generatedVideo: null
+      });
+    }
+  }
+
+  const successCount = processedClips.filter(c => !c.error).length;
+  console.log(`[CLIP-PROCESSOR] Complete: ${successCount}/${clipsMetadata.length} clips processed`);
+  return processedClips;
+}
+
+// ============================================
+// Full Pipeline Endpoint: POST /process-clips-pipeline
+// ============================================
+const processingLocks = new Set();
+
+app.post('/process-clips-pipeline', async (req, res) => {
+  const { url, projectId, userId, options = {}, captionOptions = {} } = req.body;
+
+  if (!url || !projectId || !userId) {
+    return res.status(400).json({ error: 'url, projectId, and userId are required' });
+  }
+
+  // Check for duplicate processing
+  if (processingLocks.has(projectId)) {
+    return res.status(409).json({ error: 'Project is already being processed' });
+  }
+
+  // Respond immediately, process in background
+  res.json({ success: true, message: 'Pipeline started', projectId, status: 'processing' });
+
+  // Acquire pipeline semaphore (limits concurrent jobs)
+  processingLocks.add(projectId);
+
+  await pipelineSemaphore.acquire();
+  try {
+    await connectMongo();
+
+    // === Step 1: Download video ===
+    console.log(`[PIPELINE] Starting for project ${projectId}: ${url}`);
+    await updateProjectProgress(projectId, 'downloading', 5);
+
+    const platform = detectPlatform(url);
+    const metadata = await getVideoMetadata(url);
+    console.log(`[PIPELINE] Video: "${metadata.title}" (${metadata.duration}s) from ${platform}`);
+    await updateProjectProgress(projectId, 'downloading', 15);
+
+    const downloadResult = await downloadVideo(url, { quality: 'best[height<=720]/best', platform });
+    console.log(`[PIPELINE] Downloaded to: ${downloadResult.filePath}`);
+    await updateProjectProgress(projectId, 'downloading', 30);
+
+    // === Step 2: Transcribe with Whisper ===
+    console.log(`[PIPELINE] Starting Whisper transcription...`);
+    await updateProjectProgress(projectId, 'transcribing', 35);
+
+    const transcriptionResult = await transcribeWithWhisper(downloadResult.filePath, {
+      language: options.language || null,
+      responseFormat: 'verbose_json',
+      temperature: 0
+    });
+    console.log(`[PIPELINE] Transcription done: ${transcriptionResult.segments?.length || 0} segments`);
+    await updateProjectProgress(projectId, 'transcribing', 60);
+
+    // === Step 3: Analyze with DeepSeek ===
+    console.log(`[PIPELINE] Starting DeepSeek analysis...`);
+    await updateProjectProgress(projectId, 'analyzing', 65);
+
+    const analysisResult = await analyzeContentWithDeepSeek(transcriptionResult, {
+      minClipDuration: options.minClipDuration || 15,
+      maxClipDuration: options.maxClipDuration || 60,
+      maxClips: options.maxClips || 10,
+      videoTitle: metadata.title || 'Video',
+      videoType: options.videoType || 'general'
+    });
+    console.log(`[PIPELINE] Analysis done: ${analysisResult.clips.length} clips found`);
+    await updateProjectProgress(projectId, 'analyzing', 80);
+
+    // === Step 4: Save clips to database ===
+    if (analysisResult.clips.length === 0) {
+      await VideoProject.findByIdAndUpdate(projectId, {
+        $set: {
+          status: 'completed', processingCompleted: new Date(),
+          'analytics.totalClipsGenerated': 0, 'analytics.processingStage': 'completed',
+          'analytics.progressPercentage': 100, 'analytics.warning': 'No clips met the quality threshold'
+        }
+      });
+      cleanupFile(downloadResult.filePath);
+      console.log(`[PIPELINE] No clips found for project ${projectId}`);
+      return;
+    }
+
+    await updateProjectProgress(projectId, 'saving', 82);
+
+    const clipData = analysisResult.clips.map((clip, index) => ({
+      projectId, userId,
+      title: clip.title || `${metadata.title} - Clip ${index + 1}`,
+      templateHeader: clip.templateHeader || clip.title,
+      startTime: clip.startTime, endTime: clip.endTime, duration: clip.duration,
+      viralityScore: clip.viralityScore,
+      status: 'ready', templateStatus: 'ready',
+      aiAnalysis: {
+        source: 'deepseek-v3', reason: clip.reason,
+        engagementType: clip.engagementType, contentTags: clip.contentTags || [],
+        hasSetup: clip.hasSetup, hasPayoff: clip.hasPayoff, analyzedAt: clip.analyzedAt
+      }
+    }));
+
+    const savedClips = await VideoClip.insertMany(clipData);
+    console.log(`[PIPELINE] Saved ${savedClips.length} clips to database`);
+
+    // Save transcription + analysis to project
+    await VideoProject.findByIdAndUpdate(projectId, {
+      $set: {
+        status: 'processing', processingCompleted: new Date(),
+        'analytics.totalClipsGenerated': savedClips.length,
+        transcription: {
+          text: transcriptionResult.text, language: transcriptionResult.language,
+          segments: transcriptionResult.segments, duration: transcriptionResult.duration,
+          source: 'whisper', processingCost: transcriptionResult.estimatedCost, processedAt: new Date()
+        },
+        aiAnalysis: {
+          model: 'deepseek-chat-v3', totalCost: analysisResult.cost,
+          processingTime: analysisResult.processingTime, analyzedAt: new Date()
+        }
+      }
+    });
+
+    // === Step 5: Cut clips and upload to Firebase ===
+    console.log(`[PIPELINE] Starting clip cutting for ${savedClips.length} clips...`);
+    await updateProjectProgress(projectId, 'cutting', 85);
+
+    const processedClips = await processClipsFromMetadata(
+      downloadResult.filePath,
+      savedClips.map(clip => ({
+        _id: clip._id, startTime: clip.startTime, endTime: clip.endTime,
+        title: clip.title, duration: clip.duration, viralityScore: clip.viralityScore
+      })),
+      projectId, metadata.title || 'Video', PROCESSING_DIR
+    );
+
+    // Update clip records with Firebase URLs
+    let successfulUpdates = 0;
+    for (const pc of processedClips) {
+      if (!pc.error) {
+        try {
+          await VideoClip.findByIdAndUpdate(pc.clipId, {
+            $set: { title: pc.title, generatedVideo: pc.generatedVideo, previewVideo: pc.previewVideo, status: 'ready' }
+          });
+          successfulUpdates++;
+        } catch (e) {
+          console.error(`[PIPELINE] Failed to update clip ${pc.clipId}:`, e.message);
+        }
+      }
+    }
+
+    // === Step 6: Mark complete ===
+    await updateProjectProgress(projectId, 'completed', 100);
+    await VideoProject.findByIdAndUpdate(projectId, {
+      $set: {
+        status: 'completed', 'analytics.processingStage': 'completed',
+        'analytics.totalClipsGenerated': successfulUpdates,
+        'analytics.lastAccessed': new Date()
+      }
+    });
+
+    console.log(`[PIPELINE] Project ${projectId} completed with ${successfulUpdates} clips ready`);
+
+    // Cleanup downloaded video
+    cleanupFile(downloadResult.filePath);
+
+  } catch (error) {
+    console.error(`[PIPELINE] Failed for project ${projectId}:`, error.message);
+    try {
+      await VideoProject.findByIdAndUpdate(projectId, {
+        $set: {
+          status: 'error', processingCompleted: new Date(),
+          'analytics.processingStage': 'error', 'analytics.progressPercentage': 0,
+          'analytics.progressMessage': `Error: ${error.message}`,
+          'analytics.error': error.message, 'analytics.lastUpdated': new Date()
+        }
+      });
+    } catch (e) {
+      console.error(`[PIPELINE] Failed to update error status:`, e.message);
+    }
+  } finally {
+    processingLocks.delete(projectId);
+    pipelineSemaphore.release();
+    console.log(`[PIPELINE] Released lock for project ${projectId} (active: ${pipelineSemaphore.active}, waiting: ${pipelineSemaphore.waiting})`);
+  }
+});
+
+// ============================================
 // Start Server
 // ============================================
 initializeFirebase();
+
+// Connect to MongoDB at startup (non-blocking)
+connectMongo().catch(err => console.warn('[STARTUP] MongoDB connection deferred:', err.message));
+
+// Start cleanup cron
+startCleanupCron();
 
 app.listen(PORT, () => {
   console.log(`
@@ -647,15 +1774,20 @@ app.listen(PORT, () => {
 ║  yt-dlp:      ${YTDLP_PATH}                                       ║
 ║  FFmpeg:      ${FFMPEG_PATH}                                       ║
 ║  Firebase:    ${storageBucket ? 'Connected' : 'Not configured'}                                 ║
+║  MongoDB:     ${MONGODB_URI ? 'Configured' : 'Not configured'}                                ║
+║  OpenAI:      ${OPENAI_API_KEY ? 'Configured' : 'Not configured'}                                ║
+║  DeepSeek:    ${DEEPSEEK_API_KEY ? 'Configured' : 'Not configured'}                                ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Endpoints:
-  GET  /health              - Health check
-  POST /metadata            - Get video metadata
-  POST /download            - Download video
-  POST /download-with-metadata - Download with metadata
-  POST /formats             - List available formats
-  POST /cleanup             - Delete temp file
+  GET  /health                   - Health check
+  POST /metadata                 - Get video metadata
+  POST /download                 - Download video
+  POST /download-with-metadata   - Download with metadata
+  POST /formats                  - List available formats
+  POST /extract-frame            - Extract frame as thumbnail
+  POST /process-clips-pipeline   - Full clip detection pipeline
+  POST /cleanup                  - Delete temp file
 `);
 });
 
