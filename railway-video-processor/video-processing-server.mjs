@@ -772,7 +772,7 @@ async function getVideoMetadataWithYtdlp(url, platform) {
  * Download video using yt-dlp
  */
 async function downloadVideo(url, options = {}) {
-  const { quality = 'best[height<=1080]/best', platform } = options;
+  const { quality = 'best[height<=1080]/best', platform, onProgress = null } = options;
 
   const timestamp = Date.now();
   const outputTemplate = path.join(DOWNLOAD_DIR, `video_${timestamp}.%(ext)s`);
@@ -782,7 +782,8 @@ async function downloadVideo(url, options = {}) {
     '--output', outputTemplate,
     '--merge-output-format', 'mp4',
     '--no-warnings',
-    '--no-playlist'
+    '--no-playlist',
+    '--newline' // Force progress on new lines so we can parse it
   ];
 
   // Platform-specific optimizations - Kick and Rumble require browser impersonation
@@ -793,11 +794,19 @@ async function downloadVideo(url, options = {}) {
 
   args.push(url);
 
+  const DOWNLOAD_TIMEOUT = 30 * 60 * 1000; // 30 minutes max for download
+
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP_PATH, args);
     let stdout = '';
     let stderr = '';
     let downloadedFile = null;
+    let lastProgressLog = 0;
+
+    const timeout = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error('Download timed out after 30 minutes'));
+    }, DOWNLOAD_TIMEOUT);
 
     proc.stdout.on('data', (data) => {
       const output = data.toString();
@@ -814,6 +823,19 @@ async function downloadVideo(url, options = {}) {
       if (mergeMatch) {
         downloadedFile = mergeMatch[1].trim();
       }
+
+      // Parse download progress percentage
+      const progressMatch = output.match(/\[download\]\s+([\d.]+)%/);
+      if (progressMatch) {
+        const pct = parseFloat(progressMatch[1]);
+        const now = Date.now();
+        // Log every 10% or every 15 seconds
+        if (pct - lastProgressLog >= 10 || now - lastProgressLog > 15000) {
+          console.log(`[DOWNLOAD] Progress: ${pct.toFixed(1)}%`);
+          lastProgressLog = pct;
+          if (onProgress) onProgress(pct);
+        }
+      }
     });
 
     proc.stderr.on('data', (data) => {
@@ -821,7 +843,10 @@ async function downloadVideo(url, options = {}) {
     });
 
     proc.on('close', (code) => {
+      clearTimeout(timeout);
       if (code === 0 && downloadedFile && fs.existsSync(downloadedFile)) {
+        const fileSizeMB = (fs.statSync(downloadedFile).size / 1024 / 1024).toFixed(1);
+        console.log(`[DOWNLOAD] Complete: ${fileSizeMB}MB`);
         resolve({
           success: true,
           filePath: downloadedFile,
@@ -833,6 +858,8 @@ async function downloadVideo(url, options = {}) {
         const matchedFile = files.find(f => f.startsWith(`video_${timestamp}`));
 
         if (matchedFile) {
+          const fileSizeMB = (fs.statSync(path.join(DOWNLOAD_DIR, matchedFile)).size / 1024 / 1024).toFixed(1);
+          console.log(`[DOWNLOAD] Complete (fallback): ${fileSizeMB}MB`);
           resolve({
             success: true,
             filePath: path.join(DOWNLOAD_DIR, matchedFile),
@@ -845,6 +872,7 @@ async function downloadVideo(url, options = {}) {
     });
 
     proc.on('error', (error) => {
+      clearTimeout(timeout);
       reject(new Error(`yt-dlp process failed: ${error.message}`));
     });
   });
@@ -1669,13 +1697,16 @@ app.post('/process-clips-pipeline', async (req, res) => {
     console.log(`[PIPELINE] Video: "${metadata.title}" (${metadata.duration}s) from ${platform}`);
     await updateProjectProgress(projectId, 'downloading', 10);
 
-    // Estimate download time and set intermediate progress
-    const isLongVideo = metadata.duration > 600; // > 10 minutes
-    if (isLongVideo) {
-      await updateProjectProgress(projectId, 'downloading', 12);
-    }
+    // Download with progress reporting to UI
+    const downloadProgress = async (pct) => {
+      // Map download 0-100% to pipeline 10-25%
+      const pipelinePct = Math.round(10 + (pct / 100) * 15);
+      await updateProjectProgress(projectId, 'downloading', pipelinePct);
+    };
 
-    const downloadResult = await downloadVideo(url, { quality: 'best[height<=720]/best', platform });
+    const downloadResult = await downloadVideo(url, {
+      quality: 'best[height<=720]/best', platform, onProgress: downloadProgress
+    });
     console.log(`[PIPELINE] Downloaded to: ${downloadResult.filePath}`);
     await updateProjectProgress(projectId, 'downloading', 25);
 
