@@ -772,14 +772,21 @@ async function getVideoMetadataWithYtdlp(url, platform) {
  * Extract direct video URL from Rumble embed page (fallback when yt-dlp is blocked)
  */
 async function extractRumbleDirectUrl(url) {
-  // Extract video ID - Rumble URLs look like: rumble.com/v74nqxi-title.html
-  const videoIdMatch = url.match(/rumble\.com\/(v[a-zA-Z0-9]+)/);
-  if (!videoIdMatch) throw new Error('Could not extract Rumble video ID from URL');
+  // Step 1: Use oEmbed API to get the correct embed URL (the page slug ID != embed ID)
+  console.log(`[RUMBLE-DIRECT] Getting embed URL via oEmbed API...`);
+  const oembedUrl = `https://rumble.com/api/Media/oembed.json?url=${encodeURIComponent(url)}`;
+  const oembedResp = await fetch(oembedUrl);
+  if (!oembedResp.ok) throw new Error(`Rumble oEmbed API returned ${oembedResp.status}`);
 
-  const videoId = videoIdMatch[1];
-  const embedUrl = `https://rumble.com/embed/${videoId}/`;
+  const oembedData = await oembedResp.json();
+  // oEmbed html field contains: <iframe src="https://rumble.com/embed/v5abcde/?pub=xyz" ...>
+  const embedMatch = oembedData.html?.match(/src="(https:\/\/rumble\.com\/embed\/[^"]+)"/);
+  if (!embedMatch) throw new Error('Could not find embed URL in oEmbed response');
+
+  const embedUrl = embedMatch[1];
   console.log(`[RUMBLE-DIRECT] Trying embed page: ${embedUrl}`);
 
+  // Step 2: Fetch the embed page to find direct video URLs
   const response = await fetch(embedUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -792,9 +799,7 @@ async function extractRumbleDirectUrl(url) {
 
   const html = await response.text();
 
-  // Try to extract video URL from the embed page JSON data
-  // Rumble embeds contain a JSON object with video URLs
-  const jsonMatch = html.match(/(?:var\s+config\s*=|JSON\.parse\(["'])([\s\S]*?)(?:;|\))/);
+  // Step 3: Extract direct MP4 URL from embed page
   let videoUrl = null;
 
   // Try multiple patterns for extracting the MP4 URL
