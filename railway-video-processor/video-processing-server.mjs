@@ -1076,6 +1076,44 @@ function cleanupFile(filePath) {
   }
 }
 
+/**
+ * Convert raw technical errors to user-friendly messages
+ */
+function getUserFriendlyError(rawError) {
+  const msg = rawError || 'Unknown error';
+
+  // Download / platform errors
+  if (msg.includes('403') && msg.includes('Forbidden'))
+    return 'This video is blocked or region-restricted. Try a different video or platform.';
+  if (msg.includes('404') || msg.includes('Not Found'))
+    return 'Video not found. It may have been deleted or the link is invalid.';
+  if (msg.includes('Private') || msg.includes('private'))
+    return 'This video is private. Only public videos can be processed.';
+  if (msg.includes('age') || msg.includes('Sign in'))
+    return 'This video requires sign-in or age verification and cannot be processed.';
+  if (msg.includes('timed out') || msg.includes('timeout'))
+    return 'The video took too long to download. Try a shorter video or check your link.';
+  if (msg.includes('Unsupported URL') || msg.includes('unsupported'))
+    return 'This video link is not supported. Try YouTube, Twitch, Kick, or Rumble.';
+  if (msg.includes('Download failed'))
+    return 'Failed to download this video. The link may be broken or the platform is blocking access.';
+
+  // Transcription errors
+  if (msg.includes('Whisper') || msg.includes('transcri'))
+    return 'Audio transcription failed. The video may have no audio or an unsupported format.';
+
+  // Analysis errors
+  if (msg.includes('DeepSeek') || msg.includes('API error'))
+    return 'AI analysis temporarily unavailable. Please try again in a few minutes.';
+
+  // Storage errors
+  if (msg.includes('Firebase') || msg.includes('upload'))
+    return 'Failed to save processed clips. Please try again.';
+
+  // Generic fallback
+  return 'Something went wrong while processing your video. Please try again.';
+}
+
 // ============================================
 // Audio Chunking Service (ported from audioChunkingService.js)
 // ============================================
@@ -2021,12 +2059,15 @@ app.post('/process-clips-pipeline', async (req, res) => {
   } catch (error) {
     console.error(`[PIPELINE] Failed for project ${projectId}:`, error.message);
     try {
+      // Convert raw technical errors to user-friendly messages
+      const userMessage = getUserFriendlyError(error.message);
       await VideoProject.findByIdAndUpdate(projectId, {
         $set: {
           status: 'error', processingCompleted: new Date(),
           'analytics.processingStage': 'error', 'analytics.progressPercentage': 0,
-          'analytics.progressMessage': `Error: ${error.message}`,
-          'analytics.error': error.message, 'analytics.lastUpdated': new Date()
+          'analytics.progressMessage': userMessage,
+          'analytics.error': error.message, // Keep raw error for debugging
+          'analytics.lastUpdated': new Date()
         }
       });
     } catch (e) {

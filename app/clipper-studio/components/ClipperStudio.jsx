@@ -1131,7 +1131,13 @@ export default function ClipperStudio() {
         } else if (project.status === 'error') {
           console.error(`❌ [POLLING] Project ${projectId} failed: ${project.analytics?.error}`);
           clearInterval(pollInterval);
-          updateProjectProgress(projectId, 0, 'failed');
+          // Pass the user-friendly error message from backend
+          const errorMessage = project.analytics?.progressMessage || 'Something went wrong. Please try again.';
+          updateProject(projectId, {
+            progress: 0,
+            status: 'error',
+            progressMessage: errorMessage
+          });
           
         } else if (project.status === 'processing') {
           // Use actual progress and message from backend

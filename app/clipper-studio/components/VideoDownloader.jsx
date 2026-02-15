@@ -99,7 +99,7 @@ export default function ProcessingView({
         />
 
         {/* Progress Overlay */}
-        {(progress < 100 && status !== 'failed' && status !== 'completed') ? (
+        {(progress < 100 && status !== 'failed' && status !== 'error' && status !== 'completed') ? (
           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
             <div className="text-center">
               {/* Circular Progress */}
@@ -149,16 +149,16 @@ export default function ProcessingView({
               </p>
             </div>
           </div>
-        ) : status === 'failed' ? (
+        ) : (status === 'failed' || status === 'error') ? (
           <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center">
-            <div className="text-center">
+            <div className="text-center px-3">
               <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-red-500 flex items-center justify-center">
                 <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </div>
-              <p className="text-white text-xs opacity-90">
-                Processing failed
+              <p className="text-white text-xs opacity-90 line-clamp-2">
+                {progressMessage || 'Something went wrong. Please try again.'}
               </p>
             </div>
           </div>
@@ -194,7 +194,7 @@ export default function ProcessingView({
             <Badge className="bg-orange-500/90 text-white border-0 text-xs">
               Processing
             </Badge>
-          ) : status === 'failed' ? (
+          ) : (status === 'failed' || status === 'error') ? (
             <Badge className="bg-red-500/90 text-white border-0 text-xs">
               Failed
             </Badge>
