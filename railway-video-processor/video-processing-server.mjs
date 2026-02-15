@@ -291,8 +291,25 @@ function getRandomProgressMessage(stage) {
   return messages[Math.floor(Math.random() * messages.length)];
 }
 
+// SSE connections map: projectId -> Set of response objects
+const sseClients = new Map();
+
+function sendSSEToProject(projectId, data) {
+  const clients = sseClients.get(projectId);
+  if (!clients || clients.size === 0) return;
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  for (const res of clients) {
+    try { res.write(payload); } catch (e) { clients.delete(res); }
+  }
+}
+
 async function updateProjectProgress(projectId, stage, percentage) {
   const message = getRandomProgressMessage(stage);
+
+  // Push to SSE clients instantly (real-time)
+  sendSSEToProject(projectId, { stage, percentage, message });
+
+  // Also persist to MongoDB (for page refreshes / polling fallback)
   try {
     await VideoProject.findByIdAndUpdate(projectId, {
       $set: {
@@ -373,6 +390,42 @@ app.use((req, res, next) => {
 // ============================================
 // Health Check Endpoint
 // ============================================
+// SSE endpoint for real-time progress updates
+app.get('/progress/:projectId', (req, res) => {
+  const { projectId } = req.params;
+  console.log(`[SSE] Client connected for project: ${projectId}`);
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+
+  // Send initial heartbeat
+  res.write(`data: ${JSON.stringify({ type: 'connected', projectId })}\n\n`);
+
+  // Register this client
+  if (!sseClients.has(projectId)) sseClients.set(projectId, new Set());
+  sseClients.get(projectId).add(res);
+
+  // Keep-alive every 30 seconds
+  const keepAlive = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch (e) { clearInterval(keepAlive); }
+  }, 30000);
+
+  // Cleanup on disconnect
+  req.on('close', () => {
+    console.log(`[SSE] Client disconnected for project: ${projectId}`);
+    clearInterval(keepAlive);
+    const clients = sseClients.get(projectId);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) sseClients.delete(projectId);
+    }
+  });
+});
+
 app.get('/health', async (req, res) => {
   const checks = {
     server: true,
@@ -2657,6 +2710,7 @@ app.listen(PORT, () => {
 
 Endpoints:
   GET  /health                   - Health check
+  GET  /progress/:projectId      - SSE real-time progress
   GET  /fonts                    - List available caption fonts
   POST /metadata                 - Get video metadata
   POST /download                 - Download video

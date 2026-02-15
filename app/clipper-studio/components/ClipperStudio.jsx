@@ -1128,106 +1128,107 @@ export default function ClipperStudio() {
     }
   }
 
-  // Poll project status for async processing
-  function pollProjectStatus(projectId, interval = 5000) { // Poll every 5 seconds for better responsiveness
-    console.log(`🔄 [POLLING] Starting to poll project: ${projectId} every ${interval}ms`);
-    
+  // Real-time progress via SSE from Railway, with polling fallback
+  function pollProjectStatus(projectId) {
+    const railwayUrl = process.env.NEXT_PUBLIC_VIDEO_PROCESSING_API_URL;
+
+    // Try SSE first for real-time updates
+    if (railwayUrl) {
+      console.log(`⚡ [SSE] Connecting to Railway for project: ${projectId}`);
+      const eventSource = new EventSource(`${railwayUrl}/progress/${projectId}`);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'connected') return; // Initial heartbeat
+
+          const { stage, percentage, message } = data;
+          console.log(`⚡ [SSE] ${projectId}: ${percentage}% - "${message}" - ${stage}`);
+
+          if (stage === 'completed') {
+            updateProjectProgress(projectId, 100, 'completed');
+            queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
+            eventSource.close();
+          } else if (stage === 'error') {
+            updateProject(projectId, {
+              progress: 0,
+              status: 'error',
+              progressMessage: message || 'Something went wrong. Please try again.'
+            });
+            eventSource.close();
+          } else {
+            updateProject(projectId, {
+              progress: percentage,
+              status: stage,
+              progressMessage: message
+            });
+          }
+        } catch (e) {
+          console.warn(`⚡ [SSE] Parse error:`, e);
+        }
+      };
+
+      eventSource.onerror = () => {
+        console.warn(`⚡ [SSE] Connection lost for ${projectId}, falling back to polling`);
+        eventSource.close();
+        startPollingFallback(projectId);
+      };
+
+      // Safety: close SSE after 60 minutes
+      setTimeout(() => eventSource.close(), 60 * 60 * 1000);
+      return;
+    }
+
+    // No Railway URL configured, use polling
+    startPollingFallback(projectId);
+  }
+
+  function startPollingFallback(projectId) {
+    console.log(`🔄 [POLLING] Starting fallback polling for project: ${projectId}`);
+
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/clipper-studio/projects/${projectId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
+        const response = await fetch(`/api/clipper-studio/projects/${projectId}`);
         if (!response.ok) {
           if (response.status === 404) {
-            console.error(`❌ [POLLING] Project ${projectId} not found - stopping polling and marking as failed`);
             clearInterval(pollInterval);
             updateProjectProgress(projectId, 0, 'failed');
-            return;
           }
-          
-          console.error(`❌ [POLLING] Failed to fetch project status: ${response.statusText}`);
           return;
         }
-        
-        const responseData = await response.json();
-        const project = responseData.project; // Extract the nested project data
-        
-        // Check if project data exists
+
+        const { project } = await response.json();
         if (!project) {
-          console.error(`❌ [POLLING] Project ${projectId} data missing - stopping polling and marking as failed`);
           clearInterval(pollInterval);
           updateProjectProgress(projectId, 0, 'failed');
           return;
         }
-        
-        // Debug logging to see what we're getting from the API
-        
+
         if (project.status === 'completed') {
-          console.log(`🎉 [POLLING] Project ${projectId} completed! Stopping polling.`);
           clearInterval(pollInterval);
           updateProjectProgress(projectId, 100, 'completed');
           queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
-          
-          console.log(`✅ [POLLING] Project ${projectId} marked as completed in store`);
-          
         } else if (project.status === 'error') {
-          console.error(`❌ [POLLING] Project ${projectId} failed: ${project.analytics?.error}`);
           clearInterval(pollInterval);
-          // Pass the user-friendly error message from backend
-          const errorMessage = project.analytics?.progressMessage || 'Something went wrong. Please try again.';
           updateProject(projectId, {
             progress: 0,
             status: 'error',
-            progressMessage: errorMessage
+            progressMessage: project.progressMessage || 'Something went wrong. Please try again.'
           });
-          
         } else {
-          // Active processing — status will be 'downloading', 'transcribing', 'analyzing', 'cutting', 'saving', 'processing', etc.
-          const actualProgress = project.progress || project.analytics?.progressPercentage || 0;
-          const actualMessage = project.progressMessage || project.analytics?.progressMessage || null;
-          const actualStage = project.status || project.analytics?.processingStage || 'processing';
-
-          console.log(`🔄 [POLLING] Project ${projectId} progress: ${actualProgress}% - "${actualMessage}" - stage: ${actualStage}`);
-
-          // Update store with actual backend values
           updateProject(projectId, {
-            progress: actualProgress,
-            status: actualStage,
-            progressMessage: actualMessage
+            progress: project.progress || 0,
+            status: project.status || 'processing',
+            progressMessage: project.progressMessage || null
           });
-
-          // Also update the server data cache to ensure React Query shows updated data
-          queryClient.setQueryData(
-            [CLIPPER_QUERY_KEYS.projects],
-            (oldData) => {
-              if (!oldData?.projects) return oldData;
-              return {
-                ...oldData,
-                projects: oldData.projects.map(p =>
-                  p.id === projectId
-                    ? { ...p, progress: actualProgress, status: actualStatus, progressMessage: actualMessage }
-                    : p
-                )
-              };
-            }
-          );
-          
-          console.log(`✅ [POLLING] Updated project ${projectId} in store`);
         }
-        
       } catch (error) {
-        console.error(`❌ [POLLING] Error polling project ${projectId}:`, error);
+        console.error(`❌ [POLLING] Error:`, error);
       }
-    }, interval);
-    
-    // Stop polling after 60 minutes to prevent infinite polling (extended for large video files)
+    }, 5000);
+
     setTimeout(() => {
       clearInterval(pollInterval);
-      console.warn(`⏰ [POLLING] Stopped polling for project ${projectId} after 60 minutes`);
     }, 60 * 60 * 1000);
   }
 
