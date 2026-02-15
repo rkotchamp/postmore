@@ -1412,7 +1412,7 @@ async function callDeepSeekAPI(prompt) {
               { role: 'system', content: 'You are an expert content curator specializing in viral short-form video content.' },
               { role: 'user', content: prompt }
             ],
-            max_tokens: 4000,
+            max_tokens: 8192,
             temperature: 0.7,
             stream: false
           }),
@@ -1555,10 +1555,38 @@ function validateAndCleanClips(rawClips, options) {
 }
 
 function parseDeepSeekResponse(content) {
-  try { return JSON.parse(content); } catch (e) {
-    const match = content.match(/\[[\s\S]*\]/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('DeepSeek response is not valid JSON');
+  // Try direct parse first
+  try { return JSON.parse(content); } catch (e) { /* continue */ }
+
+  // Try extracting the JSON array
+  const match = content.match(/\[[\s\S]*\]/);
+  if (match) {
+    try { return JSON.parse(match[0]); } catch (e) { /* continue to repair */ }
+  }
+
+  // Repair truncated JSON — find the last complete object in the array
+  const arrayStart = content.indexOf('[');
+  if (arrayStart === -1) throw new Error('DeepSeek response contains no JSON array');
+
+  let jsonStr = content.slice(arrayStart);
+
+  // Find the last complete object by looking for the last "},"  or "}" before the truncation
+  const lastCompleteObj = jsonStr.lastIndexOf('},');
+  const lastObj = jsonStr.lastIndexOf('}');
+
+  if (lastCompleteObj > 0) {
+    jsonStr = jsonStr.slice(0, lastCompleteObj + 1) + ']';
+  } else if (lastObj > 0) {
+    jsonStr = jsonStr.slice(0, lastObj + 1) + ']';
+  }
+
+  try {
+    const result = JSON.parse(jsonStr);
+    console.log(`[DEEPSEEK] Repaired truncated JSON — recovered ${result.length} clips`);
+    return result;
+  } catch (e) {
+    console.error(`[DEEPSEEK] JSON repair failed. Raw content (first 500 chars):`, content.slice(0, 500));
+    throw new Error('DeepSeek response is not valid JSON and could not be repaired');
   }
 }
 
