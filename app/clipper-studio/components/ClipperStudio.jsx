@@ -98,15 +98,30 @@ export default function ClipperStudio() {
     error: clipsError 
   } = useMultipleProjectClips(projectIds, projectIds.length > 0);
 
+  const UNSUPPORTED_PLATFORMS = {
+    'rumble.com': 'Rumble'
+  };
+
   const handleVideoUrlSubmit = async (e) => {
     e.preventDefault();
     if (!isInputValid()) return;
 
+    // Check for unsupported platforms before proceeding
+    const input = getCurrentInput();
+    if (typeof input === 'string') {
+      const lowerUrl = input.toLowerCase();
+      for (const [domain, name] of Object.entries(UNSUPPORTED_PLATFORMS)) {
+        if (lowerUrl.includes(domain)) {
+          alert(`${name} is not currently supported. Please try a link from YouTube, Twitch, Kick, or TikTok — or upload your video file directly.`);
+          return;
+        }
+      }
+    }
+
     setLoadingPreview(true);
     setExtractingThumbnail(true);
-    
+
     try {
-      const input = getCurrentInput();
       const cacheKey = typeof input === 'string' ? input : input.name;
       
       // Check cache first
