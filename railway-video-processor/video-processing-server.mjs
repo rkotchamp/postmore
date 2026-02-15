@@ -769,9 +769,133 @@ async function getVideoMetadataWithYtdlp(url, platform) {
 }
 
 /**
- * Download video using yt-dlp
+ * Extract direct video URL from Rumble embed page (fallback when yt-dlp is blocked)
+ */
+async function extractRumbleDirectUrl(url) {
+  // Extract video ID - Rumble URLs look like: rumble.com/v74nqxi-title.html
+  const videoIdMatch = url.match(/rumble\.com\/(v[a-zA-Z0-9]+)/);
+  if (!videoIdMatch) throw new Error('Could not extract Rumble video ID from URL');
+
+  const videoId = videoIdMatch[1];
+  const embedUrl = `https://rumble.com/embed/${videoId}/`;
+  console.log(`[RUMBLE-DIRECT] Trying embed page: ${embedUrl}`);
+
+  const response = await fetch(embedUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': 'https://rumble.com/',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    }
+  });
+
+  if (!response.ok) throw new Error(`Rumble embed page returned ${response.status}`);
+
+  const html = await response.text();
+
+  // Try to extract video URL from the embed page JSON data
+  // Rumble embeds contain a JSON object with video URLs
+  const jsonMatch = html.match(/(?:var\s+config\s*=|JSON\.parse\(["'])([\s\S]*?)(?:;|\))/);
+  let videoUrl = null;
+
+  // Try multiple patterns for extracting the MP4 URL
+  const patterns = [
+    /"mp4":\s*\{[^}]*"url":\s*"([^"]+)"/,
+    /"url":\s*"(https?:\/\/[^"]+\.mp4[^"]*)"/,
+    /(?:"webm|mp4|hls)"?\s*:\s*\{[^}]*?"url"\s*:\s*"(https?:\/\/[^"]+)"/,
+    /https?:\/\/[a-zA-Z0-9.-]+\.rumble\.com\/[^"'\s]+\.mp4/
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      videoUrl = (match[1] || match[0]).replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+      break;
+    }
+  }
+
+  if (!videoUrl) throw new Error('Could not extract direct video URL from Rumble embed page');
+
+  console.log(`[RUMBLE-DIRECT] Found direct URL: ${videoUrl.substring(0, 80)}...`);
+  return videoUrl;
+}
+
+/**
+ * Download a direct URL using FFmpeg (used as fallback for Rumble)
+ */
+async function downloadDirectUrl(directUrl, outputPath, onProgress = null) {
+  console.log(`[DOWNLOAD-DIRECT] Downloading from direct URL...`);
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', directUrl,
+      '-c', 'copy', // No re-encoding, just copy streams
+      '-y', // Overwrite
+      outputPath
+    ];
+
+    const proc = spawn(FFMPEG_PATH, args);
+    let stderr = '';
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+      // FFmpeg outputs progress to stderr
+      const timeMatch = data.toString().match(/time=(\d{2}):(\d{2}):(\d{2})/);
+      if (timeMatch && onProgress) {
+        const hours = parseInt(timeMatch[1]);
+        const mins = parseInt(timeMatch[2]);
+        const secs = parseInt(timeMatch[3]);
+        const totalSecs = hours * 3600 + mins * 60 + secs;
+        onProgress(totalSecs); // Report seconds downloaded
+      }
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outputPath)) {
+        const fileSizeMB = (fs.statSync(outputPath).size / 1024 / 1024).toFixed(1);
+        console.log(`[DOWNLOAD-DIRECT] Complete: ${fileSizeMB}MB`);
+        resolve({ success: true, filePath: outputPath });
+      } else {
+        reject(new Error(`Direct download failed (code ${code}): ${stderr.slice(-500)}`));
+      }
+    });
+
+    proc.on('error', (error) => {
+      reject(new Error(`FFmpeg process failed: ${error.message}`));
+    });
+  });
+}
+
+/**
+ * Download video using yt-dlp, with Rumble direct-URL fallback
  */
 async function downloadVideo(url, options = {}) {
+  const { platform } = options;
+
+  // Try yt-dlp first
+  try {
+    return await downloadVideoWithYtdlp(url, options);
+  } catch (ytdlpError) {
+    // If Rumble fails with 403, try extracting direct URL from embed page
+    if (platform === 'rumble' && ytdlpError.message.includes('403')) {
+      console.log(`[DOWNLOAD] yt-dlp blocked by Rumble Cloudflare, trying direct URL extraction...`);
+      try {
+        const directUrl = await extractRumbleDirectUrl(url);
+        const outputPath = path.join(DOWNLOAD_DIR, `video_${Date.now()}.mp4`);
+        const result = await downloadDirectUrl(directUrl, outputPath, options.onProgress ? (secs) => {
+          // We don't know total duration here, so just log progress
+          console.log(`[DOWNLOAD-DIRECT] Downloaded ${Math.floor(secs / 60)}m ${secs % 60}s`);
+        } : null);
+        return { ...result, platform };
+      } catch (directError) {
+        console.error(`[DOWNLOAD] Rumble direct URL fallback also failed:`, directError.message);
+        throw new Error(`Rumble download failed (Cloudflare 403). yt-dlp: ${ytdlpError.message}. Direct: ${directError.message}`);
+      }
+    }
+    throw ytdlpError;
+  }
+}
+
+async function downloadVideoWithYtdlp(url, options = {}) {
   const { quality = 'best[height<=1080]/best', platform, onProgress = null } = options;
 
   const timestamp = Date.now();
@@ -789,7 +913,11 @@ async function downloadVideo(url, options = {}) {
   // Platform-specific optimizations - Kick and Rumble require browser impersonation
   if (platform === 'kick' || platform === 'rumble') {
     args.push('--impersonate', 'chrome');
-    args.push('--ignore-errors', '--no-check-certificate', '--extractor-retries', '5');
+    args.push(
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      '--ignore-errors', '--no-check-certificate', '--extractor-retries', '5',
+      '--retry-sleep', '5', '--socket-timeout', '30'
+    );
   }
 
   args.push(url);
