@@ -100,7 +100,7 @@ export default function ProcessingView({
 
         {/* Progress Overlay */}
         {(progress < 100 && status !== 'failed' && status !== 'error' && status !== 'completed') ? (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center overflow-hidden">
             <div className="text-center">
               {/* Circular Progress */}
               <div className="relative w-12 h-12 mx-auto mb-2">
@@ -136,18 +136,37 @@ export default function ProcessingView({
                   </span>
                 </div>
               </div>
-              {/* Status Text - GenZ Messages First! */}
+              {/* Animated laser line */}
+              <div className="relative w-32 h-[2px] mx-auto mb-2 rounded-full bg-white/10">
+                <div
+                  className="absolute top-0 h-full w-10 rounded-full"
+                  style={{
+                    background: 'linear-gradient(to right, transparent, #a855f7, #c084fc, #a855f7, transparent)',
+                    boxShadow: '0 0 8px 2px rgba(168, 85, 247, 0.5)',
+                    animation: 'laserSlide 1.8s ease-in-out infinite',
+                  }}
+                />
+              </div>
+              {/* Status Text */}
               <p className="text-white text-xs opacity-90">
                 {progressMessage || (
-                  status === 'downloading' ? 'getting the sauce 🌶️' :
-                  status === 'transcribing' ? 'reading the vibes ✨' :
-                  status === 'analyzing' ? 'hunting viral moments 🎯' :
-                  status === 'saving' ? 'saving your W\'s 💾' :
-                  status === 'completed' ? 'WE DID THAT! 💥' :
-                  'we\'re cooking 👨‍🍳'
+                  status === 'downloading' ? 'getting the sauce' :
+                  status === 'transcribing' ? 'reading the vibes' :
+                  status === 'analyzing' ? 'hunting viral moments' :
+                  status === 'cutting' ? 'snipping the clips' :
+                  status === 'saving' ? 'saving your W\'s' :
+                  status === 'completed' ? 'WE DID THAT!' :
+                  'we\'re cooking'
                 )}
               </p>
             </div>
+            <style jsx>{`
+              @keyframes laserSlide {
+                0% { left: -10px; }
+                50% { left: calc(100% - 30px); }
+                100% { left: -10px; }
+              }
+            `}</style>
           </div>
         ) : (status === 'failed' || status === 'error') ? (
           <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center">
