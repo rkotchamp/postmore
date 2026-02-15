@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, Link, Play } from "lucide-react";
+import { Upload, Link, Play, AlertTriangle } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -11,6 +11,7 @@ import ProcessingView from "./VideoDownloader";
 import ClipsGallery from "./ClipsCard";
 import SkeletonClipsGallery from "./SkeletonClipsGallery";
 import DeleteDialog from "@/app/components/ui/delete-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/app/components/ui/dialog";
 import { getThumbnail } from "../../lib/video-processing/utils/thumbnailExtractor";
 import { useClipperStudioStore } from "../../lib/store/clipperStudioStore";
 import { useClipperMutations } from "../../hooks/useClipperMutations";
@@ -25,6 +26,12 @@ export default function ClipperStudio() {
     isOpen: false,
     projectId: null,
     projectTitle: null
+  });
+
+  // Unsupported platform modal state
+  const [unsupportedModal, setUnsupportedModal] = useState({
+    isOpen: false,
+    platform: null
   });
 
   // Projects tab state
@@ -112,7 +119,7 @@ export default function ClipperStudio() {
       const lowerUrl = input.toLowerCase();
       for (const [domain, name] of Object.entries(UNSUPPORTED_PLATFORMS)) {
         if (lowerUrl.includes(domain)) {
-          alert(`${name} is not currently supported. Please try a link from YouTube, Twitch, Kick, or TikTok — or upload your video file directly.`);
+          setUnsupportedModal({ isOpen: true, platform: name });
           return;
         }
       }
@@ -1020,6 +1027,37 @@ export default function ClipperStudio() {
         onConfirm={handleConfirmDelete}
         projectTitle={deleteDialog.projectTitle}
       />
+
+      {/* Unsupported Platform Modal */}
+      <Dialog open={unsupportedModal.isOpen} onOpenChange={(open) => setUnsupportedModal({ ...unsupportedModal, isOpen: open })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <DialogTitle className="text-center">
+              {unsupportedModal.platform} is not supported
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              We currently don't support links from {unsupportedModal.platform}. Try one of our supported platforms or upload your video file directly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap justify-center gap-2 py-3">
+            {['YouTube', 'Twitch', 'Kick', 'TikTok'].map((p) => (
+              <span key={p} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                {p}
+              </span>
+            ))}
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <Button
+              onClick={() => setUnsupportedModal({ isOpen: false, platform: null })}
+            >
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 
