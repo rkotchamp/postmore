@@ -1039,16 +1039,9 @@ export default function ClipperStudio() {
               {unsupportedModal.platform} is not supported
             </DialogTitle>
             <DialogDescription className="text-center">
-              We currently don't support links from {unsupportedModal.platform}. Try one of our supported platforms or upload your video file directly.
+              We currently don't support links from {unsupportedModal.platform}. Try pasting a link from one of our supported platforms — YouTube, Twitch, Kick, or TikTok.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-wrap justify-center gap-2 py-3">
-            {['YouTube', 'Twitch', 'Kick', 'TikTok'].map((p) => (
-              <span key={p} className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
-                {p}
-              </span>
-            ))}
-          </div>
           <DialogFooter className="sm:justify-center">
             <Button
               onClick={() => setUnsupportedModal({ isOpen: false, platform: null })}
