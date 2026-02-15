@@ -1185,15 +1185,15 @@ export default function ClipperStudio() {
             progressMessage: errorMessage
           });
           
-        } else if (project.status === 'processing') {
-          // Use actual progress and message from backend analytics
-          const actualProgress = project.analytics?.progressPercentage || project.progress || 0;
-          const actualMessage = project.analytics?.progressMessage || null;
-          const actualStage = project.analytics?.processingStage || 'processing';
+        } else {
+          // Active processing — status will be 'downloading', 'transcribing', 'analyzing', 'cutting', 'saving', 'processing', etc.
+          const actualProgress = project.progress || project.analytics?.progressPercentage || 0;
+          const actualMessage = project.progressMessage || project.analytics?.progressMessage || null;
+          const actualStage = project.status || project.analytics?.processingStage || 'processing';
 
           console.log(`🔄 [POLLING] Project ${projectId} progress: ${actualProgress}% - "${actualMessage}" - stage: ${actualStage}`);
 
-          // Update with actual backend values
+          // Update store with actual backend values
           updateProject(projectId, {
             progress: actualProgress,
             status: actualStage,

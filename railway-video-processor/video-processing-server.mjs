@@ -1291,6 +1291,9 @@ async function transcribeWithWhisper(filePath, options = {}, onProgress = null) 
 
     const chunkTranscription = await transcribeSingleFile(chunkResult.chunks[i], options);
 
+    // Clean up this chunk immediately after transcription to free disk space
+    try { fs.unlinkSync(chunkResult.chunks[i]); } catch (e) { /* ignore */ }
+
     let chunkDuration = 0;
     if (chunkTranscription.segments) {
       chunkTranscription.segments.forEach(s => { s.start += cumulativeTime; s.end += cumulativeTime; });
