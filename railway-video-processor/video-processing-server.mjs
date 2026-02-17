@@ -16,6 +16,7 @@ import { getStorage } from 'firebase-admin/storage';
 import mongoose from 'mongoose';
 import OpenAI from 'openai';
 import puppeteer from 'puppeteer-core';
+import { jsonrepair } from 'jsonrepair';
 
 const execAsync = promisify(exec);
 
@@ -1409,9 +1410,10 @@ async function callDeepSeekAPI(prompt) {
           body: JSON.stringify({
             model: 'deepseek-chat',
             messages: [
-              { role: 'system', content: 'You are an expert content curator specializing in viral short-form video content.' },
+              { role: 'system', content: 'You are an expert content curator specializing in viral short-form video content. You must respond with valid JSON only — no markdown, no code fences, no explanations.' },
               { role: 'user', content: prompt }
             ],
+            response_format: { type: 'json_object' },
             max_tokens: 8192,
             temperature: 0.7,
             stream: false
@@ -1555,39 +1557,70 @@ function validateAndCleanClips(rawClips, options) {
 }
 
 function parseDeepSeekResponse(content) {
-  // Try direct parse first
-  try { return JSON.parse(content); } catch (e) { /* continue */ }
+  // Layer 1: Strip markdown code block wrappers (```json ... ``` or ``` ... ```)
+  let cleaned = content.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
-  // Try extracting the JSON array
-  const match = content.match(/\[[\s\S]*\]/);
-  if (match) {
-    try { return JSON.parse(match[0]); } catch (e) { /* continue to repair */ }
-  }
+  // Layer 2: Try direct parse first (fastest path)
+  try { return JSON.parse(cleaned); } catch (e) { /* continue */ }
 
-  // Repair truncated JSON — find the last complete object in the array
-  const arrayStart = content.indexOf('[');
-  if (arrayStart === -1) throw new Error('DeepSeek response contains no JSON array');
-
-  let jsonStr = content.slice(arrayStart);
-
-  // Find the last complete object by looking for the last "},"  or "}" before the truncation
-  const lastCompleteObj = jsonStr.lastIndexOf('},');
-  const lastObj = jsonStr.lastIndexOf('}');
-
-  if (lastCompleteObj > 0) {
-    jsonStr = jsonStr.slice(0, lastCompleteObj + 1) + ']';
-  } else if (lastObj > 0) {
-    jsonStr = jsonStr.slice(0, lastObj + 1) + ']';
-  }
-
+  // Layer 3: Use jsonrepair — industry standard for fixing malformed LLM JSON
   try {
-    const result = JSON.parse(jsonStr);
-    console.log(`[DEEPSEEK] Repaired truncated JSON — recovered ${result.length} clips`);
+    const repaired = jsonrepair(cleaned);
+    const result = JSON.parse(repaired);
+    console.log(`[DEEPSEEK] jsonrepair fixed response — ${Array.isArray(result) ? result.length + ' clips' : 'object'}`);
     return result;
   } catch (e) {
-    console.error(`[DEEPSEEK] JSON repair failed. Raw content (first 500 chars):`, content.slice(0, 500));
-    throw new Error('DeepSeek response is not valid JSON and could not be repaired');
+    console.warn(`[DEEPSEEK] jsonrepair failed:`, e.message);
   }
+
+  // Layer 4: Try extracting just the JSON array and repairing that
+  const arrayMatch = cleaned.match(/\[[\s\S]*/);
+  if (arrayMatch) {
+    try {
+      const repaired = jsonrepair(arrayMatch[0]);
+      const result = JSON.parse(repaired);
+      console.log(`[DEEPSEEK] jsonrepair fixed extracted array — ${result.length} clips`);
+      return result;
+    } catch (e) { /* continue */ }
+  }
+
+  // Layer 5: Last resort — manual truncation recovery for severely broken JSON
+  const arrayStart = cleaned.indexOf('[');
+  if (arrayStart === -1) {
+    console.error(`[DEEPSEEK] No JSON array found. Raw (first 500 chars):`, content.slice(0, 500));
+    throw new Error('DeepSeek response contains no JSON array');
+  }
+
+  let jsonStr = cleaned.slice(arrayStart);
+  let lastGoodEnd = -1;
+  let braceDepth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 1; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braceDepth++;
+    if (ch === '}') {
+      braceDepth--;
+      if (braceDepth === 0) lastGoodEnd = i;
+    }
+  }
+
+  if (lastGoodEnd > 0) {
+    jsonStr = jsonStr.slice(0, lastGoodEnd + 1) + ']';
+    try {
+      const result = JSON.parse(jsonStr);
+      console.log(`[DEEPSEEK] Manual truncation repair — recovered ${result.length} clips`);
+      return result;
+    } catch (e) { /* fall through */ }
+  }
+
+  console.error(`[DEEPSEEK] All JSON repair layers failed. Raw (first 500 chars):`, content.slice(0, 500));
+  throw new Error('DeepSeek response is not valid JSON and could not be repaired');
 }
 
 function needsChunking(transcription) {
