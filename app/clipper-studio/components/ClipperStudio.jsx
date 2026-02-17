@@ -1129,47 +1129,50 @@ export default function ClipperStudio() {
   }
 
   // Real-time progress via SSE from Railway, with polling fallback
+  // IMPORTANT: Use useClipperStudioStore.getState() to avoid stale closures
+  // in async callbacks (SSE/polling run outside React render cycle)
   function pollProjectStatus(projectId) {
     const railwayUrl = process.env.NEXT_PUBLIC_VIDEO_PROCESSING_API_URL;
+    const getStore = () => useClipperStudioStore.getState();
 
     // Try SSE first for real-time updates
     if (railwayUrl) {
-      console.log(`⚡ [SSE] Connecting to Railway for project: ${projectId}`);
+      console.log(`[SSE] Connecting to Railway for project: ${projectId}`);
       const eventSource = new EventSource(`${railwayUrl}/progress/${projectId}`);
 
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'connected') return; // Initial heartbeat
+          if (data.type === 'connected') return;
 
           const { stage, percentage, message } = data;
-          console.log(`⚡ [SSE] ${projectId}: ${percentage}% - "${message}" - ${stage}`);
+          console.log(`[SSE] ${projectId}: ${percentage}% - "${message}" - ${stage}`);
 
           if (stage === 'completed') {
-            updateProjectProgress(projectId, 100, 'completed');
+            getStore().updateProject(projectId, { progress: 100, status: 'completed' });
             queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
             eventSource.close();
           } else if (stage === 'error') {
-            updateProject(projectId, {
+            getStore().updateProject(projectId, {
               progress: 0,
               status: 'error',
               progressMessage: message || 'Something went wrong. Please try again.'
             });
             eventSource.close();
           } else {
-            updateProject(projectId, {
+            getStore().updateProject(projectId, {
               progress: percentage,
               status: stage,
               progressMessage: message
             });
           }
         } catch (e) {
-          console.warn(`⚡ [SSE] Parse error:`, e);
+          console.warn(`[SSE] Parse error:`, e);
         }
       };
 
       eventSource.onerror = () => {
-        console.warn(`⚡ [SSE] Connection lost for ${projectId}, falling back to polling`);
+        console.warn(`[SSE] Connection lost for ${projectId}, falling back to polling`);
         eventSource.close();
         startPollingFallback(projectId);
       };
@@ -1184,7 +1187,8 @@ export default function ClipperStudio() {
   }
 
   function startPollingFallback(projectId) {
-    console.log(`🔄 [POLLING] Starting fallback polling for project: ${projectId}`);
+    console.log(`[POLLING] Starting fallback polling for project: ${projectId}`);
+    const getStore = () => useClipperStudioStore.getState();
 
     const pollInterval = setInterval(async () => {
       try {
@@ -1192,7 +1196,7 @@ export default function ClipperStudio() {
         if (!response.ok) {
           if (response.status === 404) {
             clearInterval(pollInterval);
-            updateProjectProgress(projectId, 0, 'failed');
+            getStore().updateProject(projectId, { progress: 0, status: 'failed' });
           }
           return;
         }
@@ -1200,32 +1204,32 @@ export default function ClipperStudio() {
         const { project } = await response.json();
         if (!project) {
           clearInterval(pollInterval);
-          updateProjectProgress(projectId, 0, 'failed');
+          getStore().updateProject(projectId, { progress: 0, status: 'failed' });
           return;
         }
 
         if (project.status === 'completed') {
           clearInterval(pollInterval);
-          updateProjectProgress(projectId, 100, 'completed');
+          getStore().updateProject(projectId, { progress: 100, status: 'completed' });
           queryClient.invalidateQueries({ queryKey: ['multiple-project-clips'] });
         } else if (project.status === 'error') {
           clearInterval(pollInterval);
-          updateProject(projectId, {
+          getStore().updateProject(projectId, {
             progress: 0,
             status: 'error',
             progressMessage: project.progressMessage || 'Something went wrong. Please try again.'
           });
         } else {
-          updateProject(projectId, {
+          getStore().updateProject(projectId, {
             progress: project.progress || 0,
             status: project.status || 'processing',
             progressMessage: project.progressMessage || null
           });
         }
       } catch (error) {
-        console.error(`❌ [POLLING] Error:`, error);
+        console.error(`[POLLING] Error:`, error);
       }
-    }, 5000);
+    }, 3000); // Poll every 3 seconds instead of 5
 
     setTimeout(() => {
       clearInterval(pollInterval);
@@ -1234,6 +1238,6 @@ export default function ClipperStudio() {
 
   // Helper function to update project progress
   function updateProjectProgress(projectId, progress, status = 'processing') {
-    updateProject(projectId, { progress, status });
+    useClipperStudioStore.getState().updateProject(projectId, { progress, status });
   }
 }

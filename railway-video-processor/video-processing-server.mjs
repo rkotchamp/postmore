@@ -401,6 +401,7 @@ app.get('/progress/:projectId', (req, res) => {
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'Access-Control-Allow-Origin': '*',
+    'X-Accel-Buffering': 'no',
   });
 
   // Send initial heartbeat
