@@ -25,7 +25,7 @@ export default function DeleteDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Project</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete "{projectTitle}"? This action cannot be undone.
+            Are you sure you want to delete this project? This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
