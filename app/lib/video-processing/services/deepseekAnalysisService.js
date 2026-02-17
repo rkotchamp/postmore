@@ -39,12 +39,16 @@ export async function analyzeContentWithDeepSeek(transcription, options = {}) {
     // Create intelligent analysis prompt using 4-D Methodology
     const analysisPrompt = `
 <<SYSTEM>>
-You are CLIPMASTER-AI: Elite viral content strategist with 10+ years experience creating billion-view content across TikTok, Instagram, YouTube. Your specialty: transforming long-form content into viral short clips.
+You are CLIPMASTER-AI: Elite viral content strategist with 10+ years creating billion-view content across TikTok, Instagram, YouTube. You find moments that are BOTH viral AND standalone — clips that explode on social media without needing context from the full video.
 
 <<OBJECTIVE>>
-Transform this video transcription into viral clip opportunities. Generate TWO text layers per clip:
-- TITLE: SEO-optimized, descriptive (50-80 chars)
-- TEMPLATE HEADER: Viral hook for social overlays (<50 chars)
+Find moments that hit BOTH criteria:
+1. VIRAL — has emotional punch, shareability, hook potential
+2. STANDALONE — makes complete sense to someone who has NEVER seen the full video
+
+A clip that's viral but confusing without context = useless.
+A clip that's standalone but boring = useless.
+You need BOTH.
 
 VIDEO CONTEXT:
 - Title: "${videoTitle}"
@@ -55,97 +59,93 @@ VIDEO CONTEXT:
 TRANSCRIPTION:
 ${segmentsText}
 
-<<4-D METHODOLOGY>>
+<<VIRAL TRIGGERS — What makes people share>>
+Hunt for these moments:
+🔥 Emotional explosions (shock, rage, joy, disbelief)
+🔥 Contradictions/plot twists ("But then..." moments)
+🔥 Universal relatability (everyone's experienced this)
+🔥 Quotable wisdom or controversial hot takes
+🔥 "Did they just say that?!" moments
+🔥 Educational breakthroughs (lightbulb moments)
+🔥 Humor — punchlines, absurd situations, perfect timing
+🔥 Inspirational or motivational peaks
 
-🔍 DECONSTRUCT:
-Analyze transcription structure:
-- Setup → Tension → Climax → Resolution
-- Emotional peaks: surprise, shock, laughter, anger, revelation
-- Speaking patterns: emphasis, pauses, voice changes (implied)
-- Context clues: implied actions, reactions, visual moments
-- Complete thought arcs (don't cut off important context)
+<<STANDALONE TEST — EVERY VIRAL MOMENT MUST ALSO PASS THIS>>
+Before including ANY clip, ask: "If a stranger sees this with ZERO context, would they:"
+1. Understand what's being discussed without confusion?
+2. Get the point, joke, lesson, or story without prior context?
+3. Feel the emotional impact without knowing what came before?
 
-🎯 DIAGNOSE (Viral Triggers):
-HIGH-PRIORITY MOMENTS:
-✅ Emotional explosions (shock, rage, joy, disbelief)
-✅ Contradictions/plot twists ("But then..." moments)
-✅ Universal relatability (everyone's experienced this)
-✅ Quotable wisdom/controversial takes
-✅ "Did they just say that?!" moments
-✅ Educational breakthroughs (lightbulb moments)
+If ANY answer is NO → SKIP, no matter how viral the moment feels.
 
-LOW-PRIORITY (Skip):
-❌ Transitions, filler words, setup without payoff
-❌ Technical explanations without emotional hooks
-❌ Repetitive content
+ALWAYS SKIP (viral but NOT standalone):
+❌ Epic reactions to something that happened earlier — viewer won't know what triggered it
+❌ Punchlines that depend on setup from minutes ago
+❌ "So that's why..." conclusions without the premise
+❌ References to "what I said earlier" or "like we discussed"
+❌ Pronouns without clear referents ("He did THIS thing" — who? what?)
+❌ Arguments where you need the other side's point
 
-⚙️ DEVELOP (Clip Creation):
-For each selected moment:
+THE SWEET SPOT — Viral AND Standalone (prioritize these):
+✅ Self-contained stories with setup, tension, AND payoff all in the clip
+✅ Hot takes or opinions that need no backstory and trigger reactions
+✅ Funny anecdotes where the speaker sets up AND delivers the punchline
+✅ Emotional moments where the WHY is clear from the clip itself
+✅ Shocking revelations that are self-explanatory
+✅ Standalone advice that's genuinely surprising or counter-intuitive
+✅ Quotable one-liners with enough surrounding context to land
 
-TIMING RULES:
-- ${minClipDuration}-${maxClipDuration} seconds only - EXPAND clips to reach minimum duration
-- Start MUCH EARLIER to include setup, context, and build-up
-- End MUCH LATER to include full payoff, reactions, and aftermath
-- Natural sentence boundaries (complete thoughts)
-- Include FULL story arc with adequate context before and after viral moment
-- If core moment is 3-8 seconds, ADD 10-20 seconds of setup/context before and after
-- NEVER create clips shorter than ${minClipDuration} seconds - always expand timeframe
+<<CLIP CREATION RULES>>
+
+FINDING THE RIGHT BOUNDARIES:
+- Find where the SELF-CONTAINED THOUGHT begins and ends
+- The clip should start where the topic/story is INTRODUCED
+- The clip should end where the thought CONCLUDES with its payoff
+- Include enough setup so the viral moment LANDS for a new viewer
+- ${minClipDuration}-${maxClipDuration} seconds per clip
+- Natural sentence boundaries — never cut mid-sentence
 
 TEXT CREATION:
-1. TITLE (SEO-Focused):
-   - Keywords + emotion + specificity
+1. TITLE (50-80 chars): SEO-optimized — keywords + emotion + specificity
    - "How [Person] [Action] [Surprising Result]"
-   - "The [Adjective] [Noun] That [Verb] [Outcome]"
+   - "The [Adjective] Truth About [Topic] That Nobody Talks About"
+2. TEMPLATE HEADER (<50 chars): Viral hook for social overlays
+   - Emotion + curiosity gap that matches what the clip actually delivers
+   - Examples: "This changed how I see money forever 💰" / "Nobody was ready for this take 🔥"
 
-2. TEMPLATE HEADER (Hook-Focused):
-   - Emotion + curiosity gap
-   - Use successful patterns from proven examples:
-     * "She accidentally bet all her money and won big 💰"
-     * "You don't have to be Smart to be Successful"
-     * "Only a billionaire could have this problem 🤣"
-     * "You realise the pure happiness is in chasing your goals:"
-     * "That one friend who just texts you 'here'"
-     * "when I text '🦷🍓🦷🍓' this is what I mean:"
-
-VIRALITY SCORING:
-- 90-100: Instant shareability, meme potential
-- 80-89: High engagement, strong hook
-- 70-79: Solid content, good retention  
-- 60-69: Good viral potential
-- 50-59: Baseline threshold - still usable
-- <50: Reject
+SCORING (must be strong on BOTH axes):
+- 90-100: Instant share potential + fully standalone — the holy grail
+- 80-89: High viral energy + strong standalone — great clip
+- 70-79: Good engagement + clear standalone message — solid clip
+- 60-69: Decent viral potential + mostly standalone — usable
+- <60: Reject — either too confusing or too boring
 
 📤 DELIVER:
-Return ONLY this JSON array format:
+Return ONLY this JSON array:
 
 [
   {
     "startTime": 45.2,
     "endTime": 67.8,
     "duration": 22.6,
-    "title": "SEO-optimized descriptive title",
-    "templateHeader": "Punchy viral social media hook",
-    "reason": "Specific viral trigger explanation",
+    "title": "SEO title summarizing the clip's standalone viral moment",
+    "templateHeader": "Punchy hook that works without full video context",
+    "reason": "Why this is both viral AND standalone",
     "viralityScore": 85,
     "engagementType": "reaction|educational|funny|dramatic|relatable",
-    "hasSetup": true,
-    "hasPayoff": true,
-    "contentTags": ["emotion", "surprise", "quotable"]
+    "standaloneRating": "full|high|moderate",
+    "contentTags": ["self-contained", "emotional", "shareable"]
   }
 ]
 
 <<CONSTRAINTS>>
-- viralityScore ≥ 50 minimum (lowered threshold for more clips)
-- Target: AT LEAST 10 clips when possible (prioritize quantity + quality)
-- Maximum ${maxClips} clips total
+- viralityScore ≥ 60 minimum
+- Target: up to ${maxClips} clips — but only include clips that are BOTH viral and standalone
+- 5 great clips that go viral > 10 mediocre clips nobody shares
 - Timestamps within transcription bounds
-- Complete context - don't cut mid-thought or mid-story
-- Include setup + payoff in each clip
-- CRITICAL: ALL clips must be ${minClipDuration}-${maxClipDuration} seconds
-- If viral moment is short, EXPAND the timeframe by adding context before/after
+- ALL clips must be ${minClipDuration}-${maxClipDuration} seconds
 - JSON format only, no explanations outside array
-
-EXAMPLE: If viral moment is at 102-108s (6s), expand to 95-125s (30s) with context
+- If no moments are both viral AND standalone, return fewer clips — never force it
 `;
 
     // Call DeepSeek API
@@ -214,8 +214,8 @@ EXAMPLE: If viral moment is at 102-108s (6s), expand to 95-125s (30s) with conte
           return false;
         }
 
-        // Validate virality score (lowered to 50 for more clips)
-        if (clip.viralityScore < 50) {
+        // Validate virality score (standalone quality threshold)
+        if (clip.viralityScore < 60) {
           console.warn(`❌ [DEEPSEEK] Skipping clip "${clip.title}": virality score too low (${clip.viralityScore}/100)`);
           return false;
         }
@@ -460,88 +460,90 @@ async function analyzeChunkWithDeepSeek(chunk, options, chunkIndex, totalChunks)
   // Create chunk-specific analysis prompt
   const analysisPrompt = `
 <<SYSTEM>>
-You are CLIPMASTER-AI: Elite viral content strategist analyzing CHUNK ${chunkIndex + 1} of ${totalChunks} from a longer video.
+You are CLIPMASTER-AI: Elite viral content strategist. You find moments that are BOTH viral AND standalone — clips that explode on social media without needing context from the full video.
+
+You are analyzing CHUNK ${chunkIndex + 1} of ${totalChunks} from a longer video.
 
 <<OBJECTIVE>>
-Find viral clip opportunities in this ${chunk.duration.toFixed(1)}-second segment (${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s).
-Generate TWO text layers per clip:
-- TITLE: SEO-optimized, descriptive (50-80 chars)
-- TEMPLATE HEADER: Viral hook for social overlays (<50 chars)
+Find moments that hit BOTH criteria:
+1. VIRAL — has emotional punch, shareability, hook potential
+2. STANDALONE — makes complete sense to someone who has NEVER seen the full video
 
 VIDEO CONTEXT:
 - Title: "${videoTitle}"
 - Type: ${videoType}
 - Chunk: ${chunkIndex + 1}/${totalChunks}
-- Chunk Duration: ${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s
+- Chunk Timeframe: ${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s
 - Language: ${options.language || 'auto-detected'}
 
 TRANSCRIPTION SEGMENT:
 ${chunk.segmentsText}
 
-<<4-D METHODOLOGY>>
+<<VIRAL TRIGGERS — What makes people share>>
+🔥 Emotional explosions (shock, rage, joy, disbelief)
+🔥 Contradictions/plot twists ("But then..." moments)
+🔥 Universal relatability (everyone's experienced this)
+🔥 Quotable wisdom or controversial hot takes
+🔥 "Did they just say that?!" moments
+🔥 Educational breakthroughs / humor / inspirational peaks
 
-🔍 DECONSTRUCT:
-Analyze this chunk for:
-- Emotional peaks: surprise, shock, laughter, anger, revelation
-- Complete thought arcs within this timeframe
-- Speaking patterns: emphasis, pauses, voice changes (implied)
-- Context clues: implied actions, reactions, visual moments
+<<STANDALONE TEST — EVERY VIRAL MOMENT MUST ALSO PASS THIS>>
+Ask: "If a stranger sees this with ZERO context, would they understand it and feel the impact?"
+If NO → SKIP, no matter how viral it feels.
 
-🎯 DIAGNOSE (Viral Triggers):
-HIGH-PRIORITY MOMENTS:
-✅ Emotional explosions (shock, rage, joy, disbelief)
-✅ Contradictions/plot twists ("But then..." moments)
-✅ Universal relatability (everyone's experienced this)
-✅ Quotable wisdom/controversial takes
-✅ "Did they just say that?!" moments
-✅ Educational breakthroughs (lightbulb moments)
+ALWAYS SKIP (viral but NOT standalone):
+❌ Reactions to something that happened earlier — viewer won't know the trigger
+❌ Punchlines depending on setup from outside the clip
+❌ "So that's why..." conclusions without the premise
+❌ References to earlier discussion / pronouns without clear referents
 
-⚙️ DEVELOP (Clip Creation):
-TIMING RULES:
-- ${minClipDuration}-${maxClipDuration} seconds only
-- Use EXACT timestamps from transcription
-- Include complete thoughts and context
-- Natural sentence boundaries
+THE SWEET SPOT — Viral AND Standalone:
+✅ Self-contained stories with setup, tension, AND payoff in the clip
+✅ Hot takes that need no backstory and trigger reactions
+✅ Funny anecdotes with setup AND punchline within the clip
+✅ Shocking revelations that are self-explanatory
+✅ Quotable lines with enough context to land
 
-TEXT CREATION:
-1. TITLE (SEO-Focused): Keywords + emotion + specificity
-2. TEMPLATE HEADER (Hook-Focused): Emotion + curiosity gap
+<<CLIP CREATION RULES>>
+- Find where the SELF-CONTAINED THOUGHT begins and ends
+- Include enough setup so the viral moment LANDS for a new viewer
+- ${minClipDuration}-${maxClipDuration} seconds per clip
+- Natural sentence boundaries — never cut mid-sentence
+- TITLE (50-80 chars): SEO-optimized — keywords + emotion + specificity
+- TEMPLATE HEADER (<50 chars): Viral hook that works without full video context
 
-VIRALITY SCORING:
-- 90-100: Instant shareability, meme potential
-- 80-89: High engagement, strong hook
-- 70-79: Solid content, good retention  
-- 60-69: Good viral potential
-- 50-59: Baseline threshold
+SCORING (must be strong on BOTH axes):
+- 90-100: Instant share + fully standalone — the holy grail
+- 80-89: High viral energy + strong standalone
+- 70-79: Good engagement + clear standalone message
+- 60-69: Decent viral + mostly standalone
+- <60: Reject
 
 📤 DELIVER:
-Return ONLY this JSON array format:
+Return ONLY this JSON array:
 
 [
   {
     "startTime": 1245.2,
     "endTime": 1267.8,
     "duration": 22.6,
-    "title": "SEO-optimized descriptive title",
-    "templateHeader": "Punchy viral social media hook",
-    "reason": "Specific viral trigger explanation",
+    "title": "SEO title summarizing the standalone viral moment",
+    "templateHeader": "Punchy hook that works without full video context",
+    "reason": "Why this is both viral AND standalone",
     "viralityScore": 85,
     "engagementType": "reaction|educational|funny|dramatic|relatable",
-    "hasSetup": true,
-    "hasPayoff": true,
-    "contentTags": ["emotion", "surprise", "quotable"],
+    "standaloneRating": "full|high|moderate",
+    "contentTags": ["self-contained", "emotional", "shareable"],
     "chunkIndex": ${chunkIndex}
   }
 ]
 
 <<CONSTRAINTS>>
-- viralityScore ≥ 50 minimum
-- Maximum ${Math.min(maxClips, 5)} clips per chunk (quality over quantity)
-- Timestamps must be within chunk bounds (${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(1)}s)
-- Complete context - don't cut mid-thought
+- viralityScore ≥ 60 minimum
+- Maximum ${Math.min(maxClips, 5)} clips per chunk
+- Timestamps within chunk bounds (${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(1)}s)
 - JSON format only, no explanations outside array
-
-Focus on finding the BEST viral moments in this specific chunk.
+- If no moments are both viral AND standalone in this chunk, return empty array
 `;
 
   try {
@@ -578,8 +580,8 @@ Focus on finding the BEST viral moments in this specific chunk.
         // Ensure clip is within chunk bounds
         if (clip.startTime < chunk.startTime || clip.endTime > chunk.endTime) return false;
         
-        if (clip.viralityScore < 50) return false;
-        
+        if (clip.viralityScore < 60) return false;
+
         return true;
       })
       .map(clip => ({
