@@ -3,7 +3,7 @@
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { MoreVertical, Trash2, Save, BookmarkMinus } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function ProcessingView({
   videoUrl,
@@ -26,10 +26,22 @@ export default function ProcessingView({
   const [showMenu, setShowMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(isSaved);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     setSaved(isSaved);
   }, [isSaved]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
 
   const handleSave = async (e) => {
     e.stopPropagation();
@@ -48,11 +60,14 @@ export default function ProcessingView({
   const handleUnsave = async (e) => {
     e.stopPropagation();
     setShowMenu(false);
+    setIsSaving(true);
     try {
       await onUnsave?.(projectId);
       setSaved(false);
     } catch {
       // failed
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -78,7 +93,7 @@ export default function ProcessingView({
     >
       {/* Three-dot menu */}
       <div className="absolute bottom-3 right-3 z-10">
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
             onClick={(e) => {
               e.stopPropagation();
