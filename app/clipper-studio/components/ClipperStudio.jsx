@@ -538,10 +538,10 @@ export default function ClipperStudio() {
   }, []);
 
   const handleDeleteProject = (projectId) => {
-    // Find project to get title for dialog
-    const project = activeProjects.find(p => p.id === projectId);
+    // Find project to get title for dialog (search allProjects which includes server data)
+    const project = allProjects.find(p => p.id === projectId);
     if (!project) {
-      console.warn('⚠️ [DELETE] Project not found in local state:', projectId);
+      console.warn('⚠️ [DELETE] Project not found:', projectId);
       return;
     }
 
@@ -979,9 +979,9 @@ export default function ClipperStudio() {
                   }
                   return true; // Show all projects for 'all' tab
                 }).sort((a, b) => {
-                  // Sort by most recent activity (updatedAt first, then createdAt)
-                  const aTime = new Date(a.updatedAt || a.createdAt).getTime();
-                  const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+                  // Sort by creation date so order stays stable when saving/unsaving
+                  const aTime = new Date(a.createdAt).getTime();
+                  const bTime = new Date(b.createdAt).getTime();
                   return bTime - aTime; // Newest first
                 });
 

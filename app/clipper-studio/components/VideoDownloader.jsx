@@ -24,6 +24,18 @@ export default function ProcessingView({
   processedClips = 0, // New prop for processed clips count
 }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    setIsSaving(true);
+    try {
+      await onSave?.(projectId);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Create fallback thumbnail if none provided
   const getFallbackThumbnail = () => {
@@ -51,11 +63,19 @@ export default function ProcessingView({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setShowMenu(!showMenu);
+              if (!isSaving) setShowMenu(!showMenu);
             }}
-            className="p-2 hover:bg-white/90 dark:hover:bg-gray-800/90 rounded-full transition-colors bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50 shadow-sm"
+            className={`p-2 rounded-full transition-all duration-300 shadow-sm ${
+              isSaving
+                ? 'border-2 border-transparent animate-spin-border bg-white/80 dark:bg-gray-800/80'
+                : isSaved
+                  ? 'bg-green-500/90 border border-green-400/50 hover:bg-green-500'
+                  : 'bg-white/80 dark:bg-gray-800/80 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/90 dark:hover:bg-gray-800/90'
+            }`}
           >
-            <MoreVertical className="w-4 h-4 text-gray-700 dark:text-gray-300" />
+            <MoreVertical className={`w-4 h-4 ${
+              isSaved ? 'text-white' : 'text-gray-700 dark:text-gray-300'
+            }`} />
           </button>
           
           {/* Dropdown Menu */}
@@ -75,11 +95,7 @@ export default function ProcessingView({
                 </button>
               ) : (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    onSave?.(projectId);
-                  }}
+                  onClick={handleSave}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors rounded-t-lg"
                 >
                   <Save className="w-4 h-4" />
@@ -248,6 +264,21 @@ export default function ProcessingView({
         </h3>
         <p className="text-xs text-muted-foreground">ClipBasic</p>
       </div>
+
+      {/* Spinning border animation for save */}
+      <style jsx>{`
+        @keyframes spinBorder {
+          0% { border-color: #10b981 transparent transparent transparent; }
+          25% { border-color: transparent #10b981 transparent transparent; }
+          50% { border-color: transparent transparent #10b981 transparent; }
+          75% { border-color: transparent transparent transparent #10b981; }
+          100% { border-color: #10b981 transparent transparent transparent; }
+        }
+        .animate-spin-border {
+          animation: spinBorder 0.8s linear infinite;
+          border-width: 2px;
+        }
+      `}</style>
     </Card>
   );
 }
