@@ -117,4 +117,18 @@
   .animate-fadeIn {
     animation: fadeIn 0.3s ease-out;
   }
+
+  @keyframes spinBorder {
+    0% { border-color: #10b981 transparent transparent transparent; }
+    25% { border-color: transparent #10b981 transparent transparent; }
+    50% { border-color: transparent transparent #10b981 transparent; }
+    75% { border-color: transparent transparent transparent #10b981; }
+    100% { border-color: #10b981 transparent transparent transparent; }
+  }
+
+  .animate-spin-border {
+    animation: spinBorder 0.8s linear infinite;
+    border-width: 2px;
+    border-style: solid;
+  }
 }

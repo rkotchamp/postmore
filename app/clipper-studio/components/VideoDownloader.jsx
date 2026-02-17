@@ -3,7 +3,7 @@
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { MoreVertical, Trash2, Save, BookmarkMinus } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function ProcessingView({
   videoUrl,
@@ -25,6 +25,11 @@ export default function ProcessingView({
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(isSaved);
+
+  useEffect(() => {
+    setSaved(isSaved);
+  }, [isSaved]);
 
   const handleSave = async (e) => {
     e.stopPropagation();
@@ -32,8 +37,22 @@ export default function ProcessingView({
     setIsSaving(true);
     try {
       await onSave?.(projectId);
+      setSaved(true);
+    } catch {
+      // failed
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleUnsave = async (e) => {
+    e.stopPropagation();
+    setShowMenu(false);
+    try {
+      await onUnsave?.(projectId);
+      setSaved(false);
+    } catch {
+      // failed
     }
   };
 
@@ -65,29 +84,25 @@ export default function ProcessingView({
               e.stopPropagation();
               if (!isSaving) setShowMenu(!showMenu);
             }}
-            className={`p-2 rounded-full transition-all duration-300 shadow-sm ${
+            className={`p-2 rounded-full shadow-sm ${
               isSaving
-                ? 'border-2 border-transparent animate-spin-border bg-white/80 dark:bg-gray-800/80'
-                : isSaved
-                  ? 'bg-green-500/90 border border-green-400/50 hover:bg-green-500'
+                ? 'animate-spin-border'
+                : saved
+                  ? 'bg-green-500 hover:bg-green-600'
                   : 'bg-white/80 dark:bg-gray-800/80 border border-gray-200/50 dark:border-gray-700/50 hover:bg-white/90 dark:hover:bg-gray-800/90'
             }`}
           >
             <MoreVertical className={`w-4 h-4 ${
-              isSaved ? 'text-white' : 'text-gray-700 dark:text-gray-300'
+              saved ? 'text-white' : 'text-gray-700 dark:text-gray-300'
             }`} />
           </button>
           
           {/* Dropdown Menu */}
           {showMenu && (
             <div className="absolute right-0 bottom-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 min-w-32">
-              {isSaved ? (
+              {saved ? (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    onUnsave?.(projectId);
-                  }}
+                  onClick={handleUnsave}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors rounded-t-lg"
                 >
                   <BookmarkMinus className="w-4 h-4" />
@@ -265,20 +280,6 @@ export default function ProcessingView({
         <p className="text-xs text-muted-foreground">ClipBasic</p>
       </div>
 
-      {/* Spinning border animation for save */}
-      <style jsx>{`
-        @keyframes spinBorder {
-          0% { border-color: #10b981 transparent transparent transparent; }
-          25% { border-color: transparent #10b981 transparent transparent; }
-          50% { border-color: transparent transparent #10b981 transparent; }
-          75% { border-color: transparent transparent transparent #10b981; }
-          100% { border-color: #10b981 transparent transparent transparent; }
-        }
-        .animate-spin-border {
-          animation: spinBorder 0.8s linear infinite;
-          border-width: 2px;
-        }
-      `}</style>
     </Card>
   );
 }
