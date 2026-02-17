@@ -82,7 +82,8 @@ export default function ClipperStudio() {
     progress,
     error,
     deleteProject,
-    saveProject
+    saveProject,
+    unsaveProject
   } = useClipperMutations();
 
   // Fetch projects from server to sync with database
@@ -592,11 +593,20 @@ export default function ClipperStudio() {
   const handleSaveProject = async (projectId) => {
     try {
       await saveProject.mutateAsync(projectId);
-      
+
       // Show success message or update UI
     } catch (error) {
       console.error('❌ [SAVE] Failed to save project:', error);
       alert('Failed to save project. Please try again.');
+    }
+  };
+
+  const handleUnsaveProject = async (projectId) => {
+    try {
+      await unsaveProject.mutateAsync(projectId);
+    } catch (error) {
+      console.error('❌ [UNSAVE] Failed to unsave project:', error);
+      alert('Failed to unsave project. Please try again.');
     }
   };
 
@@ -1011,6 +1021,8 @@ export default function ClipperStudio() {
                     isClickable={hasProcessedClips}
                     onDelete={handleDeleteProject}
                     onSave={handleSaveProject}
+                    onUnsave={handleUnsaveProject}
+                    isSaved={project.saveStatus?.isSaved}
                   />
                 );
                 });

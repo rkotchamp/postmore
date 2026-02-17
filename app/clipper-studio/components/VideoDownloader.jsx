@@ -2,7 +2,7 @@
 
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
-import { MoreVertical, Trash2, Save } from "lucide-react";
+import { MoreVertical, Trash2, Save, BookmarkMinus } from "lucide-react";
 import { useState } from "react";
 
 export default function ProcessingView({
@@ -17,6 +17,8 @@ export default function ProcessingView({
   projectId, // Project ID for actions
   onDelete,
   onSave,
+  onUnsave,
+  isSaved = false,
   hasClips = false, // New prop to indicate if clips are available
   totalClips = 0, // New prop for clip count
   processedClips = 0, // New prop for processed clips count
@@ -59,17 +61,31 @@ export default function ProcessingView({
           {/* Dropdown Menu */}
           {showMenu && (
             <div className="absolute right-0 bottom-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 min-w-32">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                  onSave?.(projectId);
-                }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors rounded-t-lg"
-              >
-                <Save className="w-4 h-4" />
-                Save
-              </button>
+              {isSaved ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onUnsave?.(projectId);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors rounded-t-lg"
+                >
+                  <BookmarkMinus className="w-4 h-4" />
+                  Unsave
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onSave?.(projectId);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors rounded-t-lg"
+                >
+                  <Save className="w-4 h-4" />
+                  Save
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();

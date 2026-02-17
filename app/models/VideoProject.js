@@ -118,16 +118,16 @@ const VideoProjectSchema = new mongoose.Schema(
       error: String, // Error message if processing stage fails
     },
   },
-  { 
+  {
     timestamps: true,
-    // Add TTL index for auto-deletion of unsaved projects
-    index: { autoDeleteAt: 1 }, 
-    expireAfterSeconds: 0
   }
 );
 
 // Compound index for efficient user queries
 VideoProjectSchema.index({ userId: 1, createdAt: -1 });
+
+// TTL index for auto-deletion of unsaved projects
+VideoProjectSchema.index({ "saveStatus.autoDeleteAt": 1 }, { expireAfterSeconds: 0 });
 
 // Index for cleanup jobs
 VideoProjectSchema.index({ "saveStatus.isSaved": 1, "saveStatus.autoDeleteAt": 1 });

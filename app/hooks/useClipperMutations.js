@@ -221,6 +221,36 @@ export function useClipperMutations() {
       },
     }),
 
+    // Unsave project (re-enable auto-delete)
+    unsaveProject: useMutation({
+      mutationFn: async (projectId) => {
+        const response = await fetch(`/api/clipper-studio/projects/${projectId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            unsaveProject: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to unsave project: ${response.statusText}`);
+        }
+
+        return response.json();
+      },
+      onSuccess: (data, projectId) => {
+        queryClient.setQueryData(
+          [CLIPPER_QUERY_KEYS.project, projectId],
+          data
+        );
+
+        queryClient.invalidateQueries({ queryKey: [CLIPPER_QUERY_KEYS.projects] });
+      },
+    }),
+
     // Start video transcription
     startTranscription: useMutation({
       mutationFn: async ({ projectId, options = {} }) => {

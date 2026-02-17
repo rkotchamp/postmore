@@ -87,6 +87,7 @@ export async function PUT(request, { params }) {
       transcription,
       errorMessage,
       saveProject,
+      unsaveProject,
       analytics
     } = body;
 
@@ -134,6 +135,13 @@ export async function PUT(request, { params }) {
       updates['saveStatus.isSaved'] = true;
       updates['saveStatus.savedAt'] = new Date();
       updates['saveStatus.autoDeleteAt'] = null; // Remove auto-delete
+    }
+
+    // Handle unsave project action
+    if (unsaveProject === true) {
+      updates['saveStatus.isSaved'] = false;
+      updates['saveStatus.savedAt'] = null;
+      updates['saveStatus.autoDeleteAt'] = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Re-enable 7-day auto-delete
     }
 
     // Update the project
