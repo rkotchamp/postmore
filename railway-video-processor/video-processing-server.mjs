@@ -1543,7 +1543,7 @@ function validateAndCleanClips(rawClips, options) {
       const duration = clip.endTime - clip.startTime;
       if (duration < minClipDuration || duration > maxClipDuration) return false;
       if (clip.startTime < 0 || clip.endTime > videoDuration) return false;
-      if (clip.viralityScore < 50) return false;
+      if (!Number.isFinite(Number(clip.viralityScore)) || Number(clip.viralityScore) < 50) return false;
       return true;
     })
     .map(clip => ({
@@ -1551,7 +1551,7 @@ function validateAndCleanClips(rawClips, options) {
       duration: parseFloat((clip.endTime - clip.startTime).toFixed(1)),
       startTime: parseFloat(clip.startTime.toFixed(1)),
       endTime: parseFloat(clip.endTime.toFixed(1)),
-      viralityScore: Math.min(100, Math.max(0, clip.viralityScore)),
+      viralityScore: Math.min(100, Math.max(0, Number(clip.viralityScore) || 0)),
       analyzedAt: new Date().toISOString(), source: 'deepseek-v3'
     }))
     .sort((a, b) => b.viralityScore - a.viralityScore);
@@ -1654,7 +1654,7 @@ async function analyzeChunkWithDeepSeek(chunk, options, chunkIndex, totalChunks)
         const dur = clip.endTime - clip.startTime;
         if (dur < (options.minClipDuration || 15) || dur > (options.maxClipDuration || 60)) return false;
         if (clip.startTime < chunk.startTime || clip.endTime > chunk.endTime) return false;
-        if (clip.viralityScore < 50) return false;
+        if (!Number.isFinite(Number(clip.viralityScore)) || Number(clip.viralityScore) < 50) return false;
         return true;
       })
       .map(clip => ({
@@ -2056,7 +2056,7 @@ app.post('/process-clips-pipeline', async (req, res) => {
       title: clip.title || `${metadata.title} - Clip ${index + 1}`,
       templateHeader: clip.templateHeader || clip.title,
       startTime: clip.startTime, endTime: clip.endTime, duration: clip.duration,
-      viralityScore: clip.viralityScore,
+      viralityScore: Number(clip.viralityScore) || 0,
       status: 'ready', templateStatus: 'ready',
       aiAnalysis: {
         source: 'deepseek-v3', reason: clip.reason,
