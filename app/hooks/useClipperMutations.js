@@ -216,7 +216,23 @@ export function useClipperMutations() {
           data
         );
 
-        // Invalidate projects list to refresh save status
+        // Optimistically update the projects list cache so UI updates immediately
+        queryClient.setQueriesData(
+          { queryKey: [CLIPPER_QUERY_KEYS.projects] },
+          (oldData) => {
+            if (!oldData?.projects) return oldData;
+            return {
+              ...oldData,
+              projects: oldData.projects.map((p) =>
+                p.id === projectId || p._id === projectId
+                  ? { ...p, saveStatus: { ...p.saveStatus, isSaved: true, savedAt: new Date().toISOString(), autoDeleteAt: null } }
+                  : p
+              ),
+            };
+          }
+        );
+
+        // Also refetch from server to stay in sync
         queryClient.invalidateQueries({ queryKey: [CLIPPER_QUERY_KEYS.projects] });
       },
     }),
@@ -245,6 +261,22 @@ export function useClipperMutations() {
         queryClient.setQueryData(
           [CLIPPER_QUERY_KEYS.project, projectId],
           data
+        );
+
+        // Optimistically update the projects list cache
+        queryClient.setQueriesData(
+          { queryKey: [CLIPPER_QUERY_KEYS.projects] },
+          (oldData) => {
+            if (!oldData?.projects) return oldData;
+            return {
+              ...oldData,
+              projects: oldData.projects.map((p) =>
+                p.id === projectId || p._id === projectId
+                  ? { ...p, saveStatus: { ...p.saveStatus, isSaved: false, savedAt: null, autoDeleteAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() } }
+                  : p
+              ),
+            };
+          }
         );
 
         queryClient.invalidateQueries({ queryKey: [CLIPPER_QUERY_KEYS.projects] });

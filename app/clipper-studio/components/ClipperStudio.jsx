@@ -1022,7 +1022,7 @@ export default function ClipperStudio() {
                     onDelete={handleDeleteProject}
                     onSave={handleSaveProject}
                     onUnsave={handleUnsaveProject}
-                    isSaved={project.saveStatus?.isSaved}
+                    isSaved={project.saveStatus?.isSaved === true}
                   />
                 );
                 });
