@@ -85,6 +85,8 @@ ALWAYS SKIP (viral but NOT standalone):
 ❌ References to "what I said earlier" or "like we discussed"
 ❌ Pronouns without clear referents ("He did THIS thing" — who? what?)
 ❌ Arguments where you need the other side's point
+❌ Generic intros — "Hey guys welcome back", "What's up everyone", "Before we start" — these are filler, not content. NEVER start a clip with a generic intro that doesn't immediately establish the topic
+❌ Intro segments where the speaker is just greeting, thanking subscribers, or explaining what the video will be about — a clip of someone describing what they're GOING to talk about is not a clip worth watching
 
 THE SWEET SPOT — Viral AND Standalone (prioritize these):
 ✅ Self-contained stories with setup, tension, AND payoff all in the clip
@@ -496,6 +498,8 @@ ALWAYS SKIP (viral but NOT standalone):
 ❌ Punchlines depending on setup from outside the clip
 ❌ "So that's why..." conclusions without the premise
 ❌ References to earlier discussion / pronouns without clear referents
+❌ Generic intros — "Hey guys welcome back", "What's up everyone" — filler, not content. NEVER start a clip with a greeting that doesn't immediately establish the topic
+❌ Intro segments of someone greeting, thanking subscribers, or previewing what the video will cover — a clip of someone describing what they're GOING to talk about is not worth watching
 
 THE SWEET SPOT — Viral AND Standalone:
 ✅ Self-contained stories with setup, tension, AND payoff in the clip
