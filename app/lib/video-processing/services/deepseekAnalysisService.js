@@ -87,6 +87,8 @@ ALWAYS SKIP (viral but NOT standalone):
 ❌ Arguments where you need the other side's point
 ❌ Generic intros — "Hey guys welcome back", "What's up everyone", "Before we start" — these are filler, not content. NEVER start a clip with a generic intro that doesn't immediately establish the topic
 ❌ Intro segments where the speaker is just greeting, thanking subscribers, or explaining what the video will be about — a clip of someone describing what they're GOING to talk about is not a clip worth watching
+❌ Outros — "Thanks for watching", "Don't forget to like and subscribe", "See you in the next one" — this is channel housekeeping, not content
+❌ Mid-stream sponsor reads / ad segments — "This video is sponsored by...", "Before we continue, let me tell you about...", "Use code X for Y% off" — skip entirely, never include any part of a sponsorship or ad read in a clip
 
 THE SWEET SPOT — Viral AND Standalone (prioritize these):
 ✅ Self-contained stories with setup, tension, AND payoff all in the clip
@@ -500,6 +502,8 @@ ALWAYS SKIP (viral but NOT standalone):
 ❌ References to earlier discussion / pronouns without clear referents
 ❌ Generic intros — "Hey guys welcome back", "What's up everyone" — filler, not content. NEVER start a clip with a greeting that doesn't immediately establish the topic
 ❌ Intro segments of someone greeting, thanking subscribers, or previewing what the video will cover — a clip of someone describing what they're GOING to talk about is not worth watching
+❌ Outros — "Thanks for watching", "Like and subscribe", "See you next time" — channel housekeeping, not content
+❌ Mid-stream sponsor reads / ad segments — "This video is sponsored by...", "Use code X for Y% off" — skip entirely
 
 THE SWEET SPOT — Viral AND Standalone:
 ✅ Self-contained stories with setup, tension, AND payoff in the clip
