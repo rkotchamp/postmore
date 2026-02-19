@@ -4,6 +4,60 @@
  * for intelligent clip creation with dynamic durations (15-60s)
  */
 
+// ─── Shared prompt rules (used by both single & MapReduce analysis) ───
+const CLIPMASTER_SYSTEM_MESSAGE = `You are CLIPMASTER-AI: Elite viral content strategist with 10+ years creating billion-view content across TikTok, Instagram, YouTube. You find moments that are BOTH viral AND standalone — clips that explode on social media without needing context from the full video. You ALWAYS return valid JSON arrays. No explanations outside the JSON.`;
+
+const VIRAL_TRIGGERS = `<<VIRAL TRIGGERS — What makes people share>>
+🔥 Emotional explosions (shock, rage, joy, disbelief)
+🔥 Contradictions/plot twists ("But then..." moments)
+🔥 Universal relatability (everyone's experienced this)
+🔥 Quotable wisdom or controversial hot takes
+🔥 "Did they just say that?!" moments
+🔥 Educational breakthroughs (lightbulb moments)
+🔥 Humor — punchlines, absurd situations, perfect timing
+🔥 Inspirational or motivational peaks`;
+
+const STANDALONE_TEST = `<<STANDALONE TEST — EVERY VIRAL MOMENT MUST ALSO PASS THIS>>
+Before including ANY clip, ask: "If a stranger sees this with ZERO context, would they:"
+1. Understand what's being discussed without confusion?
+2. Get the point, joke, lesson, or story without prior context?
+3. Feel the emotional impact without knowing what came before?
+
+If ANY answer is NO → SKIP, no matter how viral the moment feels.`;
+
+const SKIP_RULES = `ALWAYS SKIP (viral but NOT standalone):
+❌ Epic reactions to something that happened earlier — viewer won't know what triggered it
+❌ Punchlines that depend on setup from minutes ago
+❌ "So that's why..." conclusions without the premise
+❌ References to "what I said earlier" or "like we discussed"
+❌ Pronouns without clear referents ("He did THIS thing" — who? what?)
+❌ Arguments where you need the other side's point
+❌ Generic intros — "Hey guys welcome back", "What's up everyone", "Before we start" — these are filler, not content. NEVER start a clip with a generic intro that doesn't immediately establish the topic
+❌ Intro segments where the speaker is just greeting, thanking subscribers, or explaining what the video will be about — a clip of someone describing what they're GOING to talk about is not a clip worth watching
+❌ Outros — "Thanks for watching", "Don't forget to like and subscribe", "See you in the next one" — this is channel housekeeping, not content
+❌ Mid-stream sponsor reads / ad segments — "This video is sponsored by...", "Before we continue, let me tell you about...", "Use code X for Y% off" — skip entirely, never include any part of a sponsorship or ad read in a clip
+❌ Clips where someone is reading/quoting someone else's content at length — the original source is what's viral, not someone reacting to it by reading it aloud`;
+
+const SWEET_SPOT_RULES = `THE SWEET SPOT — Viral AND Standalone (prioritize these):
+✅ Self-contained stories with setup, tension, AND payoff all in the clip
+✅ Hot takes or opinions that need no backstory and trigger reactions
+✅ Funny anecdotes where the speaker sets up AND delivers the punchline
+✅ Emotional moments where the WHY is clear from the clip itself
+✅ Shocking revelations that are self-explanatory
+✅ Standalone advice that's genuinely surprising or counter-intuitive
+✅ Quotable one-liners with enough surrounding context to land`;
+
+const SCORING_RULES = `SCORING (must be strong on BOTH axes):
+- 90-100: Instant share potential + fully standalone — the holy grail
+- 80-89: High viral energy + strong standalone — great clip
+- 70-79: Good engagement + clear standalone message — solid clip
+- 60-69: Decent viral potential + mostly standalone — usable
+- <60: Reject — either too confusing or too boring`;
+
+// ─── Retry configuration ───
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1000;
+
 /**
  * Analyze transcription with DeepSeek to find the best viral moments
  * @param {Object} transcription - Whisper transcription result
@@ -36,11 +90,8 @@ export async function analyzeContentWithDeepSeek(transcription, options = {}) {
       .map(segment => `[${segment.start.toFixed(1)}s-${segment.end.toFixed(1)}s]: ${segment.text}`)
       .join('\n');
 
-    // Create intelligent analysis prompt using 4-D Methodology
+    // Create intelligent analysis prompt using shared rules
     const analysisPrompt = `
-<<SYSTEM>>
-You are CLIPMASTER-AI: Elite viral content strategist with 10+ years creating billion-view content across TikTok, Instagram, YouTube. You find moments that are BOTH viral AND standalone — clips that explode on social media without needing context from the full video.
-
 <<OBJECTIVE>>
 Find moments that hit BOTH criteria:
 1. VIRAL — has emotional punch, shareability, hook potential
@@ -59,45 +110,13 @@ VIDEO CONTEXT:
 TRANSCRIPTION:
 ${segmentsText}
 
-<<VIRAL TRIGGERS — What makes people share>>
-Hunt for these moments:
-🔥 Emotional explosions (shock, rage, joy, disbelief)
-🔥 Contradictions/plot twists ("But then..." moments)
-🔥 Universal relatability (everyone's experienced this)
-🔥 Quotable wisdom or controversial hot takes
-🔥 "Did they just say that?!" moments
-🔥 Educational breakthroughs (lightbulb moments)
-🔥 Humor — punchlines, absurd situations, perfect timing
-🔥 Inspirational or motivational peaks
+${VIRAL_TRIGGERS}
 
-<<STANDALONE TEST — EVERY VIRAL MOMENT MUST ALSO PASS THIS>>
-Before including ANY clip, ask: "If a stranger sees this with ZERO context, would they:"
-1. Understand what's being discussed without confusion?
-2. Get the point, joke, lesson, or story without prior context?
-3. Feel the emotional impact without knowing what came before?
+${STANDALONE_TEST}
 
-If ANY answer is NO → SKIP, no matter how viral the moment feels.
+${SKIP_RULES}
 
-ALWAYS SKIP (viral but NOT standalone):
-❌ Epic reactions to something that happened earlier — viewer won't know what triggered it
-❌ Punchlines that depend on setup from minutes ago
-❌ "So that's why..." conclusions without the premise
-❌ References to "what I said earlier" or "like we discussed"
-❌ Pronouns without clear referents ("He did THIS thing" — who? what?)
-❌ Arguments where you need the other side's point
-❌ Generic intros — "Hey guys welcome back", "What's up everyone", "Before we start" — these are filler, not content. NEVER start a clip with a generic intro that doesn't immediately establish the topic
-❌ Intro segments where the speaker is just greeting, thanking subscribers, or explaining what the video will be about — a clip of someone describing what they're GOING to talk about is not a clip worth watching
-❌ Outros — "Thanks for watching", "Don't forget to like and subscribe", "See you in the next one" — this is channel housekeeping, not content
-❌ Mid-stream sponsor reads / ad segments — "This video is sponsored by...", "Before we continue, let me tell you about...", "Use code X for Y% off" — skip entirely, never include any part of a sponsorship or ad read in a clip
-
-THE SWEET SPOT — Viral AND Standalone (prioritize these):
-✅ Self-contained stories with setup, tension, AND payoff all in the clip
-✅ Hot takes or opinions that need no backstory and trigger reactions
-✅ Funny anecdotes where the speaker sets up AND delivers the punchline
-✅ Emotional moments where the WHY is clear from the clip itself
-✅ Shocking revelations that are self-explanatory
-✅ Standalone advice that's genuinely surprising or counter-intuitive
-✅ Quotable one-liners with enough surrounding context to land
+${SWEET_SPOT_RULES}
 
 <<CLIP CREATION RULES>>
 
@@ -117,12 +136,7 @@ TEXT CREATION:
    - Emotion + curiosity gap that matches what the clip actually delivers
    - Examples: "This changed how I see money forever 💰" / "Nobody was ready for this take 🔥"
 
-SCORING (must be strong on BOTH axes):
-- 90-100: Instant share potential + fully standalone — the holy grail
-- 80-89: High viral energy + strong standalone — great clip
-- 70-79: Good engagement + clear standalone message — solid clip
-- 60-69: Decent viral potential + mostly standalone — usable
-- <60: Reject — either too confusing or too boring
+${SCORING_RULES}
 
 📤 DELIVER:
 Return ONLY this JSON array:
@@ -138,12 +152,14 @@ Return ONLY this JSON array:
     "viralityScore": 85,
     "engagementType": "reaction|educational|funny|dramatic|relatable",
     "standaloneRating": "full|high|moderate",
+    "transcriptExcerpt": "Brief verbatim quote from the transcript that captures the key moment",
     "contentTags": ["self-contained", "emotional", "shareable"]
   }
 ]
 
 <<CONSTRAINTS>>
 - viralityScore ≥ 60 minimum
+- standaloneRating must be "full" or "high" — reject "moderate" clips
 - Target: up to ${maxClips} clips — but only include clips that are BOTH viral and standalone
 - 5 great clips that go viral > 10 mediocre clips nobody shares
 - Timestamps within transcription bounds
@@ -224,7 +240,13 @@ Return ONLY this JSON array:
           return false;
         }
 
-        console.log(`✅ [DEEPSEEK] Valid clip: "${clip.title}" (${duration}s, score: ${clip.viralityScore}/100)`);
+        // Validate standalone rating — reject "moderate" clips
+        if (clip.standaloneRating && clip.standaloneRating === 'moderate') {
+          console.warn(`❌ [DEEPSEEK] Skipping clip "${clip.title}": standalone rating too low (${clip.standaloneRating})`);
+          return false;
+        }
+
+        console.log(`✅ [DEEPSEEK] Valid clip: "${clip.title}" (${duration}s, score: ${clip.viralityScore}/100, standalone: ${clip.standaloneRating || 'n/a'})`);
         return true;
       })
       .map(clip => ({
@@ -275,58 +297,82 @@ Return ONLY this JSON array:
 }
 
 /**
- * Call DeepSeek API
+ * Call DeepSeek API with retry logic
  * @param {string} prompt - Analysis prompt
+ * @param {number} retries - Number of retries remaining
  * @returns {Promise<Object>} - DeepSeek response
  */
-async function callDeepSeekAPI(prompt) {
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert content curator specializing in viral short-form video content. You understand what makes content engaging and shareable across platforms like TikTok, Instagram Reels, and YouTube Shorts.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 4000,
-      temperature: 0.7, // Slightly creative for engaging titles
-      stream: false
-    }),
-  });
+async function callDeepSeekAPI(prompt, retries = MAX_RETRIES) {
+  try {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: CLIPMASTER_SYSTEM_MESSAGE
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 4000,
+        temperature: 0.3, // Low temperature for reliable JSON + precise timestamps
+        stream: false
+      }),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    if (response.status === 401) {
-      throw new Error('DeepSeek API key invalid or missing. Check your DEEPSEEK_API_KEY environment variable.');
-    } else if (response.status === 429) {
-      throw new Error('DeepSeek rate limit exceeded. Please wait and try again.');
-    } else if (response.status === 400) {
-      throw new Error(`DeepSeek API error: ${errorData.error?.message || 'Invalid request'}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        throw new Error('DeepSeek API key invalid or missing. Check your DEEPSEEK_API_KEY environment variable.');
+      } else if (response.status === 429 && retries > 0) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, MAX_RETRIES - retries);
+        console.warn(`⏳ [DEEPSEEK] Rate limited. Retrying in ${delay}ms... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return callDeepSeekAPI(prompt, retries - 1);
+      } else if (response.status === 400) {
+        throw new Error(`DeepSeek API error: ${errorData.error?.message || 'Invalid request'}`);
+      }
+      
+      // Retry on 5xx server errors
+      if (response.status >= 500 && retries > 0) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, MAX_RETRIES - retries);
+        console.warn(`⏳ [DEEPSEEK] Server error ${response.status}. Retrying in ${delay}ms... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return callDeepSeekAPI(prompt, retries - 1);
+      }
+      
+      throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
     }
-    throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
-  }
 
-  const data = await response.json();
-  
-  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-    throw new Error('Invalid response format from DeepSeek API');
-  }
+    const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response format from DeepSeek API');
+    }
 
-  return {
-    content: data.choices[0].message.content,
-    usage: data.usage,
-    model: data.model
-  };
+    return {
+      content: data.choices[0].message.content,
+      usage: data.usage,
+      model: data.model
+    };
+  } catch (error) {
+    // Retry on network errors (fetch failures)
+    if (error.name === 'TypeError' && retries > 0) {
+      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, MAX_RETRIES - retries);
+      console.warn(`⏳ [DEEPSEEK] Network error. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callDeepSeekAPI(prompt, retries - 1);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -461,11 +507,8 @@ async function analyzeChunkWithDeepSeek(chunk, options, chunkIndex, totalChunks)
 
   console.log(`🧠 [DEEPSEEK-MAP] Analyzing chunk ${chunkIndex + 1}/${totalChunks} (${chunk.startTime.toFixed(1)}s-${chunk.endTime.toFixed(1)}s)`);
 
-  // Create chunk-specific analysis prompt
+  // Create chunk-specific analysis prompt using shared rules
   const analysisPrompt = `
-<<SYSTEM>>
-You are CLIPMASTER-AI: Elite viral content strategist. You find moments that are BOTH viral AND standalone — clips that explode on social media without needing context from the full video.
-
 You are analyzing CHUNK ${chunkIndex + 1} of ${totalChunks} from a longer video.
 
 <<OBJECTIVE>>
@@ -483,34 +526,13 @@ VIDEO CONTEXT:
 TRANSCRIPTION SEGMENT:
 ${chunk.segmentsText}
 
-<<VIRAL TRIGGERS — What makes people share>>
-🔥 Emotional explosions (shock, rage, joy, disbelief)
-🔥 Contradictions/plot twists ("But then..." moments)
-🔥 Universal relatability (everyone's experienced this)
-🔥 Quotable wisdom or controversial hot takes
-🔥 "Did they just say that?!" moments
-🔥 Educational breakthroughs / humor / inspirational peaks
+${VIRAL_TRIGGERS}
 
-<<STANDALONE TEST — EVERY VIRAL MOMENT MUST ALSO PASS THIS>>
-Ask: "If a stranger sees this with ZERO context, would they understand it and feel the impact?"
-If NO → SKIP, no matter how viral it feels.
+${STANDALONE_TEST}
 
-ALWAYS SKIP (viral but NOT standalone):
-❌ Reactions to something that happened earlier — viewer won't know the trigger
-❌ Punchlines depending on setup from outside the clip
-❌ "So that's why..." conclusions without the premise
-❌ References to earlier discussion / pronouns without clear referents
-❌ Generic intros — "Hey guys welcome back", "What's up everyone" — filler, not content. NEVER start a clip with a greeting that doesn't immediately establish the topic
-❌ Intro segments of someone greeting, thanking subscribers, or previewing what the video will cover — a clip of someone describing what they're GOING to talk about is not worth watching
-❌ Outros — "Thanks for watching", "Like and subscribe", "See you next time" — channel housekeeping, not content
-❌ Mid-stream sponsor reads / ad segments — "This video is sponsored by...", "Use code X for Y% off" — skip entirely
+${SKIP_RULES}
 
-THE SWEET SPOT — Viral AND Standalone:
-✅ Self-contained stories with setup, tension, AND payoff in the clip
-✅ Hot takes that need no backstory and trigger reactions
-✅ Funny anecdotes with setup AND punchline within the clip
-✅ Shocking revelations that are self-explanatory
-✅ Quotable lines with enough context to land
+${SWEET_SPOT_RULES}
 
 <<CLIP CREATION RULES>>
 - Find where the SELF-CONTAINED THOUGHT begins and ends
@@ -520,12 +542,7 @@ THE SWEET SPOT — Viral AND Standalone:
 - TITLE (50-80 chars): SEO-optimized — keywords + emotion + specificity
 - TEMPLATE HEADER (<50 chars): Viral hook that works without full video context
 
-SCORING (must be strong on BOTH axes):
-- 90-100: Instant share + fully standalone — the holy grail
-- 80-89: High viral energy + strong standalone
-- 70-79: Good engagement + clear standalone message
-- 60-69: Decent viral + mostly standalone
-- <60: Reject
+${SCORING_RULES}
 
 📤 DELIVER:
 Return ONLY this JSON array:
@@ -541,6 +558,7 @@ Return ONLY this JSON array:
     "viralityScore": 85,
     "engagementType": "reaction|educational|funny|dramatic|relatable",
     "standaloneRating": "full|high|moderate",
+    "transcriptExcerpt": "Brief verbatim quote from the transcript that captures the key moment",
     "contentTags": ["self-contained", "emotional", "shareable"],
     "chunkIndex": ${chunkIndex}
   }
@@ -548,6 +566,7 @@ Return ONLY this JSON array:
 
 <<CONSTRAINTS>>
 - viralityScore ≥ 60 minimum
+- standaloneRating must be "full" or "high" — reject "moderate" clips
 - Maximum ${Math.min(maxClips, 5)} clips per chunk
 - Timestamps within chunk bounds (${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(1)}s)
 - JSON format only, no explanations outside array
@@ -589,6 +608,9 @@ Return ONLY this JSON array:
         if (clip.startTime < chunk.startTime || clip.endTime > chunk.endTime) return false;
         
         if (clip.viralityScore < 60) return false;
+        
+        // Reject moderate standalone ratings
+        if (clip.standaloneRating && clip.standaloneRating === 'moderate') return false;
 
         return true;
       })
@@ -668,8 +690,8 @@ function mergeAndDeduplicateClips(chunkResults, options) {
   // Sort by virality score (highest first)
   allClips.sort((a, b) => b.viralityScore - a.viralityScore);
   
-  // Deduplicate clips that are too close to each other
-  const OVERLAP_THRESHOLD = 5; // seconds
+  // Deduplicate clips that overlap significantly
+  const OVERLAP_THRESHOLD = 12; // seconds — prevents false dedup on 15-60s clips
   const deduplicatedClips = [];
   
   for (const clip of allClips) {
