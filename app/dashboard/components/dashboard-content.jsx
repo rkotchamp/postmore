@@ -23,6 +23,7 @@ import { checkPlatformCompatibility, filterCompatibleAccounts } from "@/app/lib/
 import CompatibilityWarningModal from "@/app/components/ui/CompatibilityWarningModal";
 import { PostSuccessModal } from "@/app/components/ui/PostSuccessModal";
 import { PostSubmissionModal } from "@/app/components/ui/PostSubmissionModal";
+import { PostResultsModal } from "@/app/components/ui/PostResultsModal";
 import { toast } from "sonner";
 import useFirebaseStorage from "@/app/hooks/useFirebaseStorage";
 import { useRouter } from "next/navigation";
@@ -61,6 +62,10 @@ export function DashboardContent() {
   // Success modal state
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successPostType, setSuccessPostType] = useState(null); // "scheduled" or "immediate"
+
+  // Results modal state (shown when any platform fails)
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [postResults, setPostResults] = useState([]);
 
   // --- UI Zustand State ---
   const currentStep = useUIStateStore((state) => state.currentStep);
@@ -262,6 +267,12 @@ export function DashboardContent() {
   const handleDone = () => {
     setShowSuccessModal(false);
     // Reset all states and clear inputs
+    handleResetStates();
+  };
+
+  const handleTryAgain = () => {
+    setShowResultsModal(false);
+    setPostResults([]);
     handleResetStates();
   };
 
@@ -522,37 +533,20 @@ export function DashboardContent() {
             if (isActualSuccess && allPlatformsSucceeded) {
               setSuccessPostType(scheduleType === "scheduled" ? "scheduled" : "immediate");
               setShowSuccessModal(true);
-              
-              // Unmount progress modal after success modal appears
+
               setTimeout(() => {
                 setShowProgressModal(false);
                 setProgressStep(1);
               }, 100);
             } else {
-              const failedPlatforms = data.results ? 
-                data.results.filter(r => !r.success) : [];
-              
-              // Create detailed error message
-              let errorDescription = "Check your post status for details";
-              if (failedPlatforms.length > 0) {
-                const platformErrors = failedPlatforms.map(r => 
-                  `${r.platform}: ${r.error || 'Unknown error'}`
-                ).join(' | ');
-                errorDescription = `Failed platforms: ${platformErrors}`;
-              }
-              
-              // Also log debug info if available
+              // Any failure — show results modal with per-platform breakdown
               if (data.debug) {
                 console.log("🐛 POST SUBMISSION DEBUG INFO:", data.debug);
-                console.log("📊 Failed Platform Details:", data.debug.failedPlatformDetails);
               }
-              
-              toast.error("Post failed on some platforms", {
-                description: errorDescription,
-                duration: 10000, // Longer duration for debugging
-              });
-              
-              // Unmount progress modal after error toast appears
+
+              setPostResults(data.results || []);
+              setShowResultsModal(true);
+
               setTimeout(() => {
                 setShowProgressModal(false);
                 setProgressStep(1);
@@ -840,6 +834,14 @@ export function DashboardContent() {
         onDone={handleDone}
         postType={successPostType}
         scheduledAt={scheduledAt}
+      />
+
+      {/* Post Results Modal — shown when any platform fails */}
+      <PostResultsModal
+        isOpen={showResultsModal}
+        results={postResults}
+        selectedAccounts={selectedAccounts}
+        onTryAgain={handleTryAgain}
       />
     </div>
   );
