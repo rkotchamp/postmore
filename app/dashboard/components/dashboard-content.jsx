@@ -580,9 +580,6 @@ export function DashboardContent() {
           }`,
           duration: 5000,
         });
-      })
-      .finally(() => {
-        // Ensure progress modal is hidden on error
         setShowProgressModal(false);
         setProgressStep(1);
       });
