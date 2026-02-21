@@ -60,23 +60,20 @@ const getUniqueMonthsAndYears = (posts) => {
 };
 
 function MonthPostGroup({ monthYear, posts, onClick }) {
-  // Get up to 4 images for the preview
   const postImages = posts
     .filter((post) => post.media)
     .map((post) => {
-      // Handle both array and string media formats
       if (Array.isArray(post.media) && post.media.length > 0) {
-        // If media is an array, get the first item's URL
         const firstMedia = post.media[0];
-        return (firstMedia && typeof firstMedia === 'object') ? firstMedia.url : firstMedia;
+        return (firstMedia && typeof firstMedia === "object")
+          ? firstMedia.url
+          : firstMedia;
       }
-      // If media is a string URL
-      return typeof post.media === 'string' ? post.media : null;
+      return typeof post.media === "string" ? post.media : null;
     })
-    .filter(Boolean) // Remove null/undefined/empty values
+    .filter(Boolean)
     .slice(0, 4);
 
-  // Add placeholders if we have fewer than 4 images
   while (postImages.length < 4) {
     postImages.push(null);
   }
@@ -92,7 +89,7 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
       >
         {postImages.map((image, index) => (
           <div key={index} className="relative w-full h-full bg-muted/50">
-            {image && typeof image === 'string' && image.trim() !== '' ? (
+            {image && typeof image === "string" && image.trim() !== "" ? (
               <Image
                 src={image}
                 alt="Post preview"
@@ -122,23 +119,25 @@ function MonthPostGroup({ monthYear, posts, onClick }) {
 }
 
 export default function AllPosts() {
+  // selectedMonth is only used when in grouped view and user drills into a month
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [filteredPosts, setFilteredPosts] = useState(null); // Changed to null as data is now fetched
+  const [filteredPosts, setFilteredPosts] = useState(null);
   const [selectedMonthFilter, setSelectedMonthFilter] = useState(null);
   const [selectedYearFilter, setSelectedYearFilter] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [deleteDialog, setDeleteDialog] = useState({
     isOpen: false,
     post: null,
     isLoading: false,
   });
 
-  const { allPosts, isLoading: contextLoading, error } = useAllPosts();
+  const { allPosts, isLoading, error } = useAllPosts();
 
-  // Get unique months and years from all posts
   const { months, years } = getUniqueMonthsAndYears(allPosts || []);
 
-  // Apply filters when month or year selection changes
+  // Whether any date filter is active — determines grouped vs flat grid
+  const isFiltered = !!(selectedMonthFilter || selectedYearFilter);
+
+  // Apply filters
   useEffect(() => {
     if (!allPosts) return;
 
@@ -147,60 +146,35 @@ export default function AllPosts() {
     if (selectedMonthFilter) {
       filtered = filtered.filter((post) => {
         const date = new Date(post.scheduledDate);
-        const month = date.toLocaleString("default", { month: "long" });
-        return month === selectedMonthFilter;
+        return date.toLocaleString("default", { month: "long" }) === selectedMonthFilter;
       });
     }
 
     if (selectedYearFilter) {
       filtered = filtered.filter((post) => {
         const date = new Date(post.scheduledDate);
-        const year = date.getFullYear().toString();
-        return year === selectedYearFilter;
+        return date.getFullYear().toString() === selectedYearFilter;
       });
     }
 
     setFilteredPosts(filtered);
   }, [selectedMonthFilter, selectedYearFilter, allPosts]);
 
-  // Simulate loading for the main view
-  useEffect(() => {
-    setIsLoading(contextLoading);
-  }, [contextLoading]);
-
-  const groupedPosts = groupPostsByDate(filteredPosts || []);
-
-  const handleSelectMonth = (monthYear) => {
-    setSelectedMonth(monthYear);
-  };
-
-  const handleBack = () => {
-    setSelectedMonth(null);
-  };
-
+  // When filter is cleared, also clear any selected month drill-in
   const handleResetFilters = () => {
     setSelectedMonthFilter(null);
     setSelectedYearFilter(null);
+    setSelectedMonth(null);
   };
 
-  // Handle edit post
   const handleEditPost = (post) => {
-    // For now, show a placeholder - you can implement actual edit functionality
     toast.info(`Edit post: ${post.id}`);
-    // TODO: Navigate to edit page or open edit modal
-    // router.push(`/dashboard/edit-post/${post.id}`);
   };
 
-  // Handle delete post
   const handleDeletePost = (post) => {
-    setDeleteDialog({
-      isOpen: true,
-      post: post,
-      isLoading: false,
-    });
+    setDeleteDialog({ isOpen: true, post, isLoading: false });
   };
 
-  // Handle confirming delete
   const handleConfirmDelete = async (post) => {
     setDeleteDialog((prev) => ({ ...prev, isLoading: true }));
 
@@ -211,9 +185,7 @@ export default function AllPosts() {
 
       if (response.ok) {
         toast.success("Post deleted successfully");
-        // Refresh the posts list by invalidating the query
-        // You might need to add a refetch method to the context
-        window.location.reload(); // Temporary solution
+        window.location.reload();
         setDeleteDialog({ isOpen: false, post: null, isLoading: false });
       } else {
         throw new Error("Failed to delete post");
@@ -225,14 +197,12 @@ export default function AllPosts() {
     }
   };
 
-  // Handle closing delete dialog
   const handleCloseDeleteDialog = () => {
     if (!deleteDialog.isLoading) {
       setDeleteDialog({ isOpen: false, post: null, isLoading: false });
     }
   };
 
-  // Handle error state
   if (error) {
     return (
       <DashboardLayout>
@@ -242,16 +212,18 @@ export default function AllPosts() {
             <p className="text-red-500 text-center mb-4">
               Failed to load posts. Please try again.
             </p>
-            <Button onClick={() => window.location.reload()}>
-              Reload Page
-            </Button>
+            <Button onClick={() => window.location.reload()}>Reload Page</Button>
           </div>
         </div>
       </DashboardLayout>
     );
   }
 
-  // If a month is selected, show the posts for that month
+  // Posts to display (filtered or all)
+  const displayPosts = filteredPosts ?? allPosts ?? [];
+  const groupedPosts = groupPostsByDate(displayPosts);
+
+  // Drilled into a specific month (only possible when in grouped view)
   if (selectedMonth) {
     const postsForMonth = groupedPosts[selectedMonth] || [];
 
@@ -262,7 +234,7 @@ export default function AllPosts() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleBack}
+              onClick={() => setSelectedMonth(null)}
               className="flex items-center gap-1"
             >
               <X className="h-4 w-4" />
@@ -272,63 +244,8 @@ export default function AllPosts() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {isLoading ? (
-              // Generate multiple skeleton cards for grid view
-              Array(6)
-                .fill(0)
-                .map((_, index) => (
-                  <div
-                    key={index}
-                    className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden"
-                  >
-                    {/* Media Section - 3/5 of the height */}
-                    <div className="w-full h-3/5 bg-muted relative">
-                      <Skeleton className="w-full h-full rounded-t-lg" />
-                    </div>
-
-                    {/* Content Section - remaining height */}
-                    <div className="flex-1 p-4 flex flex-col">
-                      {/* Caption */}
-                      <div className="mb-2">
-                        <Skeleton className="h-4 w-full mb-1" />
-                        <Skeleton className="h-4 w-3/4 mb-1" />
-                        <Skeleton className="h-4 w-1/2" />
-                      </div>
-
-                      {/* Date and Time */}
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center">
-                          <Skeleton className="h-3 w-3 mr-1 rounded-full" />
-                          <Skeleton className="h-3 w-16" />
-                        </div>
-                        <div className="flex items-center">
-                          <Skeleton className="h-3 w-3 mr-1 rounded-full" />
-                          <Skeleton className="h-3 w-12" />
-                        </div>
-                      </div>
-
-                      {/* Social Accounts */}
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center space-x-2">
-                            <Skeleton className="h-7 w-7 rounded-full" />
-                            <div className="flex items-center -space-x-2">
-                              <Skeleton className="h-7 w-7 rounded-full" />
-                              <Skeleton className="h-7 w-7 rounded-full" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="mt-auto flex justify-end">
-                        <Skeleton className="h-8 w-16 rounded-md" />
-                      </div>
-                    </div>
-                  </div>
-                ))
-            ) : postsForMonth.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
+            {postsForMonth.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center justify-center py-12">
                 <p className="text-muted-foreground text-center mb-4">
                   No posts found for {selectedMonth}.
                 </p>
@@ -352,17 +269,16 @@ export default function AllPosts() {
     );
   }
 
-  // Otherwise show the filter and month groups
   return (
     <DashboardLayout>
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">All Posts</h1>
 
-        {/* Filter Section */}
-        <div className="flex flex-wrap items-center gap-3 mb-6 bg-muted/20 p-3 rounded-lg">
+        {/* Filter bar — no background */}
+        <div className="flex flex-wrap items-center gap-3 mb-6">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Filter by:</span>
+            <span className="text-sm font-medium text-muted-foreground">Filter by:</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -374,8 +290,8 @@ export default function AllPosts() {
             ) : (
               <>
                 <Select
-                  value={selectedMonthFilter}
-                  onValueChange={setSelectedMonthFilter}
+                  value={selectedMonthFilter ?? ""}
+                  onValueChange={(v) => setSelectedMonthFilter(v || null)}
                 >
                   <SelectTrigger className="w-[120px] h-9">
                     <SelectValue placeholder="Month" />
@@ -390,8 +306,8 @@ export default function AllPosts() {
                 </Select>
 
                 <Select
-                  value={selectedYearFilter}
-                  onValueChange={setSelectedYearFilter}
+                  value={selectedYearFilter ?? ""}
+                  onValueChange={(v) => setSelectedYearFilter(v || null)}
                 >
                   <SelectTrigger className="w-[100px] h-9">
                     <SelectValue placeholder="Year" />
@@ -405,7 +321,7 @@ export default function AllPosts() {
                   </SelectContent>
                 </Select>
 
-                {(selectedMonthFilter || selectedYearFilter) && (
+                {isFiltered && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -420,71 +336,105 @@ export default function AllPosts() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {isLoading ? (
-            // Generate multiple skeleton cards for month groups
-            Array(8)
-              .fill(0)
-              .map((_, index) => (
-                <div
-                  key={index}
-                  className="bg-background rounded-lg border shadow-sm overflow-hidden"
-                >
-                  {/* Skeleton image grid */}
+        {/* Loading skeletons */}
+        {isLoading ? (
+          isFiltered ? (
+            // Grouped skeleton
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {Array(8)
+                .fill(0)
+                .map((_, index) => (
                   <div
-                    className="grid grid-cols-2 gap-0.5 bg-muted/30"
-                    style={{ aspectRatio: "4/3" }}
+                    key={index}
+                    className="bg-background rounded-lg border shadow-sm overflow-hidden"
                   >
-                    {Array(4)
-                      .fill(0)
-                      .map((_, i) => (
-                        <Skeleton key={i} className="w-full h-full" />
-                      ))}
-                  </div>
-
-                  {/* Skeleton text content */}
-                  <div className="p-3">
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-4 w-20" />
-                      <Skeleton className="h-4 w-4" />
+                    <div
+                      className="grid grid-cols-2 gap-0.5 bg-muted/30"
+                      style={{ aspectRatio: "4/3" }}
+                    >
+                      {Array(4)
+                        .fill(0)
+                        .map((_, i) => (
+                          <Skeleton key={i} className="w-full h-full" />
+                        ))}
                     </div>
-                    <Skeleton className="h-3 w-14 mt-0.5" />
+                    <div className="p-3">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-4" />
+                      </div>
+                      <Skeleton className="h-3 w-14 mt-0.5" />
+                    </div>
                   </div>
-                </div>
-              ))
-          ) : allPosts?.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <p className="text-muted-foreground text-center mb-4">
-                No posts found for the selected filters.
-              </p>
-              <Button variant="outline" onClick={handleResetFilters}>
-                Reset Filters
-              </Button>
+                ))}
             </div>
           ) : (
-            Object.entries(groupedPosts).map(([monthYear, posts]) => (
-              <MonthPostGroup
-                key={monthYear}
-                monthYear={monthYear}
-                posts={posts}
-                onClick={() => handleSelectMonth(monthYear)}
-              />
-            ))
-          )}
-        </div>
-
-        {!isLoading && Object.keys(groupedPosts).length === 0 && (
+            // Flat grid skeleton
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array(6)
+                .fill(0)
+                .map((_, index) => (
+                  <div
+                    key={index}
+                    className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden"
+                  >
+                    <div className="w-full h-3/5 bg-muted relative">
+                      <Skeleton className="w-full h-full rounded-t-lg" />
+                    </div>
+                    <div className="flex-1 p-4 flex flex-col">
+                      <div className="mb-2">
+                        <Skeleton className="h-4 w-full mb-1" />
+                        <Skeleton className="h-4 w-3/4 mb-1" />
+                      </div>
+                      <div className="flex justify-between items-center mb-3">
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Skeleton className="h-7 w-7 rounded-full" />
+                        <Skeleton className="h-7 w-7 rounded-full" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )
+        ) : displayPosts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <p className="text-muted-foreground text-center mb-4">
               {allPosts && allPosts.length === 0
                 ? "You don't have any posts yet."
                 : "No posts found for the selected filters."}
             </p>
-            {allPosts && allPosts.length > 0 && (
+            {isFiltered && (
               <Button variant="outline" onClick={handleResetFilters}>
                 Reset Filters
               </Button>
             )}
+          </div>
+        ) : isFiltered ? (
+          // Grouped view — only when a filter is active
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {Object.entries(groupedPosts).map(([monthYear, posts]) => (
+              <MonthPostGroup
+                key={monthYear}
+                monthYear={monthYear}
+                posts={posts}
+                onClick={() => setSelectedMonth(monthYear)}
+              />
+            ))}
+          </div>
+        ) : (
+          // Default flat grid — all posts
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {displayPosts.map((post) => (
+              <Post
+                key={post.id}
+                post={post}
+                onEdit={handleEditPost}
+                onDelete={handleDeletePost}
+              />
+            ))}
           </div>
         )}
       </div>
