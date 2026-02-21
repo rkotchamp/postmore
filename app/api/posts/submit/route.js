@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import mongoose from "mongoose";
 import { apiManager } from "@/app/lib/api/services/apiManager";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import SocialAccount from "@/app/models/SocialAccount";
 
 // Add this to ensure we have the Post model available
 // This prevents errors with mongoose model initialization
@@ -224,8 +225,42 @@ export async function POST(request) {
       );
     }
 
+    // Enrich accounts with tokens from the database server-side.
+    // The social-accounts API strips tokens for security, so they are never
+    // in originalData. We fetch them here (server-side only) before posting.
+    const PLATFORMS_NEEDING_TOKENS = ["tiktok", "instagram", "bluesky", "linkedin", "ytshorts"];
+    const enrichedAccounts = await Promise.all(
+      accounts.map(async (account) => {
+        const platform = (account.platform || account.type || "").toLowerCase();
+        if (PLATFORMS_NEEDING_TOKENS.includes(platform)) {
+          try {
+            // Verify the account belongs to the authenticated user before
+            // fetching tokens — prevents token theft via spoofed account IDs.
+            const dbAccount = await SocialAccount.findOne({
+              _id: account.id,
+              userId: session.user.id,
+            });
+            if (dbAccount) {
+              return {
+                ...account,
+                originalData: {
+                  ...(account.originalData || {}),
+                  accessToken: dbAccount.accessToken,
+                  refreshToken: dbAccount.refreshToken,
+                  tokenExpiry: dbAccount.tokenExpiry,
+                },
+              };
+            }
+          } catch (e) {
+            console.warn(`submit/route.js: Could not enrich account ${account.id} with tokens:`, e.message);
+          }
+        }
+        return account;
+      })
+    );
+
     // Extract platform/account targets
-    const targets = accounts.map((account) => ({
+    const targets = enrichedAccounts.map((account) => ({
       platform: account.platform,
       account: account,
     }));
@@ -256,8 +291,13 @@ export async function POST(request) {
           text: text || "",
           media: media || [],
           captions,
-          // Spread TikTok settings so tiktokService can read privacyLevel, disableComment, etc.
-          ...(tiktokSettings || {}),
+          // Explicitly whitelist TikTok settings — never spread untrusted client input directly.
+          privacyLevel: tiktokSettings?.privacyLevel || "",
+          disableComment: !!tiktokSettings?.disableComment,
+          disableDuet: !!tiktokSettings?.disableDuet,
+          disableStitch: !!tiktokSettings?.disableStitch,
+          isBrandOrganic: !!tiktokSettings?.isBrandOrganic,
+          isBrandedContent: !!tiktokSettings?.isBrandedContent,
         };
         console.log(
           "API Route: Data sent to apiManager.schedulePost - Post Data:",
