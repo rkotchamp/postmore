@@ -18,7 +18,7 @@ const scopes = [
 export async function GET(request) {
   console.log("Initiating Instagram Business Login flow (direct Instagram OAuth)");
 
-  const appId = process.env.META_APP_ID;
+  const appId = process.env.INSTAGRAM_APP_ID;
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
 
   if (!appId || !redirectUri) {

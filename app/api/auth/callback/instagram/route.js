@@ -4,8 +4,8 @@ import { connectToMongoose } from "@/app/lib/db/mongoose";
 import SocialAccount from "@/app/models/SocialAccount";
 import User from "@/app/models/userSchema";
 
-const clientId = process.env.META_APP_ID;
-const clientSecret = process.env.META_APP_SECRET;
+const clientId = process.env.INSTAGRAM_APP_ID;
+const clientSecret = process.env.INSTAGRAM_APP_SECRET;
 const redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
 const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
