@@ -43,6 +43,7 @@ const AccountSchema = new Schema({
       "linkedin",
       "ytshorts",
       "tiktok",
+      "threads",
     ],
     required: true,
   },
