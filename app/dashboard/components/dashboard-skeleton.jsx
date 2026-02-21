@@ -86,16 +86,52 @@ export function DashboardSkeleton() {
   );
 }
 
-// Simple content skeleton for step-specific loading
+// Step-specific skeleton that mirrors the real content layout exactly
 export function DynamicContentSkeleton({ step = 0 }) {
-  return (
-    <div className="space-y-6">
-      <div className="border-2 border-dashed border-gray-600 rounded-lg p-16 text-center">
-        <div className="flex flex-col items-center space-y-4">
-          <Skeleton className="w-12 h-12 bg-gray-600" />
-          <Skeleton className="h-5 w-32 bg-gray-700" />
+  if (step === 0) {
+    return (
+      <div className="w-full space-y-4">
+        {/* Mirrors Content.jsx → Card → CardContent → Tabs */}
+        {/* Tab switcher — two equal buttons */}
+        <div className="grid grid-cols-2 gap-1 bg-muted/60 rounded-lg p-1 h-auto shadow-inner mb-6 md:mb-8">
+          <Skeleton className="h-10 rounded-md" />
+          <Skeleton className="h-10 rounded-md" />
+        </div>
+
+        {/* Mirrors MediaPosts.jsx */}
+        {/* "Media Post" heading */}
+        <Skeleton className="h-6 w-24 mb-4" />
+
+        {/* Dropzone */}
+        <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg flex flex-col items-center justify-center min-h-[200px] gap-4">
+          <Skeleton className="h-12 w-12 rounded-md" />
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-3 w-28" />
         </div>
       </div>
+    );
+  }
+
+  if (step === 1) {
+    // Accounts step skeleton
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {Array(6).fill(0).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Caption step skeleton
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-6 w-24" />
+      <Skeleton className="h-32 w-full rounded-lg" />
+      <Skeleton className="h-9 w-full rounded-lg" />
     </div>
   );
 }
