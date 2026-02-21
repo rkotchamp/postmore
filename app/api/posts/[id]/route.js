@@ -128,7 +128,6 @@ export async function DELETE(request, { params }) {
       return NextResponse.json(
         {
           error: "Unauthorized",
-          debug: debugInfo,
         },
         { status: 401 }
       );
@@ -153,7 +152,6 @@ export async function DELETE(request, { params }) {
       return NextResponse.json(
         {
           error: "Invalid post ID",
-          debug: debugInfo,
         },
         { status: 400 }
       );
@@ -172,7 +170,6 @@ export async function DELETE(request, { params }) {
       return NextResponse.json(
         {
           error: "Post not found",
-          debug: debugInfo,
         },
         { status: 404 }
       );
@@ -335,8 +332,7 @@ export async function DELETE(request, { params }) {
         return NextResponse.json(
           {
             error: "Post not found",
-            debug: debugInfo,
-          },
+            },
           { status: 404 }
         );
       }
@@ -345,7 +341,6 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({
         message: "Post deleted successfully",
         deletedMediaFiles: mediaFilesToDelete.length,
-        debug: debugInfo,
       });
     } catch (databaseError) {
       debugInfo.error = "Database deletion failed";

@@ -118,6 +118,11 @@ const ResultSchema = new Schema({
     },
     privacyLevel: String,
     publishAt: Date,
+    disableComment: Boolean,
+    disableDuet: Boolean,
+    disableStitch: Boolean,
+    brandOrganic: Boolean,
+    brandedContent: Boolean,
   },
   timestamp: {
     type: Date,

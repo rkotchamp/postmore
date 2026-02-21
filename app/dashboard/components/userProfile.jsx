@@ -19,12 +19,19 @@ import { User, Settings, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useUser } from "@/app/context/UserContext";
 import { Skeleton } from "@/app/components/ui/skeleton";
+import { queryClient } from "@/app/lib/queryClient";
 import Link from "next/link";
 
 export function UserNav() {
   const { user, isLoading, isAuthenticated } = useUser();
 
   const handleLogout = async () => {
+    // Clear cached data to prevent leaking to next user on same device
+    queryClient.clear();
+    localStorage.removeItem("postmore-cache");
+    localStorage.removeItem("post-store-storage");
+    localStorage.removeItem("ui-state-storage");
+    localStorage.removeItem("subscription-store");
     await signOut({ callbackUrl: "/auth/login" });
   };
 

@@ -86,6 +86,7 @@ export function Preview() {
   const getCaptionForAccount = usePostStore(
     (state) => state.getCaptionForAccount
   );
+  const tiktokSettings = usePostStore((state) => state.tiktokSettings);
 
   const setVideoThumbnail = usePostStore((state) => state.setVideoThumbnail);
   const getVideoThumbnail = usePostStore((state) => state.getVideoThumbnail);
@@ -572,6 +573,56 @@ export function Preview() {
                   </span>
                 ))}
             </p>
+          </div>
+        )}
+
+        {/* TikTok settings summary */}
+        {selectedAccounts.some((acc) => acc.platform === "tiktok") && (
+          <div className="pt-2 border-t space-y-1.5">
+            <p className="text-xs font-medium flex items-center gap-1.5">
+              <svg
+                className="h-3 w-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M9 12a4 4 0 1 0 4 4V4c.23 2.58 1.32 4.19 4 5v3c-1.5-.711-2.717-.216-4 1v3" />
+              </svg>
+              TikTok
+            </p>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span>Privacy:</span>
+              <span
+                className={
+                  !tiktokSettings.privacyLevel ? "text-destructive font-medium" : ""
+                }
+              >
+                {tiktokSettings.privacyLevel === "PUBLIC_TO_EVERYONE"
+                  ? "Everyone"
+                  : tiktokSettings.privacyLevel === "MUTUAL_FOLLOW_FRIENDS"
+                  ? "Friends"
+                  : tiktokSettings.privacyLevel === "SELF_ONLY"
+                  ? "Only me"
+                  : "Not set ⚠️"}
+              </span>
+              <span>Comments:</span>
+              <span>{tiktokSettings.disableComment ? "Off" : "On"}</span>
+              <span>Duets:</span>
+              <span>{tiktokSettings.disableDuet ? "Off" : "On"}</span>
+              <span>Stitches:</span>
+              <span>{tiktokSettings.disableStitch ? "Off" : "On"}</span>
+              <span>Music:</span>
+              <span
+                className={
+                  !tiktokSettings.musicConfirmed ? "text-destructive font-medium" : ""
+                }
+              >
+                {tiktokSettings.musicConfirmed ? "Confirmed ✓" : "Not confirmed ⚠️"}
+              </span>
+            </div>
           </div>
         )}
 

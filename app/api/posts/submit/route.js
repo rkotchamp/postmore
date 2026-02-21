@@ -73,7 +73,7 @@ export async function POST(request) {
     }
 
     // Extract and validate post content
-    const { contentType, text, media, accounts, captions, schedule } = postData;
+    const { contentType, text, media, accounts, captions, schedule, tiktokSettings } = postData;
 
     // Validate content type and content
     if (!contentType) {
@@ -256,6 +256,8 @@ export async function POST(request) {
           text: text || "",
           media: media || [],
           captions,
+          // Spread TikTok settings so tiktokService can read privacyLevel, disableComment, etc.
+          ...(tiktokSettings || {}),
         };
         console.log(
           "API Route: Data sent to apiManager.schedulePost - Post Data:",
@@ -317,6 +319,8 @@ export async function POST(request) {
         text: text || "",
         media: media || [],
         captions,
+        // Spread TikTok settings so tiktokService can read privacyLevel, disableComment, etc.
+        ...(tiktokSettings || {}),
       };
       console.log(
         "API Route: Post data being sent to apiManager.postToMultiplePlatforms - Targets:",

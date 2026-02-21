@@ -15,6 +15,15 @@ const initialState = {
   isPosted: false, // Might be useful later
   lastUpdatedAt: new Date(),
   thumbnails: {}, // { [videoId]: File } - Store thumbnail File objects
+  tiktokSettings: {
+    privacyLevel: "", // No default — user must choose
+    disableComment: false,
+    disableDuet: false,
+    disableStitch: false,
+    isBrandOrganic: false,
+    isBrandedContent: false,
+    musicConfirmed: false,
+  },
   // Consider adding a field for draftId or postId if managing multiple drafts/posts in the store
 };
 
@@ -274,6 +283,12 @@ export const usePostStore = create(
       };
     }),
 
+  setTiktokSettings: (updates) =>
+    set((state) => ({
+      tiktokSettings: { ...state.tiktokSettings, ...updates },
+      ...get()._updateTimestamp(),
+    })),
+
   // Getter for a specific video thumbnail
   getVideoThumbnail: (videoId) => {
     const state = get();
@@ -328,6 +343,7 @@ export const usePostStore = create(
         captionMode: state.captionMode,
         singleCaption: state.singleCaption,
         multiCaptions: state.multiCaptions,
+        tiktokSettings: state.tiktokSettings,
         // Don't persist thumbnails as they are File objects
         // Don't persist lastUpdatedAt as it should be fresh
       }),

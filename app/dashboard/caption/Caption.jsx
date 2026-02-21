@@ -18,6 +18,7 @@ import {
 } from "@/app/components/ui/avatar";
 import { Badge } from "@/app/components/ui/badge";
 import { ScheduleToggle } from "./ScheduleToggle";
+import { TikTokSettings } from "./TikTokSettings";
 import { usePostStore } from "@/app/lib/store/postStore";
 import { Switch } from "@/app/components/ui/switch";
 
@@ -315,6 +316,8 @@ export function Caption() {
           })}
         </Accordion>
       )}
+
+      {platforms.includes("tiktok") && <TikTokSettings />}
 
       <div className="mt-4">
         <MemoizedScheduleToggle />

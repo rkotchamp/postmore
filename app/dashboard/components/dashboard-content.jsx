@@ -87,6 +87,7 @@ export function DashboardContent() {
   const multiCaptions = usePostStore((state) => state.multiCaptions);
   const scheduleType = usePostStore((state) => state.scheduleType);
   const scheduledAt = usePostStore((state) => state.scheduledAt);
+  const tiktokSettings = usePostStore((state) => state.tiktokSettings);
   const resetPostConfig = usePostStore((state) => state.resetPostConfig);
   // ------------------------------------------
 
@@ -123,9 +124,14 @@ export function DashboardContent() {
       case 1: // Accounts
         return selectedAccounts.length > 0;
       case 2: // Caption
-        // Caption step is always considered completable once reached, maybe add validation?
-        // For now, just reaching it with selected accounts is enough.
-        return selectedAccounts.length > 0;
+        if (selectedAccounts.length === 0) return false;
+        // If TikTok is selected, require privacy level and music confirmation
+        if (selectedAccounts.some((acc) => acc.platform === "tiktok")) {
+          return (
+            tiktokSettings.privacyLevel !== "" && tiktokSettings.musicConfirmed
+          );
+        }
+        return true;
       default:
         return false;
     }
@@ -490,6 +496,7 @@ export function DashboardContent() {
             type: scheduleType,
             at: scheduledAt,
           },
+          tiktokSettings,
         };
 
         // Send the data to our API endpoint

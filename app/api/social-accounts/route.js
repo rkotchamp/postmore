@@ -19,11 +19,11 @@ export async function GET(request) {
     // Connect to database
     await connectToMongoose();
 
-    // Fetch all social accounts for the user
+    // Fetch all social accounts for the user (exclude sensitive token fields)
     const accounts = await SocialAccount.find({
       userId: session.user.id,
       status: "active", // Only get active accounts
-    }).sort({ createdAt: -1 }); // Sort by newest first
+    }).select('-accessToken -refreshToken -tokenExpiry').sort({ createdAt: -1 }); // Sort by newest first
 
     // Return the accounts
     return NextResponse.json({ accounts });

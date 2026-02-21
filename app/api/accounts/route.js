@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import mongoose from "mongoose";
 
 import SocialAccount from "@/app/models/SocialAccount";
@@ -11,7 +12,7 @@ import SocialAccount from "@/app/models/SocialAccount";
 export async function GET(request) {
   try {
     // Check authentication
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json(
         { error: "Authentication required" },
