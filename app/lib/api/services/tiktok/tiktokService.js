@@ -110,8 +110,10 @@ async function post(accountData, postData) {
     // 2. Get creator info to check if posting is allowed and verify limits
     const creatorInfo = await getCreatorInfo(accessToken);
 
-    // Check if the creator can post
-    if (!creatorInfo.can_post) {
+    // Check if the creator can post.
+    // TikTok only includes can_post in the response when it is explicitly false.
+    // Checking === false avoids false-positives when the field is simply absent.
+    if (creatorInfo.can_post === false) {
       throw new Error(
         "This TikTok account cannot post at this moment. Please try again later."
       );

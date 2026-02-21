@@ -359,8 +359,13 @@ export async function POST(request) {
         text: text || "",
         media: media || [],
         captions,
-        // Spread TikTok settings so tiktokService can read privacyLevel, disableComment, etc.
-        ...(tiktokSettings || {}),
+        // Explicitly whitelist TikTok settings — never spread untrusted client input directly.
+        privacyLevel: tiktokSettings?.privacyLevel || "",
+        disableComment: !!tiktokSettings?.disableComment,
+        disableDuet: !!tiktokSettings?.disableDuet,
+        disableStitch: !!tiktokSettings?.disableStitch,
+        isBrandOrganic: !!tiktokSettings?.isBrandOrganic,
+        isBrandedContent: !!tiktokSettings?.isBrandedContent,
       };
       console.log(
         "API Route: Post data being sent to apiManager.postToMultiplePlatforms - Targets:",
