@@ -228,7 +228,7 @@ export async function POST(request) {
     // Enrich accounts with tokens from the database server-side.
     // The social-accounts API strips tokens for security, so they are never
     // in originalData. We fetch them here (server-side only) before posting.
-    const PLATFORMS_NEEDING_TOKENS = ["tiktok", "instagram", "bluesky", "linkedin", "ytshorts"];
+    const PLATFORMS_NEEDING_TOKENS = ["tiktok", "instagram", "bluesky", "linkedin", "ytshorts", "threads"];
     const enrichedAccounts = await Promise.all(
       accounts.map(async (account) => {
         const platform = (account.platform || account.type || "").toLowerCase();

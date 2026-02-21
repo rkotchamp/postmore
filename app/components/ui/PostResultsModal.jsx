@@ -35,8 +35,7 @@ export function PostResultsModal({ isOpen, results = [], selectedAccounts = [], 
   return (
     <Dialog open={isOpen} onOpenChange={() => {}}>
       <DialogContent
-        className="sm:max-w-md"
-        // Prevent closing by clicking outside — user must explicitly act
+        className="sm:max-w-md [&>button:last-child]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >

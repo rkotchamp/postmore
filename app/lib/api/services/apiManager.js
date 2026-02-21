@@ -9,6 +9,7 @@ import youtubeService from "./youtube/youtubeService";
 import tiktokService from "./tiktok/tiktokService";
 import linkedinService from "./linkedinService";
 import instagramService from "./instagramService";
+import threadsService from "./threads/threadsService";
 import { addPostToQueue } from "@/app/lib/queues/postQueue";
 
 // Platform service registry
@@ -35,6 +36,7 @@ const platformServices = {
   ytShorts: youtubeService, // YouTube Shorts service
   tiktok: tiktokService, // TikTok service
   linkedin: linkedinService, // LinkedIn service
+  threads: threadsService, // Threads service
 };
 
 /**
@@ -292,6 +294,44 @@ const postToPlatform = async (platform, account, data) => {
           account.id
         );
         mappedData.textContent = caption;
+      }
+    }
+
+    // If it's Threads, ensure the account data has the expected structure
+    if (platform === "threads") {
+      mappedAccount = {
+        id: account.id,
+        platformAccountId:
+          account.platformAccountId ||
+          account.originalData?.platformAccountId ||
+          account.platformId,
+        platformUsername:
+          account.platformUsername ||
+          account.originalData?.platformUsername ||
+          account.name,
+        accessToken: account.accessToken || account.originalData?.accessToken,
+      };
+
+      if (!mappedAccount.accessToken) {
+        throw new Error("Missing accessToken for Threads account");
+      }
+
+      if (!mappedAccount.platformAccountId) {
+        throw new Error("Missing platformAccountId for Threads account");
+      }
+
+      // Transform captions
+      if (mappedData.captions) {
+        mappedData.textContent = getCaptionForPlatform(
+          mappedData.captions,
+          platform,
+          account.id
+        );
+      }
+
+      // Pass mediaFiles
+      if (mappedData.media && Array.isArray(mappedData.media)) {
+        mappedData.mediaFiles = mappedData.media;
       }
     }
 
