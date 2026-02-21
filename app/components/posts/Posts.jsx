@@ -606,12 +606,12 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
   };
 
   return (
-    <div className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden">
+    <div className="bg-background rounded-lg border shadow-sm w-full max-w-md aspect-square flex flex-col overflow-hidden relative">
       {/* Media Section */}
       <div className="w-full h-3/5 bg-muted relative">{renderMedia()}</div>
 
       {/* Content Section */}
-      <div className="flex-1 p-4 flex flex-col">
+      <div className="flex-1 p-4 flex flex-col overflow-hidden">
         {/* Caption */}
         <div className="mb-2">{renderCaption()}</div>
 
@@ -620,18 +620,18 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
           <div className="mb-2">
             <span
               className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                post.statusIndicator 
+                post.statusIndicator
                   ? `${post.statusIndicator.bgColor} ${post.statusIndicator.textColor} ${post.statusIndicator.borderColor} border`
-                  : post.status === 'scheduled' 
-                    ? 'bg-blue-50 text-blue-700 border-blue-200 border' 
+                  : post.status === 'scheduled'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 border'
                     : post.status === 'published'
                       ? 'bg-green-50 text-green-700 border-green-200 border'
                       : 'bg-gray-50 text-gray-700 border-gray-200 border'
               }`}
             >
-              {post.statusIndicator?.label || 
-               (post.status === 'scheduled' ? 'Scheduled' : 
-                post.status === 'published' ? 'Published' : 
+              {post.statusIndicator?.label ||
+               (post.status === 'scheduled' ? 'Scheduled' :
+                post.status === 'published' ? 'Published' :
                 post.status?.charAt(0).toUpperCase() + post.status?.slice(1) || 'Unknown')}
             </span>
           </div>
@@ -649,39 +649,39 @@ export function Post({ post, onEdit, onDelete, showActions = true }) {
           </div>
         </div>
 
-        {/* Social Accounts */}
-        <div className="mb-3">
+        {/* Social Accounts — leave space for the absolutely-positioned button */}
+        <div className={showActions ? "pr-10" : ""}>
           <SelectedAccountsDisplay accounts={accountsArray} />
         </div>
-
-        {/* Actions */}
-        {showActions && (
-          <div className="mt-auto flex justify-end mb-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[160px]">
-                <DropdownMenuItem onClick={handleEdit}>
-                  <PenSquare className="mr-2 h-4 w-4" />
-                  <span>Edit</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleDelete}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  <span>Delete</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
       </div>
+
+      {/* Actions — always visible in bottom-right corner */}
+      {showActions && (
+        <div className="absolute bottom-3 right-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuItem onClick={handleEdit}>
+                <PenSquare className="mr-2 h-4 w-4" />
+                <span>Edit</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                <span>Delete</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }
