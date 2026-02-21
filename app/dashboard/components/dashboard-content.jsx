@@ -742,8 +742,9 @@ export function DashboardContent() {
             </CardContent>
           </Card>
 
-          {/* Navigation Buttons (Uses UI store state/actions) */}
-          <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t gap-3 sm:gap-0">
+          {/* Navigation Buttons — hidden on step 0 until content is ready */}
+          {(currentStep > 0 || canProceed()) && (
+          <div className="flex flex-col sm:flex-row justify-between items-center pt-4 gap-3 sm:gap-0">
             <Button
               variant="outline"
               onClick={handlePrevious}
@@ -802,6 +803,7 @@ export function DashboardContent() {
               </Button>
             )}
           </div>
+          )}
         </div>
 
         {/* Right side: Preview Panel - Conditionally render based on derived state */}

@@ -75,7 +75,7 @@ const useFetchPosts = () => {
 
       // Create the formatted post object
       return {
-        id: post._id,
+        id: post._id?.toString(),
         status: post.status || "scheduled", // Add status field for the badge
         contentType:
           post.contentType ||

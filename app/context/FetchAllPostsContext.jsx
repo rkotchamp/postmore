@@ -113,7 +113,7 @@ const useFetchAllPosts = () => {
     };
 
     return {
-      id: post._id,
+      id: post._id?.toString(),
       contentType: post.contentType,
       text: post.text,
       media: mediaArray, // Preserve full media array structure

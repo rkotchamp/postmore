@@ -397,34 +397,34 @@ export function MediaPosts() {
         </div>
       )}
 
-      {/* Footer Helper Text */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
-        <div className="flex items-center">
-          {mode === "empty" ? null : mode === "singleVideo" ? (
-            <FileVideo className="h-4 w-4 mr-2" />
-          ) : (
-            <ImageIcon className="h-4 w-4 mr-2" />
+      {/* Footer Helper Text — only shown when media is present */}
+      {mode !== "empty" && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground pt-2">
+          <div className="flex items-center">
+            {mode === "singleVideo" ? (
+              <FileVideo className="h-4 w-4 mr-2" />
+            ) : (
+              <ImageIcon className="h-4 w-4 mr-2" />
+            )}
+            <span>
+              {mode === "singleVideo"
+                ? `Video: ${mediaItems[0]?.fileInfo?.name || "video file"}`
+                : `Images: ${mediaItems.length} / ${MAX_IMAGES}`}
+            </span>
+          </div>
+          {mediaItems.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearAllMedia}
+              className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+              disabled={clearMedia.isLoading || updateMedia.isLoading}
+            >
+              Clear all
+            </Button>
           )}
-          <span>
-            {mode === "empty"
-              ? ""
-              : mode === "singleVideo"
-              ? `Video: ${mediaItems[0]?.fileInfo?.name || "video file"}`
-              : `Images: ${mediaItems.length} / ${MAX_IMAGES}`}
-          </span>
         </div>
-        {mode !== "empty" && mediaItems.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearAllMedia}
-            className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-            disabled={clearMedia.isLoading || updateMedia.isLoading}
-          >
-            Clear all
-          </Button>
-        )}
-      </div>
+      )}
 
       {/* DaisyUI Modal for Errors */}
       <dialog
