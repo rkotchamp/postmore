@@ -190,12 +190,10 @@ async function refreshInstagramToken(accountData) {
 
   try {
     // For Facebook/Instagram tokens, we can use the long-lived token to get a new long-lived token
-    const response = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/oauth/access_token`, {
+    const response = await axios.get(`https://graph.instagram.com/refresh_access_token`, {
       params: {
-        grant_type: 'fb_exchange_token',
-        client_id: process.env.META_APP_ID,
-        client_secret: process.env.META_APP_SECRET,
-        fb_exchange_token: accountData.accessToken
+        grant_type: 'ig_refresh_token',
+        access_token: accountData.accessToken
       }
     });
 
@@ -223,7 +221,7 @@ async function createSinglePhotoPost(accessToken, instagramAccountId, postData) 
     
     // Step 1: Create media container
     const containerResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
       {
         image_url: mediaFile.url || mediaFile.downloadURL,
         caption: postData.textContent || '',
@@ -236,7 +234,7 @@ async function createSinglePhotoPost(accessToken, instagramAccountId, postData) 
 
     // Step 2: Publish the media container
     const publishResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
       {
         creation_id: containerId,
         access_token: accessToken
@@ -283,7 +281,7 @@ async function createCarouselPost(accessToken, instagramAccountId, postData) {
       }
 
       const containerResponse = await axios.post(
-        `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+        `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
         containerData
       );
 
@@ -293,7 +291,7 @@ async function createCarouselPost(accessToken, instagramAccountId, postData) {
 
     // Step 2: Create carousel container
     const carouselResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
       {
         media_type: 'CAROUSEL',
         children: mediaContainers.join(','),
@@ -307,7 +305,7 @@ async function createCarouselPost(accessToken, instagramAccountId, postData) {
 
     // Step 3: Publish the carousel
     const publishResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
       {
         creation_id: carouselContainerId,
         access_token: accessToken
@@ -337,7 +335,7 @@ async function createVideoPost(accessToken, instagramAccountId, postData) {
     
     // Step 1: Create video media container
     const containerResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
       {
         media_type: 'VIDEO',
         video_url: mediaFile.url || mediaFile.downloadURL,
@@ -359,7 +357,7 @@ async function createVideoPost(accessToken, instagramAccountId, postData) {
       
       try {
         const statusResponse = await axios.get(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/${containerId}`,
+          `https://graph.instagram.com/${GRAPH_API_VERSION}/${containerId}`,
           {
             params: {
               fields: 'status_code',
@@ -386,7 +384,7 @@ async function createVideoPost(accessToken, instagramAccountId, postData) {
 
     // Step 3: Publish the video
     const publishResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
       {
         creation_id: containerId,
         access_token: accessToken
@@ -416,7 +414,7 @@ async function createReelsPost(accessToken, instagramAccountId, postData) {
     
     // Step 1: Create reels media container
     const containerResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media`,
       {
         media_type: 'REELS',
         video_url: mediaFile.url || mediaFile.downloadURL,
@@ -438,7 +436,7 @@ async function createReelsPost(accessToken, instagramAccountId, postData) {
       
       try {
         const statusResponse = await axios.get(
-          `https://graph.facebook.com/${GRAPH_API_VERSION}/${containerId}`,
+          `https://graph.instagram.com/${GRAPH_API_VERSION}/${containerId}`,
           {
             params: {
               fields: 'status_code',
@@ -465,7 +463,7 @@ async function createReelsPost(accessToken, instagramAccountId, postData) {
 
     // Step 3: Publish the reels
     const publishResponse = await axios.post(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}/media_publish`,
       {
         creation_id: containerId,
         access_token: accessToken
@@ -490,7 +488,7 @@ async function createReelsPost(accessToken, instagramAccountId, postData) {
 async function getAccountInfo(accessToken, instagramAccountId) {
   try {
     const response = await axios.get(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${instagramAccountId}`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${instagramAccountId}`,
       {
         params: {
           fields: 'id,username,profile_picture_url,followers_count,media_count',
@@ -512,7 +510,7 @@ async function getAccountInfo(accessToken, instagramAccountId) {
 async function getMediaInsights(accessToken, mediaId) {
   try {
     const response = await axios.get(
-      `https://graph.facebook.com/${GRAPH_API_VERSION}/${mediaId}/insights`,
+      `https://graph.instagram.com/${GRAPH_API_VERSION}/${mediaId}/insights`,
       {
         params: {
           metric: 'engagement,impressions,reach,saved',
